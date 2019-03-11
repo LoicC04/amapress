@@ -35,8 +35,8 @@ function amapress_can_renew_same_period_contrat_instance( $post_or_user ) {
 add_filter( 'amapress_register_entities', 'amapress_register_entities_contrat' );
 function amapress_register_entities_contrat( $entities ) {
 	$entities['contrat']          = array(
-		'singular'                => amapress__( 'Présentation web' ),
-		'plural'                  => amapress__( 'Présentations web' ),
+		'singular'                => amapress__( 'Production' ),
+		'plural'                  => amapress__( 'Productions' ),
 		'public'                  => true,
 		'thumb'                   => true,
 		'editor'                  => true,
@@ -59,13 +59,13 @@ function amapress_register_entities_contrat( $entities ) {
 			$contrat = AmapressContrat::getBy( $post );
 			if ( TitanFrameworkOption::isOnEditScreen() ) {
 				if ( empty( $contrat->getProducteur() ) ) {
-					echo '<div class="notice notice-error"><p>Présentation Web invalide : pas de producteur associée</p></div>';
+					echo '<div class="notice notice-error"><p>Production invalide : pas de producteur associée</p></div>';
 				}
 			}
 
 			TitanFrameworkOption::echoFullEditLinkAndWarning();
 
-			echo '<h1>Termes du contrat :</h1>';
+			echo '<h2>Présentation du producteur et de sa production <em>(par ex, Légumes, Champignons)</em></h2>';
 		},
 		'fields'                  => array(
 //			'amapress_icon_id' => array(
@@ -156,7 +156,7 @@ function amapress_register_entities_contrat( $entities ) {
 			$contrat = AmapressContrat_instance::getBy( $post );
 			if ( TitanFrameworkOption::isOnEditScreen() ) {
 				if ( empty( $contrat->getModel() ) ) {
-					echo '<div class="notice notice-error"><p>Modèle de contrat invalide : pas de présentation Web associée</p></div>';
+					echo '<div class="notice notice-error"><p>Modèle de contrat invalide : pas de production associée</p></div>';
 				}
 			}
 
@@ -185,6 +185,10 @@ function amapress_register_entities_contrat( $entities ) {
 						echo '<p style="color: red"><span class="dashicons dashicons-warning"></span> Édition d’un contrat actif</p>';
 					}
 
+					TitanFrameworkOption::echoFullEditLinkAndWarning(
+						'Edition avancée', ''
+					);
+
 					echo '<p>Modifier ce contrat peut impacter les ' . count( $adhs ) . ' inscriptions associées. 
 <span class="description">(Par ex : si vous changez le nombre de dates de distribution, le montant de l\'inscription sera adapté et les quantités saisies dans le cas d\'un contrat modulable seront perdues.)</span></p>';
 //				echo '<p>Ce contrat a déjà des inscriptions. Modifier ce contrat peut impacter les ' . count( $adhs ) . ' inscriptions associées. Par exemple si vous changez le nombre de dates de distribution le montant de l\'inscription sera adapté et les quantités saisies dans le cas d\'un contrat avec quantités variables peuvent être perdues.</p>';
@@ -192,11 +196,6 @@ function amapress_register_entities_contrat( $entities ) {
 ////					echo '<p>Si vous voulez malgrès tout éditer le contrat, utiliser le lien suivant : <a href="' . esc_attr( add_query_arg( 'adv', 'true' ) ) . '">Confirmer l\'édition.</a></p>';
 //					echo '<p><a href="' . esc_attr( add_query_arg( 'adv', 'true' ) ) . '">Confirmer l\'édition</a></p>';
 //				}
-
-					TitanFrameworkOption::echoFullEditLinkAndWarning(
-						'Edition avancée', ''
-					);
-
 
 					echo '<p><a href="' . amapress_get_row_action_href( 'clone', $post->ID ) . '">Dupliquer</a> : Créer un nouveau contrat - Durée et période identiques <span class="description">(Par ex : Semaine A - Semaine B)</span></p>';
 				}
@@ -236,7 +235,7 @@ function amapress_register_entities_contrat( $entities ) {
 				'confirm' => true,
 			],
 			'generate_contrat'  => [
-				'label'     => 'Générer le contrat papier',
+				'label'     => 'Générer le contrat papier (DOCX)',
 				'condition' => function ( $adh_id ) {
 					$contrat = AmapressContrat_instance::getBy( $adh_id );
 
@@ -331,7 +330,7 @@ function amapress_register_entities_contrat( $entities ) {
 		),
 		'fields'           => array(
 			//renouvellement
-			'renouv'         => array(
+			'renouv'     => array(
 				'name'        => amapress__( 'Options' ),
 				'show_column' => false,
 				'show_on'     => 'edit-only',
@@ -359,34 +358,7 @@ function amapress_register_entities_contrat( $entities ) {
 			),
 
 			// 1/6 - Ferme
-			'model'          => array(
-				'name'              => amapress__( 'Présentation web' ),
-				'type'              => 'select-posts',
-				'post_type'         => AmapressContrat::INTERNAL_POST_TYPE,
-				'group'             => '1/6 - Ferme',
-				'required'          => true,
-				'desc'              => 'Sélectionner la présentation web du producteur.',
-				'import_key'        => true,
-				'autoselect_single' => true,
-				'orderby'           => 'post_title',
-				'order'             => 'ASC',
-				'top_filter'        => array(
-					'name'        => 'amapress_contrat',
-					'placeholder' => 'Toutes les présentations web',
-				),
-				'readonly'          => function ( $post_id ) {
-					if ( TitanFrameworkOption::isOnNewScreen() ) {
-						return false;
-					}
-					if ( TitanFrameworkOption::isOnEditScreen() ) {
-						return true;
-					}
-
-					return amapress_is_contrat_instance_readonly( $post_id );
-				},
-				'searchable'        => true,
-			),
-			'producteur'     => array(
+			'producteur' => array(
 				'name'        => amapress__( 'Producteur' ),
 				'type'        => 'custom',
 				'group'       => '1/6 - Ferme',
@@ -408,6 +380,33 @@ function amapress_register_entities_contrat( $entities ) {
 							$contrat->getModel()->getProducteur()->getUser()->getEditLink(),
 							$contrat->getModel()->getProducteur()->getUser()->getDisplayName() ) . ')';
 				}
+			),
+			'model'      => array(
+				'name'              => amapress__( 'Production' ),
+				'type'              => 'select-posts',
+				'post_type'         => AmapressContrat::INTERNAL_POST_TYPE,
+				'group'             => '1/6 - Ferme',
+				'required'          => true,
+				'desc'              => 'Sélectionner la production.',
+				'import_key'        => true,
+				'autoselect_single' => true,
+				'orderby'           => 'post_title',
+				'order'             => 'ASC',
+				'top_filter'        => array(
+					'name'        => 'amapress_contrat',
+					'placeholder' => 'Toutes les productions',
+				),
+				'readonly'          => function ( $post_id ) {
+					if ( TitanFrameworkOption::isOnNewScreen() ) {
+						return false;
+					}
+					if ( TitanFrameworkOption::isOnEditScreen() ) {
+						return true;
+					}
+
+					return amapress_is_contrat_instance_readonly( $post_id );
+				},
+				'searchable'        => true,
 			),
 			'refs'           => array(
 				'name'                 => amapress__( 'Référents' ),
@@ -553,17 +552,24 @@ jQuery(function($) {
 				'show_column' => false,
 				'desc'        => 'Montant minimum demandé par le producteur pour un contrat',
 			),
-			'word_paper_model'      => array(
+			'word_paper_model' => array(
 				'name'            => amapress__( 'Contrat vierge' ),
-				'media-type'      => 'application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+				'media-type'      => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 				'type'            => 'upload',
 				'show_column'     => false,
 				'show_download'   => true,
 				'show_title'      => true,
 				'selector-button' => 'Utiliser ce modèle',
-				'selector-title'  => 'Sélectionnez/téléversez un modèle de contrat personnalisé DOCX/ODT',
+				'selector-title'  => 'Sélectionnez/téléversez un modèle de contrat personnalisé DOCX',
 				'group'           => '2/6 - Paramètres généraux',
 				'desc'            => 'Générer un contrat vierge à partir d’un contrat papier existant (Pour les utilisateurs avancés : à configurer avec des marquages substitutifs de type "${xxx}" <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_help_page&tab=paper_contrat_placeholders' ) . '">Plus d\'info</a>)',
+			),
+			'contrat_info'     => array(
+				'name'        => amapress__( 'Termes du contrat' ),
+				'type'        => 'editor',
+				'show_column' => false,
+				'group'       => '2/6 - Paramètres généraux',
+				'desc'        => 'Termes du contrats (Pour les utilisateurs avancés : à compléter avec des marquages substitutifs de type "%%xxx%%" <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_help_page&tab=pres_prod_contrat_placeholders' ) . '">Plus d\'info</a>)',
 			),
 
 
@@ -1061,13 +1067,13 @@ jQuery(function($) {
 			),
 			'word_model'     => array(
 				'name'            => amapress__( 'Contrat personnalisé' ),
-				'media-type'      => 'application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+				'media-type'      => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 				'type'            => 'upload',
 				'show_column'     => false,
 				'show_download'   => true,
 				'show_title'      => true,
 				'selector-button' => 'Utiliser ce modèle',
-				'selector-title'  => 'Sélectionnez/téléversez un modèle de contrat papier DOCX/ODT',
+				'selector-title'  => 'Sélectionnez/téléversez un modèle de contrat papier DOCX',
 				'group'           => '5/6 - Pré-inscription en ligne',
 				'desc'            => 'Configurer un modèle de contrat à imprimer  pour chaque adhérent (Pour les utilisateurs avancés : à configurer avec des marquages substitutifs de type "${xxx}" <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_help_page&tab=adhesion_contrat_placeholders' ) . '">Plus d\'info</a>)',
 			),
@@ -2047,12 +2053,12 @@ function amapress_is_contrat_instance_readonly( $option ) {
 
 function amapress_modify_post_mime_types( $post_mime_types ) {
 
-	$post_mime_types['application/pdf']                                                                                                 = array(
+	$post_mime_types['application/pdf']                                                         = array(
 		__( 'PDFs' ),
 		__( 'Gérer les PDFs' ),
 		_n_noop( 'PDF <span class="count">(%s)</span>', 'PDFs <span class="count">(%s)</span>' )
 	);
-	$post_mime_types['application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document'] = array(
+	$post_mime_types['application/vnd.openxmlformats-officedocument.wordprocessingml.document'] = array(
 		__( 'Documents' ),
 		__( 'Gérer les Documents' ),
 		_n_noop( 'Document <span class="count">(%s)</span>', 'Documents <span class="count">(%s)</span>' )
@@ -2068,7 +2074,7 @@ add_action( 'amapress_row_action_contrat_instance_generate_contrat', 'amapress_r
 function amapress_row_action_contrat_instance_generate_contrat( $post_id ) {
 	$adhesion       = AmapressContrat_instance::getBy( $post_id );
 	$date           = isset( $_GET['start_date'] ) ? intval( $_GET['start_date'] ) : amapress_time();
-	$full_file_name = $adhesion->generateContratDoc( $date );
+	$full_file_name = $adhesion->generateContratDoc( $date, true );
 	$file_name      = basename( $full_file_name );
 	Amapress::sendDocumentFile( $full_file_name, $file_name );
 }
@@ -2170,3 +2176,7 @@ add_action( 'delete_post', function ( $post_id ) {
 		}
 	}
 }, 1000 );
+
+add_filter( 'amapress_row_actions_label_contrat_instance', function ( $abel ) {
+	return '';
+} );

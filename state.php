@@ -106,7 +106,7 @@ function amapress_get_state() {
 //    $state['01_plugins'][] = amapress_check_plugin_install('google-sitemap-generator', 'Google XML Sitemaps',
 //        'Permet un meilleur référencement par les moteurs de recherche pour votre AMAP');
 	$state['01_plugins'][] = amapress_check_plugin_install( 'backupwordpress', 'BackUpWordPress',
-		'<strong>Recommandé</strong> : Sauvegarde du site. Permet de réinstaller en cas de panne, bug, hack. <br/> Voir la <a target="_blank" href="' . admin_url( 'tools.php?page=backupwordpress' ) . '">Configuration de la sauvegarde</a>. Configurer y la Notification par e-mail pour recevoir un backup de la base de donnée du site toutes les semaines par exemple',
+		'<strong>Recommandé</strong> : Sauvegarde du site. Permet de réinstaller en cas de panne, bug, hack. <br/> Voir la <a target="_blank" href="' . admin_url( 'tools.php?page=backupwordpress' ) . '">Configuration de la sauvegarde</a>. Configurer ici la notification par e-mail pour recevoir un backup de la base de donnée du site toutes les semaines par exemple.',
 		'error' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'really-simple-ssl', 'Really Simple SSL',
 		'<strong>Recommandé</strong> : Passer votre site en HTTPS sécurise et protège les échanges de données et les données de votre AMAP.',
@@ -124,13 +124,16 @@ function amapress_get_state() {
 		'warning' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'google-sitemap-generator', 'Google Sitemap Generator',
 		'<strong>Recommandé</strong> : Utilisation simple, améliore le référencement du site en générant un plan du site et en notifiant les moteurs de recherche des modifications du site. 
-<br/>Après activation rendez-vous dans sa <a target="_blank" href="' . admin_url( 'options-general.php?page=google-sitemap-generator%2Fsitemap.php#sm_includes' ) . '">configuration</a> (Section Contenu du sitemap/Autres types d\'article) et cocher les cases "Inclure les articles de type Produits/Recettes/Producteurs/Lieux de distribution/Présentations Web"',
+<br/>Après activation rendez-vous dans sa <a target="_blank" href="' . admin_url( 'options-general.php?page=google-sitemap-generator%2Fsitemap.php#sm_includes' ) . '">configuration</a> (Section Contenu du sitemap/Autres types d\'article) et cocher les cases "Inclure les articles de type Produits/Recettes/Producteurs/Lieux de distribution/Productions"',
 		'warning' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'wordpress-seo', 'Yoast SEO',
 		'<strong>Optionnel</strong> : Utilisation avancée, améliore le référencement du site. Ce plugin ajoute de nombreuse options dans le back-office, à installer par un webmaster.',
 		'info' );
+	$state['01_plugins'][] = amapress_check_plugin_install( 'count-per-day', 'Count Per Day',
+		'<strong>Optionnel</strong> : Permet d\'obtenir des statistiques de visites journalières simples sans recourir à des moteurs de statistiques externes.',
+		'info' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'unconfirmed', 'Unconfirmed',
-		'<strong>Recommandé</strong> : Permet de gérer les inscriptions en cours (Renvoyer le mail de bienvenue avec le lien pour activer le compte utilisateur…)',
+		'<strong>Recommandé</strong> : Permet de gérer les inscriptions en cours, renvoyer le mail de bienvenue avec le lien pour activer le compte utilisateur.',
 		'warning' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'user-switching', 'User Switching',
 		'<strong>Recommandé</strong> : Permet aux administrateurs de consulter Amapress avec un autre compte utilisateur. Ce plugin est à installer par un webmaster. ',
@@ -140,7 +143,7 @@ function amapress_get_state() {
 		'warning' );
 
 	$state['01_plugins'][] = amapress_check_plugin_install( 'wp-maintenance', 'WP Maintenance',
-		'<strong>Optionnel</strong> : Permet d\'indiquer aux visiteurs que le site de votre AMAP est en train d\'être mis en place et d\'éviter l\'affichage de contenu non terminé',
+		'<strong>Optionnel</strong> : Permet d\'indiquer aux visiteurs que le site de votre AMAP est en construction et d\'éviter l\'affichage de contenu non finalisé.',
 		'info' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'aryo-activity-log', 'Activity Log',
 		'<strong>Optionnel</strong> : Permet de tracer l\'activité des utilisateurs dans votre AMAP (création, modification, suppression de contenu, pages, articles, utilisateurs...)',
@@ -148,7 +151,7 @@ function amapress_get_state() {
 	$state['01_plugins'][] = amapress_check_plugin_install( 'error-log-monitor', 'Error Log Monitor',
 		'<strong>Optionnel</strong> : Permet de logger les erreurs PHP/Wordpress et de les envoyer automatiquement au support Amapress pour aider à son développement',
 		'info' );
-	$state['01_plugins'][] = amapress_check_plugin_install( 'uk-cookie-consent', 'Cookie Consent',
+	$state['01_plugins'][] = amapress_check_plugin_install( 'uk-cookie-consent', 'GDPR Cookie Consent Banner',
 		'<strong>Recommandé</strong> : Affiche un bandeau de consentement à l\'utilisation des cookies sur votre site. Cela est nécessaire pour être en conformité avec la loi RGPD, par exemple, si vous faites des statistiques (ie, Google Analytics) sur les visiteurs.',
 		'warning' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'gprd', 'GPRD',
@@ -159,6 +162,9 @@ function amapress_get_state() {
 		'info' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'latest-post-shortcode', 'Latest Post Shortcode',
 		'<strong>Optionnel</strong> : Permet de créér une gallerie des articles récents (par ex, pour donner des nouvelles de l\'AMAP sur la page d\'Acceuil',
+		'info' );
+	$state['01_plugins'][] = amapress_check_plugin_install( 'feed-them-social', 'Feed Them Social',
+		'<strong>Optionnel</strong> : Permet d\'afficher le flux d\'actualité d\'une page Facebook/Twitter/Instagram..., par exemple, la page Facebook de votre AMAP.',
 		'info' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'external-media', 'External Media',
 		'<strong>Optionnel</strong> : Permet de référencer des documents accessibles sur GoogleDrive, OneDrive, DropBox sans les importer via la «Media Library » de Wordpress',
@@ -206,14 +212,14 @@ function amapress_get_state() {
 		empty( $blog_desc ) ? 'warning' : 'success',
 		'Description de l\'AMAP',
 		'Cette section permet le référencement dans les moteurs de recherche. 
-<br/>Remplir les champs <strong>Titre</strong> (Typiquement le nom de votre AMAP) et <strong>Slogan</strong> (Un sous titre pour votre AMAP. Vous pouvez également y indiquer l\'utilisation d\'Amapress, en y ajoutant la mention suivante "Construit avec Amapress, l\'outil pour les AMAP")',
+<br/>Remplir les champs <strong>Titre</strong> (Le nom de votre AMAP) et <strong>Slogan</strong> (Un sous titre pour votre AMAP. Vous pouvez ajouter la mention suivante "Construit avec Amapress, l\'outil pour les AMAP")',
 		admin_url( 'customize.php?autofocus[section]=title_tagline' )
 	);
 	$site_icon            = get_option( 'site_icon' );
 	$state['05_config'][] = amapress_get_check_state(
 		empty( $site_icon ) ? 'warning' : 'success',
 		'Icône de l\'AMAP',
-		'Ajouter une icône pour personnaliser l\'entête du navigateur et les signets/favoris',
+		'Ajouter une icône pour personnaliser l\'entête du navigateur et les signets/favoris.',
 		admin_url( 'customize.php?autofocus[section]=title_tagline' )
 	);
 	$state['05_config'][] = amapress_get_check_state(
@@ -234,7 +240,7 @@ function amapress_get_state() {
 	$state['05_config'][] = amapress_get_check_state(
 		empty( $static_front_id ) ? 'error' : 'success',
 		'Page d\'accueil statique',
-		'Vérifier que votre thème est configuré avec l’option « page d\'accueil statique »<br/>Sélectionner votre page d’accueil existante, ou configurer une nouvelle page.',
+		'Vérifier que votre thème est configuré avec l’option « page d\'accueil statique ».<br/>Sélectionner votre page d’accueil existante, ou configurer une nouvelle page.',
 		admin_url( 'customize.php?autofocus[section]=static_front_page' )
 	);
 	$front_page_content   = null;
@@ -431,10 +437,8 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		}, $users ) )
 	);
 
-	$state['15_posts'] = array();
-
 	$amap_roles          = amapress_get_amap_roles();
-	$state['15_posts'][] = amapress_get_check_state(
+	$state['10_users'][] = amapress_get_check_state(
 		count( $amap_roles ) == 0 ? 'warning' : 'success',
 		'Rôle descriptif des membres du collectif',
 		'Créer et <a href="' . admin_url( 'users.php?amapress_role=collectif' ) . '" target=\'_blank\'>associer des rôles descriptifs aux utilisateurs</a> (par ex "Responsable des distribution", "Boîte contact", "Accueil des nouveaux")',
@@ -459,7 +463,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 			$empty_resp_roles = true;
 		}
 	}
-	$state['15_posts'][] = amapress_get_check_state(
+	$state['10_users'][] = amapress_get_check_state(
 		count( $amap_roles ) == 0 ? 'warning' : 'success',
 		'Rôle descriptif spécifiques des membres du collectif',
 		'<a href="' . admin_url( 'admin.php?page=amapress_collectif&tab=amp_amap_roles_config' ) . '" target="_blank">Associer des rôles descriptifs spécifiques</a> aux responsables de la gestion des distributions, des visites/sorties, des intermittents ou des évènements',
@@ -474,7 +478,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		'amapress_role' => 'collectif_no_amap_role',
 	] ) );
 	if ( ! empty( $members_no_desc ) ) {
-		$state['15_posts'][] = amapress_get_check_state(
+		$state['10_users'][] = amapress_get_check_state(
 			'error',
 			'Membres du collectif sans rôle descriptif',
 			'<a target="_blank" href="' . admin_url( 'admin.php?page=amapress_collectif' ) . '">Associer</a> des rôles descriptifs aux utilisateurs ayant accès au backoffice',
@@ -492,7 +496,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		'amapress_contrat' => 'no',
 	] ) );
 	if ( ! empty( $members_no_contrats ) ) {
-		$state['15_posts'][] = amapress_get_check_state(
+		$state['10_users'][] = amapress_get_check_state(
 			'info',
 			'Membres du collectif sans contrat',
 			'<a target="_blank" href="' . admin_url( 'admin.php?page=amapress_collectif' ) . '">Vérifier</a> les utilisateurs membres du collectif qui n\'ont pas de contrats',
@@ -500,6 +504,8 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 			implode( ', ', $members_no_contrats )
 		);
 	}
+
+	$state['15_posts'] = array();
 
 	$lieux               = Amapress::get_lieux();
 	$not_localized_lieux = array_filter( $lieux,
@@ -584,7 +590,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	//TODO better check prod vs user
 	$state['15_posts'][] = amapress_get_check_state(
 		count( $prod_users ) == 0 ? 'error' : ( count( $all_producteurs ) < count( $prod_users ) ? 'warning' : 'success' ),
-		'Présentation Producteurs',
+		'Producteurs',
 		'Créer les Producteur correspondant à leur compte utilisateur',
 		admin_url( 'post-new.php?post_type=' . AmapressProducteur::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $u ) {
@@ -655,8 +661,8 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	);
 	$state['15_posts'][]            = amapress_get_check_state(
 		count( $contrat_types ) == 0 ? 'error' : ( ! empty( $not_subscribable_contrat_types ) ? 'warning' : 'success' ),
-		'Présentation Web des contrats',
-		'Créer au moins une présentation web par producteur pour présenter son/ses offre(s)',
+		'Présentation des productions',
+		'Créer au moins une production par producteur pour présenter son/ses offre(s)',
 		admin_url( 'post-new.php?post_type=' . AmapressContrat::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $u ) {
 			$dn = AmapressContrat::getBy( $u );
@@ -664,7 +670,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 
 			return "<a href='{$l}' target='_blank'>{$dn->getTitle()}</a>";
 		}, $contrat_types ) ) .
-		( ! empty( $not_subscribable_contrat_types ) ? '<p><strong>Les producteurs suivants n\'ont pas de présentations web</strong> : ' .
+		( ! empty( $not_subscribable_contrat_types ) ? '<p><strong>Les producteurs suivants n\'ont pas de production</strong> : ' .
 		                                               implode( ', ', array_map( function ( $dn ) {
 
 			                                               $l = admin_url( 'post.php?post=' . $dn->ID . '&action=edit' );
@@ -704,7 +710,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	$state['15_posts'][]                = amapress_get_check_state(
 		count( $subscribable_contrat_instances ) == 0 ? 'error' : ( count( $subscribable_contrat_instances ) < count( $contrat_types ) ? 'warning' : 'success' ),
 		'Modèles de contrats',
-		'Créer au moins un modèle de contrat par contrat pour permettre au amapien d\'adhérer',
+		'Créer au moins un modèle de contrat par contrat pour permettre aux amapiens d\'adhérer',
 		admin_url( 'post-new.php?post_type=' . AmapressContrat_instance::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $dn ) {
 			/** @var AmapressContrat_instance $dn */
@@ -771,8 +777,8 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		if ( empty( $contrat->getProducteur() ) ) {
 			$state['15_posts'][] = amapress_get_check_state(
 				'error',
-				'Présentation Web invalide',
-				'La présentation Web ' . $contrat->getTitle() . ' n\'est pas associée à un producteur.',
+				'Production invalide',
+				'La production ' . $contrat->getTitle() . ' n\'est pas associée à un producteur.',
 				$contrat->getAdminEditLink()
 			);
 		}
@@ -790,7 +796,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 			$state['15_posts'][] = amapress_get_check_state(
 				'error',
 				'Modèle de contrat invalide',
-				'Le modèle de contrat ' . $contrat_instance->getTitle() . ' n\'est pas associé à une présentation Web.',
+				'Le modèle de contrat ' . $contrat_instance->getTitle() . ' n\'est pas associé à une production.',
 				$contrat_instance->getAdminEditLink()
 			);
 		}
@@ -1196,8 +1202,8 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	} );
 	$state['26_online_inscr'][] = amapress_get_check_state(
 		count( $without_word_contrats ) > 0 ? 'warning' : 'success',
-		'Modèles de contrats avec contrat DOCX/ODT (Word) associé',
-		'Préparer un contrat papier (DOCX/ODT) par modèle de contrat pour permettre aux amapiens d\'imprimer et signer directement leur contrat lors de leur inscription en ligne',
+		'Modèles de contrats avec contrat DOCX (Word) associé',
+		'Préparer un contrat papier (DOCX) par modèle de contrat pour permettre aux amapiens d\'imprimer et signer directement leur contrat lors de leur inscription en ligne',
 		admin_url( 'edit.php?post_type=amps_contrat_inst&amapress_date=active' ),
 		'<strong>Contrats avec Word attaché :</strong> ' . ( count( $online_contrats ) == 0 ? 'aucun' : implode( ', ', array_map( function ( $dn ) {
 			/** @var AmapressContrat_instance $dn */
@@ -1328,13 +1334,13 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	$state['35_import'][] = amapress_get_check_state(
 		'do',
 		'Amapiens',
-		'Importer des amapiens',
+		'Importer des amapiens à partir d\'un fichier Excel.',
 		admin_url( 'admin.php?page=amapress_import_page' )
 	);
 	$state['35_import'][] = amapress_get_check_state(
 		count( $subscribable_contrat_instances ) == 0 ? 'error' : 'do',
 		'Adhésions',
-		count( $subscribable_contrat_instances ) == 0 ? 'Vous devez créer au moins un modèle de contrat pour importer les adhésions' : 'Importer des adhésions',
+		count( $subscribable_contrat_instances ) == 0 ? 'Vous devez créer au moins un modèle de contrat pour importer les adhésions' : 'Importer des inscriptions à partir d\'un fichier Excel.',
 		admin_url( 'admin.php?page=amapress_import_page&tab=adhésions' )
 	);
 
@@ -1367,8 +1373,8 @@ function amapress_echo_and_check_amapress_state_page() {
 		'05_config'       => 'Configuration',
 		'10_users'        => 'Comptes utilisateurs',
 		'15_posts'        => 'Votre AMAP',
-		'20_content'      => 'Contenus à compléter',
-		'25_shortcodes'   => 'Shortcodes à configurer',
+		'20_content'      => 'Contenus complémentaires',
+		'25_shortcodes'   => 'Shortcodes',
 		'26_online_inscr' => 'Inscriptions en ligne',
 		'30_recalls'      => 'Rappels',
 		'35_import'       => 'Import CSV',

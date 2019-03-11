@@ -913,7 +913,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 						array(
 							'title'      => 'Présentations des contrats',
 							'menu_icon'  => 'post_type',
-							'menu_title' => 'Présentations web',
+							'menu_title' => 'Productions',
 							'post_type'  => 'amps_contrat',
 							'capability' => 'edit_contrat',
 							'slug'       => 'edit.php?post_type=amps_contrat',
@@ -1794,6 +1794,34 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 										return ob_get_clean();
 									},
 									'capability' => 'manage_options',
+								),
+								array(
+									'type' => 'save',
+								),
+							),
+						),
+						'Conversion PDF'  => array(
+							'id'      => 'amp_convertws_config',
+							'desc'    => '',
+							'options' => array(
+								array(
+									'id'         => 'convertws_url',
+									'name'       => 'Url du convertisseur PDF',
+									'type'       => 'text',
+									'capability' => 'manage_options',
+								),
+								array(
+									'id'         => 'convertws_user',
+									'name'       => 'Compte utilisateur du convertisseur PDF',
+									'type'       => 'text',
+									'capability' => 'manage_options',
+								),
+								array(
+									'id'          => 'convertws_pass',
+									'name'        => 'Mot de passe du compte du convertisseur PDF',
+									'type'        => 'text',
+									'capability'  => 'manage_options',
+									'is_password' => true,
 								),
 								array(
 									'type' => 'save',
@@ -2722,7 +2750,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 						'icon'       => 'dashicons-sos',
 					),
 					'tabs'     => array(
-						'Placeholders - contrat vierge'                 => array(
+						'Placeholders - contrat vierge'       => array(
 							'id'      => 'paper_contrat_placeholders',
 							'desc'    => '',
 							'options' => array(
@@ -2731,12 +2759,26 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 									'name'   => 'Placeholders - contrat vierge',
 									'type'   => 'custom',
 									'custom' => function () {
-										return AmapressContrat_instance::getPlaceholdersHelp( [], true, false );
+										return AmapressContrat_instance::getPlaceholdersHelp( [], 'paper', false );
 									}
 								)
 							)
 						),
-						'Placeholders - contrat personnalisé'           => array(
+						'Placeholders - production'           => array(
+							'id'      => 'pres_prod_contrat_placeholders',
+							'desc'    => '',
+							'options' => array(
+								array(
+									'id'     => 'pres_prod_contrat_placeholders_cust',
+									'name'   => 'production',
+									'type'   => 'custom',
+									'custom' => function () {
+										return AmapressContrat_instance::getPlaceholdersHelp( [], 'pres', false );
+									}
+								)
+							)
+						),
+						'Placeholders - contrat personnalisé' => array(
 							'id'      => 'adhesion_contrat_placeholders',
 							'desc'    => '',
 							'options' => array(
@@ -2750,7 +2792,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								)
 							)
 						),
-						'Configuration des paniers (Taille/Quantités)'  => array(
+						'Configuration des paniers (Taille/Quantités)' => array(
 							'id'      => 'conf_paniers',
 							'desc'    => '',
 							'options' => array(

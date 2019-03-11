@@ -6,7 +6,7 @@
 Plugin Name: Amapress (forked by LoicC04)
 Plugin URI: https://github.com/LoicC04/amapress/
 Description:
-Version: 0.68.15
+Version: 0.70.25
 Requires PHP: 5.6
 Author: LoicC04
 Author URI: https://github.com/LoicC04/
@@ -45,8 +45,8 @@ define( 'AMAPRESS__PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_FILE', __FILE__ );
 define( 'AMAPRESS_DELETE_LIMIT', 100000 );
-define( 'AMAPRESS_DB_VERSION', 80 );
-define( 'AMAPRESS_VERSION', '0.68.15' );
+define( 'AMAPRESS_DB_VERSION', 82 );
+define( 'AMAPRESS_VERSION', '0.70.25' );
 //remove_role('responable_amap');
 
 function amapress_ensure_no_cache() {
