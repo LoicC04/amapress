@@ -372,7 +372,10 @@ class AmapressUsers {
 			$i ++;
 		}
 
+		$username = str_replace( ' ', '', $username );
+		$username = strtolower( $username );
 		$username = self::unaccent( $username );
+		$username = sanitize_user( $username );
 
 		if ( ! username_exists( $username ) ) {
 			return $username;
@@ -398,10 +401,30 @@ class AmapressUsers {
 		add_action( 'admin_head-user-new.php', array( 'AmapressUsers', 'remove_user_unused_fields' ) );
 		add_action( 'admin_head-user-edit.php', array( 'AmapressUsers', 'remove_user_unused_fields' ) );
 		add_action( 'admin_head-profile.php', array( 'AmapressUsers', 'remove_user_unused_fields' ) );
-		amapress_register_shortcode( 'users_near', array( 'AmapressUsers', 'users_near_shortcode' ) );
-		amapress_register_shortcode( 'trombinoscope', array( 'AmapressUsers', 'trombinoscope_shortcode' ) );
-		amapress_register_shortcode( 'trombinoscope_lieu', array( 'AmapressUsers', 'trombinoscope_lieu_shortcode' ) );
-		amapress_register_shortcode( 'trombinoscope_role', array( 'AmapressUsers', 'trombinoscope_role_shortcode' ) );
+		amapress_register_shortcode( 'users_near', array( 'AmapressUsers', 'users_near_shortcode' ),
+			[
+				'desc' => 'Amapiens proche de moi/d\'un autre amapien',
+				'args' => [
+				]
+			] );
+		amapress_register_shortcode( 'trombinoscope', array( 'AmapressUsers', 'trombinoscope_shortcode' ),
+			[
+				'desc' => 'Trombinoscope des membres de l\'AMAP',
+				'args' => [
+				]
+			] );
+		amapress_register_shortcode( 'trombinoscope_lieu', array( 'AmapressUsers', 'trombinoscope_lieu_shortcode' ),
+			[
+				'desc' => 'Trombinoscope des membres d\'un lieu de distribution de l\'AMAP',
+				'args' => [
+				]
+			] );
+		amapress_register_shortcode( 'trombinoscope_role', array( 'AmapressUsers', 'trombinoscope_role_shortcode' ),
+			[
+				'desc' => 'Trombinoscope des membres avec un certain role',
+				'args' => [
+				]
+			] );
 		// enqueue and localise scripts
 //        wp_enqueue_script('userlikes-handle', plugin_dir_url(__FILE__) . 'js/ajax-userlikes.js', array('jquery'));
 //        wp_localize_script('userlikes-handle', 'user_produit_likebox', array('ajax_url' => admin_url('admin-ajax.php')));
@@ -791,9 +814,17 @@ jQuery(function() {
 			$users = get_users( wp_parse_args(
 				array( 'amapress_contrat' => 'active' ),
 				$base_query ) );
-		} else if ( $role == 'prochaine_distrib' ) {
+		} else if ( $role == 'resp_distrib_cette_semaine' ) {
 			$users = get_users( wp_parse_args(
 				array( 'amapress_role' => 'resp_distrib' ),
+				$base_query ) );
+
+			if ( count( $users ) == 0 ) {
+				return 'Pas de responsable(s) inscrit(s)';
+			}
+		} else if ( $role == 'resp_distrib_semaine_prochaine' ) {
+			$users = get_users( wp_parse_args(
+				array( 'amapress_role' => 'resp_distrib_next' ),
 				$base_query ) );
 
 			if ( count( $users ) == 0 ) {
@@ -888,8 +919,15 @@ jQuery(function() {
 		ob_start();
 
 		//echo '<h2>'.$lieu->post_title.'</h2>';
-		amapress_echo_panel_start( 'Les responsables à la prochaine distribution', null, 'amap-panel-resp-dist' );
-		echo do_shortcode( '[trombinoscope_role role=prochaine_distrib lieu=' . $lieu_id . ']' );
+		amapress_echo_panel_start( 'Les responsables à la distribution de cette semaine (' .
+		                           date_i18n( 'd/m/Y', Amapress::start_of_week( amapress_time() ) ) . ')',
+			null, 'amap-panel-resp-dist' );
+		echo do_shortcode( '[trombinoscope_role role=resp_distrib_cette_semaine lieu=' . $lieu_id . ']' );
+		amapress_echo_panel_end();
+		amapress_echo_panel_start( 'Les responsables à la distribution de la semaine prochaine (' .
+		                           date_i18n( 'd/m/Y', Amapress::start_of_week( Amapress::add_a_week( amapress_time() ) ) ) . ')',
+			null, 'amap-panel-resp-dist' );
+		echo do_shortcode( '[trombinoscope_role role=resp_distrib_semaine_prochaine lieu=' . $lieu_id . ']' );
 		amapress_echo_panel_end();
 		if ( count( Amapress::get_lieux() ) > 1 ) {
 			amapress_echo_panel_start( 'Les responsables de l\'AMAP dans ce lieu' );
@@ -1153,7 +1191,7 @@ jQuery(function() {
 			$address_text = $_REQUEST['amapress_user_adresse'] . ', ' . $_REQUEST['amapress_user_code_postal'] . ' ' . $_REQUEST['amapress_user_ville'];
 		}
 
-		self::resolveUserFullAdress( $user_id, $address_text );
+		return self::resolveUserFullAdress( $user_id, $address_text );
 	}
 
 	public static function resolveUserFullAdress( $user_id, $address_text ) {

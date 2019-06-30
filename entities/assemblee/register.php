@@ -30,7 +30,10 @@ function amapress_register_entities_assemblee( $entities ) {
 			'_dyn_'   => 'amapress_assemblee_views',
 			'exp_csv' => true,
 		),
-		'fields'             => array(
+		'edit_header'        => function ( $post ) {
+			TitanFrameworkOption::echoFullEditLinkAndWarning();
+		},
+		'fields'           => array(
 			'ordre_du_jour' => array(
 				'name'       => amapress__( 'Ordre du jour' ),
 				'type'       => 'editor',
@@ -41,7 +44,7 @@ function amapress_register_entities_assemblee( $entities ) {
 			'date'          => array(
 				'name'       => amapress__( 'Date' ),
 				'type'       => 'date',
-				'time'       => true,
+				'time'       => false,
 				'required'   => true,
 				'desc'       => 'Date ',
 				'group'      => '2/ Horaires',
@@ -82,11 +85,17 @@ function amapress_register_entities_assemblee( $entities ) {
 			'participants'  => array(
 				'name'         => amapress__( 'Participants' ),
 				'type'         => 'select-users',
+				'readonly'     => true,
 				'autocomplete' => true,
 				'multiple'     => true,
 				'tags'         => true,
 				'desc'         => 'Participants',
 				'group'        => '4/ Participants',
+				'after_option' => function ( $option ) {
+					/** @var TitanFrameworkOption $option */
+					$visite = new AmapressAssemblee_generale( $option->getPostID() );
+					echo '<p>Les inscription se gère <a href="' . esc_attr( $visite->getPermalink() ) . '" target="_blank">ici</a> pour cette AG</p>';
+				},
 			),
 		),
 	);

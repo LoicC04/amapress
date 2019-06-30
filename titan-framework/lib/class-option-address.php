@@ -24,8 +24,11 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 			return null;
 		}
 
+		$string = preg_replace( '/(?:\s+-\s+)(\d{5})\s+([^,]+),\s*\1\s+\2/', ', $1 $2', $string );
+
+		$string = preg_replace( '/\s+/', " ", trim( $string ) );
 		if ( 'google' == self::$geoprovider ) {
-			$string      = str_replace( " ", "+", urlencode( $string ) );
+			$string      = urlencode( $string );
 			$key         = self::$google_map_api_key;
 			$details_url = "https://maps.googleapis.com/maps/api/geocode/json?address={$string}&sensor=false&key={$key}";
 
@@ -37,6 +40,7 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 			if ( $response['status'] != 'OK' ) {
 				$res = $response['status'];
 				error_log( "Google Maps resolution failed: $res" );
+
 				return null;
 			}
 
@@ -48,7 +52,7 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 				'location_type' => $geometry['location_type'],
 			);
 		} else if ( 'nominatim' == self::$geoprovider ) {
-			$string      = str_replace( " ", "+", urlencode( $string ) );
+			$string      = urlencode( $string );
 			$details_url = "https://nominatim.openstreetmap.org/search?q={$string}&format=json";
 
 			$ch = curl_init();
@@ -59,8 +63,9 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 			$res      = curl_exec( $ch );
 			$response = json_decode( $res, true );
 
-			if ( ! is_array( $response ) ) {
+			if ( ! is_array( $response ) || empty( $response ) ) {
 				error_log( "Nominatim resolution failed: $res" );
+
 				return null;
 			}
 

@@ -9,6 +9,10 @@ add_action( 'admin_enqueue_scripts', 'amapress_admin_add_validation_js' );
 function amapress_admin_add_validation_js() {
 	wp_enqueue_script( 'jquery.validate', plugins_url( '/js/jquery-validate/jquery.validate.min.js', AMAPRESS__PLUGIN_FILE ), array( 'jquery' ) );
 	wp_enqueue_script( 'jquery.validate-fr', plugins_url( '/js/jquery-validate/localization/messages_fr.js', AMAPRESS__PLUGIN_FILE ), array( 'jquery.validate' ) );
+	wp_enqueue_script( 'jquery.ui.datepicker.validation', plugins_url( '/js/jquery.ui.datepicker.validation.min.js', AMAPRESS__PLUGIN_FILE ), array(
+		'jquery.validate',
+		'jquery-ui-datepicker'
+	) );
 }
 
 add_action( 'admin_footer', 'amapress_post_validation' );
@@ -58,8 +62,8 @@ function amapress_post_validation() {
             };
             jQuery.validator.addMethod("multicheckReq", function (value, element) {
                 return jQuery('input:checkbox:checked,input:radio:checked', jQuery(element).closest('fieldset')).length > 0;
-            }, "Merci de sélectionner au moins un élément");
-            jQuery.validator.addMethod("exclusiveCheckgroup", exclusiveGroupCheckFunction, "Merci de sélectionner des élements dans un seul groupe");
+            }, "Sélectionner au moins un élément");
+            jQuery.validator.addMethod("exclusiveCheckgroup", exclusiveGroupCheckFunction, "Sélectionner des élements dans un seul groupe");
             jQuery.validator.addMethod("exclusiveContrat", exclusiveGroupCheckFunction, "Attention, vous avez sélectionné des produits/quantités concernant des contrats différents !");
             jQuery.validator.addMethod("tinymcerequired", function (value, element) {
                 var content = tinymce.get(element.id).getContent({format: 'text'});
@@ -150,6 +154,9 @@ function amapress_post_validation() {
                             },
                             "user": function () {
                                 return jQuery('#amapress_adhesion_adherent').val();
+                            },
+                            "related": function () {
+                                return jQuery('#amapress_adhesion_related').val();
                             },
                             "post_ID": function () {
                                 return jQuery('#post_ID').val();

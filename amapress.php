@@ -6,7 +6,7 @@
 Plugin Name: Amapress (forked by LoicC04)
 Plugin URI: https://github.com/LoicC04/amapress/
 Description:
-Version: 0.70.25
+Version: 0.81.65
 Requires PHP: 5.6
 Author: LoicC04
 Author URI: https://github.com/LoicC04/
@@ -41,12 +41,13 @@ if ( ! function_exists( 'add_action' ) ) {
 }
 
 define( 'AMAPRESS__MINIMUM_WP_VERSION', '4.4' );
+define( 'AMAPRESS_MINIMUM_PHP_VERSION', '5.6' );
 define( 'AMAPRESS__PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_FILE', __FILE__ );
 define( 'AMAPRESS_DELETE_LIMIT', 100000 );
 define( 'AMAPRESS_DB_VERSION', 82 );
-define( 'AMAPRESS_VERSION', '0.70.25' );
+define( 'AMAPRESS_VERSION', '0.81.65' );
 //remove_role('responable_amap');
 
 function amapress_ensure_no_cache() {
@@ -106,13 +107,23 @@ function amapress_dump( $v ) {
 
 global $amapress_notices;
 $amapress_notices = array();
-function amapress_add_admin_notice( $message, $type, $is_dismissible ) {
+function amapress_add_admin_notice( $message, $type, $is_dismissible, $escape = true ) {
 	global $amapress_notices;
 
 	$class = $is_dismissible ? "notice-$type is-dismissible" : "notice-$type";
 
-	$amapress_notices[] = sprintf( '<div class="notice %1$s"><p>%2$s</p></div>', esc_attr( $class ), esc_html( $message ) );
+	$amapress_notices[] = sprintf( '<div class="notice %1$s"><p>%2$s</p></div>', esc_attr( $class ), ! $escape ? $message : esc_html( $message ) );
 }
+
+add_action( 'init', function () {
+	if ( current_user_can( 'manage_options' ) ) {
+		$dir_name = basename( dirname( __FILE__ ) );
+		if ( 'amapress' != $dir_name ) {
+			amapress_add_admin_notice( 'Le nom du dossier d\'Amapress doit être "amapress" pour le bon fonctionnement de la mise à jour par GitHub Updater (actuellement, ' . $dir_name . '. Merci de renommer "' . dirname( __FILE__ ) . '" et de réactiver Amapress',
+				'error', false );
+		}
+	}
+} );
 
 add_action( 'admin_notices', 'amapress_output_admin_notices' );
 function amapress_output_admin_notices() {
@@ -513,9 +524,9 @@ add_action( 'init', 'amapress_global_init', 15 );
 //});
 
 function amapress_global_init() {
-	$key = Amapress::getOption( 'google_map_key' );
+	TitanFrameworkOptionAddress::$geoprovider = Amapress::getOption( 'geocode_provider' );
+	$key                                      = Amapress::getOption( 'google_map_key' );
 	if ( ! empty( $key ) ) {
-		TitanFrameworkOptionAddress::$geoprovider        = Amapress::getOption( 'geocode_provider' );
 		TitanFrameworkOptionAddress::$google_map_api_key = $key;
 	}
 
@@ -697,13 +708,13 @@ function amapress_get_avatar_url( $id, $meta_name, $size, $default_image, $user 
 	return $url;
 }
 
-function amapress_get_font_icon( $icon_name ) {
+function amapress_get_font_icon( $icon_name, $add_class = '' ) {
 	if ( strpos( $icon_name, 'fa-' ) === 0 ) {
-		return '<i class="fa ' . $icon_name . '" aria-hidden="true"></i>';
+		return '<i class="' . $add_class . ' fa ' . $icon_name . '" aria-hidden="true"></i>';
 	} else if ( strpos( $icon_name, 'dashicons-' ) === 0 ) {
-		return '<span class="dashicons-before ' . $icon_name . '" aria-hidden="true"></span>';
+		return '<span class="' . $add_class . ' dashicons-before ' . $icon_name . '" aria-hidden="true"></span>';
 	} else if ( strpos( $icon_name, 'flaticon-' ) === 0 ) {
-		return '<span class="dashicons-before ' . $icon_name . '" aria-hidden="true"></span>';
+		return '<span class="' . $add_class . ' dashicons-before ' . $icon_name . '" aria-hidden="true"></span>';
 	} else {
 		return $icon_name;
 	}
@@ -1309,8 +1320,58 @@ add_action( 'amapress_init', function () {
 	new AmapressDocSpace( 'responsables', 'edit_posts', 'edit_posts', 'edit_posts' );
 	new AmapressDocSpace( 'amapiens', 'read', 'edit_posts', 'read' );
 	new AmapressDocSpace( 'public', '', 'edit_posts', '' );
+
+	if ( Amapress::getOption( 'auto-post-thumb' ) ) {
+		add_filter( 'get_post_metadata', function ( $value, $object_id, $meta_key, $single ) {
+			if ( $meta_key !== '_thumbnail_id' || $value ) {
+				return $value;
+			}
+
+			preg_match( '~<img[^>]+wp-image-(\\d+)~', get_post_field( 'post_content', $object_id ), $matches );
+			if ( $matches ) {
+				return $matches[1];
+			}
+
+			return $value;
+		}, 10, 4 );
+	}
+} );
+
+add_action( 'admin_init', function () {
+	$contrat_to_generate = AmapressContrats::get_contrat_to_generate();
+	if ( ! empty( $contrat_to_generate ) ) {
+		amapress_add_admin_notice(
+			'Les contrats suivants nécessitent une mise à jour : ' .
+			implode( ', ', array_map( function ( $dn ) {
+				/** @var AmapressContrat_instance $dn */
+				$l      = admin_url( 'post.php?post=' . $dn->getID() . '&action=edit' );
+				$tit    = esc_html( $dn->getTitle() );
+				$status = '(' . AmapressContrats::contratStatus( $dn->getID(), 'span' ) . ')';
+
+				return "<a href='{$l}' target='_blank'>{$tit}</a> {$status}";
+			}, $contrat_to_generate ) ),
+			'warning', false, false
+		);
+	}
+
+	add_action( 'tf_custom_admin_amapress_action_test_convert_ws', function () {
+		require_once 'utils/sample_pdf_convert.php';
+		amapress_test_convertpdf_ws();
+	} );
 } );
 
 if ( defined( 'WP_CORRECT_OB_END_FLUSH_ALL' ) ) {
 	remove_action( 'shutdown', 'wp_ob_end_flush_all', 1 );
+}
+
+if ( ! defined( 'AMAPRESS_ALLOW_XMLRPC' ) ) {
+	add_action( "init", function () {
+		global $pagenow; // get current page
+		if ( ! empty( $pagenow ) && "xmlrpc.php" === $pagenow ) {
+			header( "HTTP/1.1 403 Forbidden" ); // Produit une erreur 403
+			exit; // exit request
+		}
+
+		return;
+	} );
 }

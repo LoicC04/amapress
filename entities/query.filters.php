@@ -470,37 +470,47 @@ function amapress_filter_posts( WP_Query $query ) {
 				)
 			) );
 		} else if ( $pt == 'distribution' ) {
-			$amapress_contrat_instnace = array_shift( $amapress_contrat_instnace );
-			$cancelled_paniers_dates   = array_map( function ( $p ) {
-				/** @var AmapressPanier $p */
-				return Amapress::start_of_day( $p->getDate() );
-			}, AmapressPanier::get_delayed_paniers( $amapress_contrat_instnace ) );
-			$delayed_paniers_dates     = array_map( function ( $p ) {
-				/** @var AmapressPanier $p */
-				return Amapress::start_of_day( $p->getDateSubst() );
-			}, AmapressPanier::get_delayed_paniers( $amapress_contrat_instnace, null, null, [ 'delayed' ] ) );
-			amapress_add_meta_query( $query,
+			$query_or = array();
+			foreach ( $amapress_contrat_instnace as $contrat_inst ) {
+				$cancelled_paniers_dates = array_map( function ( $p ) {
+					/** @var AmapressPanier $p */
+					return Amapress::start_of_day( $p->getDate() );
+				}, AmapressPanier::get_delayed_paniers( $contrat_inst ) );
+				$delayed_paniers_dates   = array_map( function ( $p ) {
+					/** @var AmapressPanier $p */
+					return Amapress::start_of_day( $p->getDateSubst() );
+				}, AmapressPanier::get_delayed_paniers( $contrat_inst, null, null, [ 'delayed' ] ) );
+				$query_or[]              =
+					array(
+						'relation' => 'AND',
+						array(
+							'relation' => 'OR',
+							array(
+								'key'     => 'amapress_distribution_date',
+								'value'   => amapress_prepare_in( $delayed_paniers_dates ),
+								'compare' => 'IN',
+								'type'    => 'NUMERIC',
+							),
+							amapress_prepare_like_in_array( "amapress_distribution_contrats", $contrat_inst )
+						),
+						array(
+							array(
+								'key'     => 'amapress_distribution_date',
+								'value'   => amapress_prepare_in( $cancelled_paniers_dates ),
+								'compare' => 'NOT IN',
+								'type'    => 'NUMERIC',
+							),
+						)
+					);
+			}
+//			amapress_dump($query_or);
+//			die();
+			amapress_add_meta_query( $query, array(
 				array(
-					array(
-						'relation' => 'OR',
-						array(
-							'key'     => 'amapress_distribution_date',
-							'value'   => $delayed_paniers_dates,
-							'compare' => 'IN',
-							'type'    => 'NUMERIC',
-						),
-						amapress_prepare_like_in_array( "amapress_distribution_contrats", $amapress_contrat_instnace )
-					),
-					array(
-						array(
-							'key'     => 'amapress_distribution_date',
-							'value'   => $cancelled_paniers_dates,
-							'compare' => 'NOT IN',
-							'type'    => 'NUMERIC',
-						),
-					)
+					'relation' => 'OR',
+					$query_or
 				)
-			);
+			) );
 		}
 	}
 	if ( ! empty( $query->query_vars['amapress_contrat_qt'] ) ) {
@@ -523,9 +533,17 @@ function amapress_filter_posts( WP_Query $query ) {
 	if ( ! empty( $query->query_vars['amapress_contrat'] ) ) {
 		$amapress_contrat = Amapress::resolve_post_id( $query->query_vars['amapress_contrat'], 'amps_contrat' );
 		if ( $pt == 'adhesion' || $pt == 'commande' || $pt == 'intermittence_panier' || $pt == 'panier' ) {
-//			$amapress_date        = get_query_var( 'amapress_date' );
-//			$date                 = ( empty( $amapress_date ) || $amapress_date == 'active' ) ? null : ( is_int( $amapress_date ) ? intval( $amapress_date ) : DateTime::createFromFormat( 'Y-m-d', $amapress_date )->getTimestamp() );
 			$active_contrat_insts = AmapressContrats::get_all_contrat_instances_by_contrat_ids( $amapress_contrat );
+			if ( empty( $active_contrat_insts ) ) {
+				$active_contrat_insts = array_map(
+					function ( $id ) {
+						return Amapress::resolve_post_id(
+							$id,
+							'amps_contrat_inst' );
+					},
+					explode( ',', $query->query_vars['amapress_contrat'] )
+				);
+			}
 			amapress_add_meta_query( $query, array(
 				array(
 					'key'     => "amapress_{$pt}_contrat_instance",
@@ -546,7 +564,17 @@ function amapress_filter_posts( WP_Query $query ) {
 //			$amapress_date        = get_query_var( 'amapress_date' );
 //			$date                 = ( empty( $amapress_date ) || $amapress_date == 'active' ) ? null : ( is_int( $amapress_date ) ? intval( $amapress_date ) : DateTime::createFromFormat( 'Y-m-d', $amapress_date )->getTimestamp() );
 			$active_contrat_insts = AmapressContrats::get_all_contrat_instances_by_contrat_ids( $amapress_contrat );
-			$query_or             = array();
+			if ( empty( $active_contrat_insts ) ) {
+				$active_contrat_insts = array_map(
+					function ( $id ) {
+						return Amapress::resolve_post_id(
+							$id,
+							'amps_contrat_inst' );
+					},
+					explode( ',', $query->query_vars['amapress_contrat'] )
+				);
+			}
+			$query_or = array();
 			foreach ( $active_contrat_insts as $contrat_inst ) {
 				$cancelled_paniers_dates = array_map( function ( $p ) {
 					/** @var AmapressPanier $p */
@@ -558,11 +586,12 @@ function amapress_filter_posts( WP_Query $query ) {
 				}, AmapressPanier::get_delayed_paniers( $contrat_inst, null, null, [ 'delayed' ] ) );
 				$query_or[]              =
 					array(
+						'relation' => 'AND',
 						array(
 							'relation' => 'OR',
 							array(
 								'key'     => 'amapress_distribution_date',
-								'value'   => $delayed_paniers_dates,
+								'value'   => amapress_prepare_in( $delayed_paniers_dates ),
 								'compare' => 'IN',
 								'type'    => 'NUMERIC',
 							),
@@ -571,13 +600,15 @@ function amapress_filter_posts( WP_Query $query ) {
 						array(
 							array(
 								'key'     => 'amapress_distribution_date',
-								'value'   => $cancelled_paniers_dates,
+								'value'   => amapress_prepare_in( $cancelled_paniers_dates ),
 								'compare' => 'NOT IN',
 								'type'    => 'NUMERIC',
 							),
 						)
 					);
 			}
+//			amapress_dump($query_or);
+//			die();
 			amapress_add_meta_query( $query, array(
 				array(
 					'relation' => 'OR',
@@ -1087,6 +1118,20 @@ function amapress_filter_posts( WP_Query $query ) {
 				) );
 				//echo (date('d m Y', end_of_month(time())));
 			}
+		} else if ( $amapress_date == 'prevmonth' ) {
+			if ( $pt == 'distribution' || $pt == 'panier' || $pt == 'assemblee_generale' || $pt == 'visite' || $pt == 'contrat_paiement' || $pt == 'amap_event' || $pt == 'intermittence_panier' ) {
+				amapress_add_meta_query( $query, array(
+					array(
+						'key'     => "amapress_{$pt}_date",
+						'value'   => array(
+							Amapress::add_a_month( Amapress::start_of_month( amapress_time() ), - 1 ),
+							Amapress::add_a_month( Amapress::end_of_month( amapress_time() ), - 1 ),
+						),
+						'compare' => 'BETWEEN',
+					)
+				) );
+				//echo (date('d m Y', end_of_month(time())));
+			}
 		} else if ( $amapress_date == 'foramonth' ) {
 			if ( $pt == 'distribution' || $pt == 'panier' || $pt == 'assemblee_generale' || $pt == 'visite' || $pt == 'contrat_paiement' || $pt == 'amap_event' || $pt == 'intermittence_panier' ) {
 				amapress_add_meta_query( $query, array(
@@ -1363,39 +1408,11 @@ add_action( 'pre_user_query', function ( WP_User_Query $uqi ) {
 			//
 		} else if ( $amapress_role == 'referent_producteur' ) {
 			$user_ids = array();
-			foreach ( AmapressContrats::get_active_contrat_instances() as $contrat ) {
-				if ( empty( $contrat->getModel() ) ) {
-					continue;
-				}
-				$prod = $contrat->getModel()->getProducteur();
-				if ( ! $prod ) {
-					continue;
-				}
-				foreach ( Amapress::get_lieu_ids() as $lieu_id ) {
-					$user_ids = array_merge( $user_ids, $prod->getReferentsIds( $lieu_id ) );
-				}
-				$user_ids = array_merge( $user_ids, $prod->getReferentsIds() );
+			foreach ( Amapress::get_producteurs() as $prod ) {
+				$user_ids = array_merge( $user_ids, $prod->getAllReferentsIds() );
 			}
 			$user_id_sql = amapress_prepare_in_sql( $user_ids );
 			$where       .= " AND $wpdb->users.ID IN ($user_id_sql)";
-		} else if ( $amapress_role == 'referent_producteur' ) {
-			$user_ids = array();
-			foreach ( AmapressContrats::get_active_contrat_instances() as $contrat ) {
-				if ( empty( $contrat->getModel() ) ) {
-					continue;
-				}
-				$prod = $contrat->getModel()->getProducteur();
-				if ( ! $prod ) {
-					continue;
-				}
-				foreach ( Amapress::get_lieu_ids() as $lieu_id ) {
-					$user_ids = array_merge( $user_ids, $prod->getReferentsIds( $lieu_id ) );
-				}
-				$user_ids = array_merge( $user_ids, $prod->getReferentsIds() );
-			}
-			$user_id_sql = amapress_prepare_in_sql( $user_ids );
-			$where       .= " AND $wpdb->users.ID IN ($user_id_sql)";
-
 		} else if ( $amapress_role == 'resp_distrib' ) {
 			$user_ids    = AmapressDistributions::getResponsablesBetween(
 				Amapress::start_of_week( amapress_time() ),

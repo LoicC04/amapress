@@ -50,7 +50,7 @@ function amapress_intermittence_inscription_shortcode( $atts ) {
 				}
 				$ret .= '<form action="' . $admin_post_url . '?action=inscription_intermittent&return_sender&confirm=yes" method="post">
   <div class="form-group">
-    <label for="email">Email:</label>
+    <label for="email"><strong>*Email:</strong></label>
     <input type="email" class="form-control required" id="email" name="email">
   </div>
   <div class="form-group">
@@ -60,6 +60,14 @@ function amapress_intermittence_inscription_shortcode( $atts ) {
   <div class="form-group">
     <label for="last_name">Nom:</label>
     <input type="text" class="form-control" id="last_name" name="last_name">
+  </div>
+  <div class="form-group">
+    <label for="phone"><em>Téléphone</em>:</label>
+    <input type="text" class="form-control" id="phone" name="phone">
+  </div>
+  <div class="form-group">
+    <label for="address"><em>Adresse</em>:</label>
+    <input type="text" class="form-control" id="address" name="address">
   </div>
   <button type="submit" class="btn btn-default" onclick="return confirm(\'Confirmez-vous votre inscription ?\')">Inscrire</button>
 </form>';
@@ -139,10 +147,13 @@ function amapress_intermittence_tags_handler( WPCF7_ContactForm $cf7 ) {
 }
 
 function amapress_intermittence_desinscription_link( $atts = null ) {
-	return wp_nonce_url(
-		admin_url( 'admin-post.php?action=desinscription_intermittent' ),
-		'desinscription_intermittent',
-		'desinter_nonce'
+	$uuid = wp_generate_uuid4();
+	set_transient( 'amps_desinscr_inter_' . $uuid, $uuid, 5 * 24 * HOUR_IN_SECONDS );
+
+	return add_query_arg(
+		'desinter_nonce',
+		$uuid,
+		admin_url( 'admin-post.php?action=desinscription_intermittent' )
 	);
 }
 
@@ -293,6 +304,13 @@ function amapress_echanger_panier_shortcode( $atts ) {
 			$date_dists = [ array_shift( $date_dists ) ];
 		}
 
+		$manage_my_exchanges_link = '';
+		$manage_my_exchanges_href = Amapress::get_page_with_shortcode_href( 'amapien-paniers-intermittents', 'amps_manage_paniers_inter' );
+		if ( ! empty( $manage_my_exchanges_href ) ) {
+			$manage_my_exchanges_link = '<p><a href="' . esc_attr( $manage_my_exchanges_href ) . '">Gérer l\'échange</a></p>';
+		}
+
+
 		foreach ( $date_dists as $dist ) {
 			if ( ! in_array( $dist->getLieuId(), $lieu_ids ) ) {
 				continue;
@@ -325,15 +343,19 @@ function amapress_echanger_panier_shortcode( $atts ) {
 					break;
 				case AmapressIntermittence_panier::EXCHANGE_VALIDATE_WAIT:
 					$ret .= '<span class="repreneurè-waiting">Repreneur(s) en attente de validation</span>';
+					$ret .= $manage_my_exchanges_link;
 					break;
 				case 'to_exchange':
 					$ret .= '<span class="panier-to-exchange">Panier(s) en attente de repreneur</span>';
+					$ret .= $manage_my_exchanges_link;
 					break;
 				case 'exchanged':
 					$ret .= '<span class="panier-exchanged">Panier(s) cédé(s)</span>';
+					$ret .= $manage_my_exchanges_link;
 					break;
 				case 'closed':
 					$ret .= '<span class="echange-done">Cession effectuée</span>';
+					$ret .= $manage_my_exchanges_link;
 					break;
 			}
 			$ret .= '</td>';

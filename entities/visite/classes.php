@@ -65,15 +65,12 @@ class AmapressVisite extends Amapress_EventBase {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
-		$participants = unserialize( get_post_meta( $this->ID, 'amapress_visite_participants', true ) );
-		if ( ! $participants ) {
-			$participants = array();
-		}
+		$participants = $this->getParticipantIds();
 		if ( in_array( $user_id, $participants ) ) {
 			return 'already_in_list';
 		} else {
 			$participants[] = $user_id;
-			update_post_meta( $this->ID, 'amapress_visite_participants', $participants );
+			$this->setCustom( 'amapress_visite_participants', $participants );
 
 			amapress_mail_current_user_inscr( $this, $user_id, 'visite' );
 
@@ -86,15 +83,11 @@ class AmapressVisite extends Amapress_EventBase {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
-		$participants = Amapress::get_post_meta_array( $this->ID, 'amapress_visite_participants' );
-		if ( ! $participants ) {
-			$participants = array();
-		}
+		$participants = $this->getParticipantIds();
 
 		if ( ( $key = array_search( $user_id, $participants ) ) !== false ) {
 			unset( $participants[ $key ] );
-
-			update_post_meta( $this->ID, 'amapress_visite_participants', $participants );
+			$this->setCustom( 'amapress_visite_participants', $participants );
 
 			amapress_mail_current_user_desinscr( $this, $user_id, 'visite' );
 
@@ -164,7 +157,7 @@ class AmapressVisite extends Amapress_EventBase {
 					'priority' => 90,
 					'lieu'     => $producteur,
 					'label'    => 'Visite ' . $producteur->getTitle(),
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_visite_icon", 'dashicons dashicons-admin-post' ) ),
+					'icon'     => 'flaticon-sprout',
 					'alt'      => 'Vous êtes inscript pour la visite à la ferme du ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );
@@ -179,7 +172,7 @@ class AmapressVisite extends Amapress_EventBase {
 					'priority' => 95,
 					'lieu'     => $producteur,
 					'label'    => 'Visite ' . $producteur->getTitle(),
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_visite_inscription_icon" ) ),
+					'icon'     => 'flaticon-sprout',
 					'alt'      => 'Une vsite est prévue à la ferme le ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );

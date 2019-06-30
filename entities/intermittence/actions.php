@@ -18,6 +18,8 @@ function amapress_create_user_if_not_exists(
 		$username = sanitize_user( $email_address );
 		if ( ! empty( $last_name ) && ! empty( $first_name ) ) {
 			$username = "$first_name.$last_name";
+		} else {
+			$username = preg_replace( '/@.+$/', '', $username );
 		}
 
 		$username = AmapressUsers::generate_unique_username( $username );
@@ -95,6 +97,8 @@ function amapress_admin_action_inscription_intermittent() {
 
 	$user_firt_name = isset( $_REQUEST['first_name'] ) ? $_REQUEST['first_name'] : '';
 	$user_last_name = isset( $_REQUEST['last_name'] ) ? $_REQUEST['last_name'] : '';
+	$user_phone     = isset( $_REQUEST['phone'] ) ? $_REQUEST['phone'] : '';
+	$user_address   = isset( $_REQUEST['address'] ) ? $_REQUEST['address'] : '';
 	$user_email     = sanitize_email( $_REQUEST['email'] );
 	$me             = AmapressUser::getBy( amapress_current_user_id() );
 	$is_me          = in_array( $user_email, $me->getAllEmails() );
@@ -105,7 +109,7 @@ function amapress_admin_action_inscription_intermittent() {
 <a href="' . add_query_arg( 'confirm', 'yes' ) . '">Confirmer l\'inscription</a>';
 	} else {
 		$return_to_sender = isset( $_REQUEST['return_sender'] );
-		$user_id          = amapress_create_user_if_not_exists( $user_email, $user_firt_name, $user_last_name );
+		$user_id          = amapress_create_user_if_not_exists( $user_email, $user_firt_name, $user_last_name, $user_address, $user_phone );
 		$user             = AmapressUser::getBy( $user_id );
 		if ( false === $user->inscriptionIntermittence() ) {
 			if ( $return_to_sender ) {
@@ -127,8 +131,9 @@ function amapress_admin_action_inscription_intermittent() {
 add_action( 'admin_post_nopriv_desinscription_intermittent', 'amapress_admin_action_nopriv_desinscription_intermittent' );
 function amapress_admin_action_nopriv_desinscription_intermittent() {
 	if ( ! empty( $_GET['desinter_nonce'] ) ) {
+		$nonce = $_GET['desinter_nonce'];
 		header( 'Content-Type: text/html; charset=UTF-8' );
-		if ( ! wp_verify_nonce( $_GET['desinter_nonce'], 'desinscription_intermittent' ) ) {
+		if ( get_transient( 'amps_desinscr_inter_' . $nonce ) != $nonce ) {
 			wp_die( 'Ce lien de désinscription de la liste des intermittents est périmé.' );
 		}
 		if ( ! empty( $_REQUEST['email'] ) ) {
@@ -160,8 +165,12 @@ function amapress_admin_action_desinscription_intermittent() {
 	}
 
 	$user_email = sanitize_email( $_REQUEST['email'] );
-	$me         = AmapressUser::getBy( amapress_current_user_id() );
-	$is_me      = in_array( $user_email, $me->getAllEmails() );
+	if ( amapress_is_user_logged_in() ) {
+		$me    = AmapressUser::getBy( amapress_current_user_id() );
+		$is_me = in_array( $user_email, $me->getAllEmails() );
+	} else {
+		$is_me = true;
+	}
 
 	$user = get_user_by( 'email', $user_email );
 	if ( ! $user ) {
@@ -176,7 +185,11 @@ function amapress_admin_action_desinscription_intermittent() {
 	if ( ! isset( $_REQUEST['confirm'] ) ) {
 		echo 'Etes-vous sûr de vouloir ' . ( $is_me ? 'vous désinscrire' : "désinscrire {$user_email}" ) . ' en tant qu\'intermittent ? 
 <br/>
-<a href="' . add_query_arg( 'confirm', 'yes' ) . '">Confirmer la désinscription</a>';
+<a href="' . add_query_arg(
+				[
+					'confirm' => 'yes',
+					'email'   => $user_email,
+				] ) . '">Confirmer la désinscription</a>';
 	} else {
 		$amapien->desinscriptionIntermittence();
 

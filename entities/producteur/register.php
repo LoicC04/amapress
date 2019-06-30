@@ -37,11 +37,14 @@ function amapress_register_entities_producteur( $entities ) {
 				if ( ! $producteur->isAdresseExploitationLocalized() ) {
 					amapress_add_admin_notice( 'Adresse du producteur non localisée', 'warning', false );
 				}
+				if ( empty( $producteur->getAllReferentsIds() ) ) {
+					echo '<div class="notice notice-error"><p>Producteur sans référent</p></div>';
+				}
 			}
 
 			TitanFrameworkOption::echoFullEditLinkAndWarning();
 
-			echo '<h2>Historique de la ferme et du producteur</h2>';
+			echo '<h2>Présentation du producteur <em>(Biographie, historique de la ferme...)</em></h2>';
 		},
 		'fields'                  => array(
 			'nom_exploitation'     => array(

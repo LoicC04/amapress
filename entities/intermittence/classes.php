@@ -437,8 +437,35 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 			return 'too_late';
 		}
 
+		if ( ! $user_id ) {
+			$user_id = amapress_current_user_id();
+		}
+
 		$repreneur = $this->getRepreneur();
 		$ask       = $this->getAsk();
+		if ( isset( $ask[ $user_id ] ) ) {
+			$repreneur = AmapressUser::getBy( $user_id );
+		}
+
+		if ( $repreneur ) {
+			$this->setLastAskId( $repreneur->ID );
+		}
+
+		$adherent_subject = amapress_replace_mail_placeholders(
+			Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-adherent-mail-subject' ),
+			$this->getAdherent(), $this );
+		$adherent_message = amapress_replace_mail_placeholders(
+			Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-adherent-mail-content' ),
+			$this->getAdherent(), $this );
+		if ( $repreneur ) {
+			$repreneur_subject = amapress_replace_mail_placeholders(
+				Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-repreneur-mail-subject' ),
+				$repreneur, $this );
+			$repreneur_message = amapress_replace_mail_placeholders(
+				Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-repreneur-mail-content' ),
+				$repreneur, $this );
+		}
+
 		if ( isset( $ask[ $user_id ] ) ) {
 			unset( $ask[ $user_id ] );
 			if ( empty( $ask ) ) {
@@ -453,22 +480,17 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 			return 'unknown';
 		}
 
-		amapress_mail_to_current_user(
-			Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-adherent-mail-subject' ),
-			Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-adherent-mail-content' ),
-			$user_id,
-			$this, [], null, null, $repreneur ? [
-			'Reply-To: ' . implode( ',', $repreneur->getAllEmails() )
-		] : [] );
+		amapress_wp_mail( implode( ',', $this->getAdherent()->getAllEmails() ), $adherent_subject, $adherent_message,
+			$repreneur ? [
+				'Reply-To: ' . implode( ',', $repreneur->getAllEmails() )
+			] : [], [], null, null );
 
 		if ( $repreneur ) {
-			amapress_mail_to_current_user(
-				Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-repreneur-mail-subject' ),
-				Amapress::getOption( 'intermittence-panier-cancel-from-repreneur-repreneur-mail-content' ),
-				$repreneur->ID,
-				$this, [], null, null, [
+			amapress_wp_mail(
+				implode( ',', $repreneur->getAllEmails() ),
+				$repreneur_subject, $repreneur_message, [
 				'Reply-To: ' . implode( ',', $this->getAdherent()->getAllEmailsWithCoAdherents() )
-			] );
+			], [], null, null );
 		}
 
 		return 'ok';
@@ -695,7 +717,7 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 				'lien_desinscription_intermittent' => [
 					'desc' => 'Lien vers la page de désinscription de la liste des intermittents',
 					'func' => function ( AmapressIntermittence_panier $panier ) {
-						return amapress_intermittence_desinscription_link();
+						return Amapress::makeLink( amapress_intermittence_desinscription_link() );
 					}
 				],
 			] );
@@ -786,7 +808,7 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 						'priority' => 10,
 						'lieu'     => $this->getRealLieu(),
 						'label'    => 'A échanger ' . $this->getPaniersTitles(),
-						'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+						'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
 						'alt'      => 'Votre panier ' . $this->getPaniersTitles() . ' reste à échanger',
 						'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 					) );
@@ -801,7 +823,7 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 						'priority' => 5,
 						'lieu'     => $this->getRealLieu(),
 						'label'    => 'Echange ' . $this->getPaniersTitles(),
-						'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+						'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
 						'alt'      => 'Votre panier ' . $this->getPaniersTitles() . ' a été échanger',
 						'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 					) );
@@ -817,7 +839,7 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 					'priority' => 15,
 					'lieu'     => $this->getRealLieu(),
 					'label'    => 'Récupérer panier ' . $this->getPaniersTitles(),
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+					'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
 					'alt'      => 'Panier ' . $this->getPaniersTitles() . ' de ' . $this->getAdherent()->getDisplayName() . ' à récupérer',
 					'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 				) );
@@ -836,7 +858,7 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 							'priority' => 10,
 							'lieu'     => $this->getRealLieu(),
 							'label'    => 'A échanger ' . $this->getPaniersTitles(),
-							'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+							'icon'     => 'fa fa-shopping-basket',
 							'alt'      => 'Panier ' . $this->getPaniersTitles() . ' à échanger',
 							'href'     => $paniers_url
 						) );

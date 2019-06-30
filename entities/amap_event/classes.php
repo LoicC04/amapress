@@ -171,15 +171,12 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
-		$participants = unserialize( get_post_meta( $this->ID, 'amapress_amap_event_participants', true ) );
-		if ( ! $participants ) {
-			$participants = array();
-		}
+		$participants = $this->getParticipantsIds();
 		if ( in_array( $user_id, $participants ) ) {
 			return 'already_in_list';
 		} else {
 			$participants[] = $user_id;
-			update_post_meta( $this->ID, 'amapress_amap_event_participants', $participants );
+			$this->setCustom( 'amapress_amap_event_participants', $participants );
 
 			amapress_mail_current_user_inscr( $this, $user_id, 'amap_event' );
 
@@ -192,19 +189,14 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
-		$participants = Amapress::get_post_meta_array( $this->ID, 'amapress_amap_event_participants' );
-		if ( ! $participants ) {
-			$participants = array();
-		}
-
+		$participants = $this->getParticipantsIds();
 		if ( ( $key = array_search( $user_id, $participants ) ) !== false ) {
 			unset( $participants[ $key ] );
-
-			update_post_meta( $this->ID, 'amapress_amap_event_participants', $participants );
+			$this->setCustom( 'amapress_amap_event_participants', $participants );
 
 			amapress_mail_current_user_desinscr( $this, $user_id, 'amap_event' );
 
-			return true;
+			return 'ok';
 		} else {
 			return 'not_inscr';
 		}
@@ -244,7 +236,7 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 				'lieu'     => $this,
 				'priority' => 60,
 				'label'    => $this->getTitle(),
-				'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_amap_event_inscription_icon" ) ),
+				'icon'     => 'dashicons dashicons-groups',
 				'alt'      => 'Un(e) ' . $this->getTitle() . ' est prévu(e) le ' . date_i18n( 'd/m/Y', $date ),
 				'href'     => $this->getPermalink()
 			) );
@@ -263,7 +255,7 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 					'lieu'     => $this,
 					'priority' => 60,
 					'label'    => $this->getTitle(),
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_event_icon" ) ),
+					'icon'     => 'dashicons dashicons-groups',
 					'alt'      => 'Vous êtes inscript pour ' . $this->getTitle() . ' le ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );
@@ -278,7 +270,7 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 					'lieu'     => $this,
 					'priority' => 60,
 					'label'    => $this->getTitle(),
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_amap_event_inscription_icon" ) ),
+					'icon'     => 'dashicons dashicons-groups',
 					'alt'      => 'Un(e) ' . $this->getTitle() . ' est prévu(e) le ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );
@@ -306,5 +298,18 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 		} else {
 			return $this->getLieu_externe_nom();
 		}
+	}
+
+	public static function getRespAmapEventsEmails( $lieu_id ) {
+		return AmapressUser::getEmailsForAmapRole( intval( Amapress::getOption( 'resp-amap_event-amap-role' ), $lieu_id ) );
+	}
+
+	public static function getResponsableAmapEventsReplyto() {
+		$emails = self::getRespAmapEventsEmails( null );
+		if ( empty( $emails ) ) {
+			return [];
+		}
+
+		return 'Reply-To: ' . implode( ',', $emails );
 	}
 }

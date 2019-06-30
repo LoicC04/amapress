@@ -589,7 +589,7 @@ class AmapressDistribution extends Amapress_EventBase {
 					'type'     => 'resp-distribution',
 					'priority' => 45,
 					'label'    => 'Responsable de distribution',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_resp_distrib_icon" ) ),
+					'icon'     => 'dashicons dashicons-universal-access-alt',
 					'alt'      => 'Vous êtes responsable de distribution à ' . $lieu->getShortName(),
 					'href'     => $this->getPermalink()
 				) );
@@ -668,7 +668,7 @@ class AmapressDistribution extends Amapress_EventBase {
 					'priority' => 10,
 					'lieu'     => $this->getRealLieu(),
 					'label'    => '<span class="badge">' . $status_count['me_to_exchange'] . '</span> à échanger',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+					'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
 					'alt'      => $status_count['me_to_exchange'] . ' à échanger',
 					'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 				) );
@@ -684,7 +684,7 @@ class AmapressDistribution extends Amapress_EventBase {
 					'priority' => 5,
 					'lieu'     => $this->getRealLieu(),
 					'label'    => '<span class="badge">' . $status_count['me_exchanged'] . '</span> échangé(s)',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+					'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
 					'alt'      => $status_count['me_exchanged'] . ' échangé(s)',
 					'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 				) );
@@ -701,7 +701,7 @@ class AmapressDistribution extends Amapress_EventBase {
 					'priority' => 15,
 					'lieu'     => $this->getRealLieu(),
 					'label'    => '<span class="badge">' . $status_count['me_recup'] . '</span> à récupérer',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+					'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
 					'alt'      => $status_count['me_recup'] . ' à récupérer',
 					'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 				) );
@@ -720,7 +720,7 @@ class AmapressDistribution extends Amapress_EventBase {
 					'priority' => 10,
 					'lieu'     => $this->getRealLieu(),
 					'label'    => '<span class="badge">' . $status_count['other_to_exchange'] . '</span> à échanger',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_intermittence_icon" ) ),
+					'icon'     => 'fa fa-shopping-basket',
 					'alt'      => $status_count['other_to_exchange'] . ' à échanger',
 					'href'     => $paniers_url
 				) );
@@ -741,19 +741,43 @@ class AmapressDistribution extends Amapress_EventBase {
 	public static function getProperties() {
 		if ( null == self::$properties ) {
 			$ret = array_merge( parent::getProperties(), [
-				'lien_liste_emargement'         => [
+				'lien-liste-paniers'               => [
+					'desc' => 'Lien vers la page "Paniers disponibles"',
+					'func' => function ( AmapressDistribution $dist ) {
+						return Amapress::makeLink( Amapress::getPageLink( 'paniers-intermittents-page' ) . '#' . $dist->getSlug() );
+					}
+				],
+				'liste-paniers'                    => [
+					'desc' => 'Lien vers la page "Paniers disponibles"',
+					'func' => function ( AmapressDistribution $dist ) {
+						return Amapress::makeLink( Amapress::getPageLink( 'paniers-intermittents-page' ) . '#' . $dist->getSlug() );
+					}
+				],
+				'mes-echanges'                     => [
+					'desc' => 'Lien vers la page "Mes paniers échangés"',
+					'func' => function ( AmapressDistribution $dist ) {
+						return Amapress::makeLink( Amapress::getPageLink( 'mes-paniers-intermittents-page' ) . '#' . $dist->getSlug() );
+					}
+				],
+				'lien_desinscription_intermittent' => [
+					'desc' => 'Lien vers la page de désinscription de la liste des intermittents',
+					'func' => function ( AmapressDistribution $distrib ) {
+						return Amapress::makeLink( amapress_intermittence_desinscription_link() );
+					}
+				],
+				'lien_liste_emargement'            => [
 					'desc' => 'Lien vers la liste d\'émargement de cette distribution',
 					'func' => function ( AmapressDistribution $distrib ) {
 						return Amapress::makeLink( $distrib->getListeEmargementHref() );
 					}
 				],
-				'lieu'                          => [
+				'lieu'                             => [
 					'desc' => 'Nom du lieu de cette distribution',
 					'func' => function ( AmapressDistribution $distrib ) {
 						return $distrib->getRealLieu()->getTitle();
 					}
 				],
-				'lieu_instruction'              => [
+				'lieu_instruction'                 => [
 					'desc' => 'Instructions du lieu de cette distribution',
 					'func' => function ( AmapressDistribution $distrib ) {
 						$instructions = $distrib->getLieu()->getInstructions_privee();

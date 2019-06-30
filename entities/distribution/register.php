@@ -21,14 +21,23 @@ function amapress_register_entities_distribution( $entities ) {
 		'redirect_archive' => 'amapress_redirect_agenda',
 		'menu_icon'        => 'dashicons-store',
 		'row_actions'      => array(
-			'emargement'             => [
+			'emargement'  => [
 				'label'  => 'Liste émargement',
 				'target' => '_blank',
 				'href'   => function ( $dist_id ) {
 					return AmapressDistribution::getBy( $dist_id )->getListeEmargementHref();
 				},
 			],
-			'mailto_resp'            => [
+			'quant_prod'  => [
+				'label'  => 'Quantités producteurs',
+				'target' => '_blank',
+				'href'   => function ( $dist_id ) {
+					return add_query_arg( 'date',
+						date_i18n( 'Y-m-d', AmapressDistribution::getBy( $dist_id )->getDate() ),
+						admin_url( 'admin.php?page=contrats_quantites_next_distrib' ) );
+				},
+			],
+			'mailto_resp' => [
 				'label'     => 'Mail aux responsables',
 				'target'    => '_blank',
 				'confirm'   => true,
@@ -44,7 +53,7 @@ function amapress_register_entities_distribution( $entities ) {
 				},
 				'show_on'   => 'editor',
 			],
-			'smsto_resp'             => [
+			'smsto_resp'  => [
 				'label'     => 'SMS aux responsables',
 				'target'    => '_blank',
 				'confirm'   => true,
@@ -162,13 +171,19 @@ function amapress_register_entities_distribution( $entities ) {
 				'group' => '1/ Partage',
 			),
 			'contrats'          => array(
-				'name'      => amapress__( 'Contrats' ),
-				'type'      => 'multicheck-posts',
-				'post_type' => 'amps_contrat_inst',
-				'group'     => '1/ Partage',
-				'readonly'  => true,
-				'hidden'    => true,
-				'desc'      => 'Contrats',
+				'name'       => amapress__( 'Contrats' ),
+				'type'       => 'multicheck-posts',
+				'post_type'  => 'amps_contrat_inst',
+				'group'      => '1/ Partage',
+				'readonly'   => true,
+				'hidden'     => true,
+				'desc'       => 'Contrats',
+				'orderby'    => 'post_title',
+				'order'      => 'ASC',
+				'top_filter' => array(
+					'name'        => 'amapress_contrat_inst',
+					'placeholder' => 'Tous les contrats'
+				),
 //                'searchable' => true,
 			),
 			'paniers'           => array(
@@ -233,21 +248,40 @@ function amapress_register_entities_distribution( $entities ) {
 				'show_column' => false,
 			),
 			'responsables' => array(
-				'name'          => amapress__( 'Responsables' ),
-				'group'         => '2/ Responsables',
-				'type'          => 'select-users',
-				'autocomplete'  => true,
-				'multiple'      => true,
-				'tags'          => true,
-				'desc'          => 'Indiquer tous les responsables de distribution',
-				'before_option' => function ( $o ) {
-					if ( Amapress::hasRespDistribRoles() ) {
-						echo '<p style="color: orange">Lorsqu\'il existe des rôles de responsables de distribution, l\'inscription ne peut se faire que depuis la page d\'inscription par dates.</p>';
-					}
+				'name'         => amapress__( 'Responsables' ),
+				'group'        => '2/ Responsables',
+				'type'         => 'select-users',
+				'autocomplete' => true,
+				'multiple'     => true,
+				'tags'         => true,
+				'desc'         => 'Indiquer tous les responsables de distribution',
+//				'before_option' => function ( $o ) {
+//					if ( Amapress::hasRespDistribRoles() ) {
+//						echo '<p style="color: orange">Lorsqu\'il existe des rôles de responsables de distribution, l\'inscription ne peut se faire que depuis la page d\'inscription par dates.</p>';
+//					}
+//				},
+				'readonly'     => true,
+				'after_option' => function ( $option ) {
+					/** @var TitanFrameworkOption $option */
+
+//					$href = Amapress::get_inscription_distrib_page_href();
+//					if ( ! empty( $href ) ) {
+//						echo '<p>Les inscriptions aux distributions se gèrent <a href="' . esc_attr( $href ) . '" target="_blank">ici</a></p>';
+//					} else {
+//						echo '<p style="color:red">Aucune page du site ne contient le shortcode [inscription-distrib] (qui permet de gérer l\'inscription aux distributions)</p>';
+//					}
+					$dist = AmapressDistribution::getBy( $option->getPostID() );
+					echo amapress_inscription_distrib_shortcode(
+						[
+							'date'                     => $dist->getDate(),
+							'show_for_resp'            => 'true',
+							'show_title'               => 'false',
+							'max_dates'                => 1,
+							'lieu'                     => $dist->getLieuId(),
+							'manage_all_subscriptions' => 'true',
+						]
+					);
 				},
-				'readonly'      => function ( $o ) {
-					return Amapress::hasRespDistribRoles();
-				}
 //                'searchable' => true,
 			),
 

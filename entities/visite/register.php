@@ -27,7 +27,10 @@ function amapress_register_entities_visite( $entities ) {
 			'_dyn_'   => 'amapress_visite_views',
 			'exp_csv' => true,
 		),
-		'fields'             => array(
+		'edit_header'        => function ( $post ) {
+			TitanFrameworkOption::echoFullEditLinkAndWarning();
+		},
+		'fields'           => array(
 //			'photo'        => array(
 //				'name'  => amapress__( 'Photo' ),
 //				'type'  => 'upload',
@@ -92,11 +95,17 @@ function amapress_register_entities_visite( $entities ) {
 			'participants' => array(
 				'name'         => amapress__( 'Participants' ),
 				'type'         => 'select-users',
+				'readonly'     => true,
 				'autocomplete' => true,
 				'multiple'     => true,
 				'tags'         => true,
 				'desc'         => 'Participants',
 				'group'        => '4/ Participants',
+				'after_option' => function ( $option ) {
+					/** @var TitanFrameworkOption $option */
+					$visite = new AmapressVisite( $option->getPostID() );
+					echo '<p>Les inscription se gère <a href="' . esc_attr( $visite->getPermalink() ) . '" target="_blank">ici</a> pour cette visite</p>';
+				},
 			),
 		),
 	);

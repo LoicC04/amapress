@@ -67,6 +67,21 @@ class AmapressEntities {
 
 	static function getMenu() {
 		if ( empty( AmapressEntities::$menu ) ) {
+			$contrats_model_buttons = [];
+			$contrat_instances      = AmapressContrats::get_active_contrat_instances();
+			usort( $contrat_instances, function ( $a, $b ) {
+				/** @var AmapressContrat_instance $a */
+				/** @var AmapressContrat_instance $b */
+				return strcmp( $a->getTitle(), $b->getTitle() );
+			} );
+			foreach ( $contrat_instances as $contrat_instance ) {
+				$contrats_model_buttons[] = array(
+					'type'   => 'action',
+					'class'  => 'button button-primary button-import-model',
+					'text'   => 'Télécharger le modèle "' . $contrat_instance->getTitle() . '"',
+					'action' => 'generate_model_' . AmapressAdhesion::POST_TYPE . '_contrat_' . $contrat_instance->ID,
+				);
+			}
 			AmapressEntities::$menu = array(
 				array(
 					'type'       => 'page',
@@ -85,7 +100,7 @@ class AmapressEntities {
 					'menu_title' => 'Listes de diffusion',
 					'post_type'  => Amapress_MailingListConfiguration::INTERNAL_POST_TYPE,
 					'position'   => '25.1',
-					'capability' => 'edit_mailinglist',
+					'capability' => 'manage_options',
 					'slug'       => 'edit.php?post_type=' . Amapress_MailingListConfiguration::INTERNAL_POST_TYPE,
 					'function'   => null,
 				),
@@ -134,7 +149,7 @@ class AmapressEntities {
 						),
 						array(
 							'title'      => 'Catégories de produit',
-							'menu_icon'  => 'dashicons-none ',
+							'menu_icon'  => 'dashicons-tag',
 							'menu_title' => 'Catégories de produits',
 							'capability' => 'edit_produit',
 							'slug'       => 'edit-tags.php?taxonomy=amps_produit_category',
@@ -168,7 +183,7 @@ class AmapressEntities {
 						),
 						array(
 							'title'      => 'Catégories de recettes',
-							'menu_icon'  => 'dashicons-none ',
+							'menu_icon'  => 'dashicons-tag',
 							'menu_title' => 'Catégories de recettes',
 							'capability' => 'edit_recette',
 							'slug'       => 'edit-tags.php?taxonomy=amps_recette_category',
@@ -247,6 +262,16 @@ class AmapressEntities {
 							'desc'    => '',
 							'options' => amapress_visite_available_recall_options(),
 						),
+						'Mails - Evènement AMAP - Inscription - Rappel'           => array(
+							'id'      => 'amp_tab_recall_amap_event_inscr',
+							'desc'    => '',
+							'options' => amapress_amap_event_inscription_recall_options(),
+						),
+						'Mails - Evènement AMAP - Inscription possible - Rappel'  => array(
+							'id'      => 'amp_tab_recall_amap_event_avail',
+							'desc'    => '',
+							'options' => amapress_amap_event_available_recall_options(),
+						),
 						'Distributions - Définir horaires particuliers'           => array(
 							'id'      => 'amp_tab_distrib_hours_setter',
 							'desc'    => '',
@@ -305,7 +330,7 @@ class AmapressEntities {
 						),
 						array(
 							'title'      => 'Catégories d\'évènements',
-							'menu_icon'  => 'dashicons-none flaticon-tool',
+							'menu_icon'  => 'dashicons-tag',
 							'menu_title' => 'Catégories d\'évènements',
 							'capability' => 'edit_amap_event',
 							'slug'       => 'edit-tags.php?taxonomy=amps_amap_event_category',
@@ -318,7 +343,7 @@ class AmapressEntities {
 								'menu_title' => 'Statistiques',
 //								'position'   => '25.2',
 								'capability' => 'edit_distribution',
-								'icon'       => 'dashicons-none flaticon-pen',
+								'menu_icon'  => 'dashicons-chart-bar',
 							),
 							'options'  => array(
 								array(
@@ -498,7 +523,7 @@ class AmapressEntities {
 					'settings' => array(
 						'name'       => 'Gestion Contrats',
 						'position'   => '25.4',
-						'capability' => 'manage_contrats',
+						'capability' => 'edit_contrat_instance',
 						'icon'       => 'dashicons-none flaticon-pen',
 					),
 					'options'  => array(
@@ -518,7 +543,7 @@ class AmapressEntities {
 //						),
 					),
 					'tabs'     => array(
-						'Ajouter une inscription'              => array(
+						'Ajouter Inscription Contrat '    => array(
 							'id'        => 'add_inscription',
 							'desc'      => '',
 							'use_form'  => false,
@@ -532,7 +557,7 @@ class AmapressEntities {
 								)
 							),
 						),
-						'Ajouter un coadhérent'                => array(
+						'Ajouter un coadhérent'           => array(
 							'id'        => 'add_coadherent',
 							'desc'      => '',
 							'use_form'  => false,
@@ -546,7 +571,7 @@ class AmapressEntities {
 								)
 							),
 						),
-						'Ajouter une personne hors AMAP'       => array(
+						'Ajouter une personne hors AMAP'  => array(
 							'id'        => 'add_other_user',
 							'desc'      => '',
 							'use_form'  => false,
@@ -560,7 +585,7 @@ class AmapressEntities {
 								)
 							),
 						),
-						'Renouvèlement'                        => array(
+						'Renouvèlement'                   => array(
 							'id'      => 'renew_config',
 							'desc'    => '',
 							'options' => array(
@@ -576,7 +601,7 @@ class AmapressEntities {
 								),
 							)
 						),
-						'Mails - Envoi liste des chèques'      => array(
+						'Mails - Envoi liste des chèques' => array(
 							'id'      => 'amp_tab_recall_liste_cheques',
 							'desc'    => '',
 							'options' => amapress_contrat_paiements_recall_options(),
@@ -730,7 +755,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 								'menu_title' => 'Calendrier',
 								'position'   => '25.2',
 								'capability' => 'edit_contrat_paiement',
-								'icon'       => 'dashicons-none flaticon-pen',
+								'menu_icon'  => 'dashicons-calendar-alt',
 							),
 							'options'  => array(),
 							'tabs'     => function () {
@@ -780,7 +805,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 								'menu_title' => 'Quantités',
 								'position'   => '25.2',
 								'capability' => 'edit_distribution',
-								'icon'       => 'dashicons-none flaticon-pen',
+								'menu_icon'  => 'dashicons-chart-pie',
 							),
 							'options'  => array(),
 							'tabs'     => function () {
@@ -828,7 +853,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 								'menu_title' => 'Statistiques',
 								'position'   => '25.2',
 								'capability' => 'edit_distribution',
-								'icon'       => 'dashicons-none flaticon-pen',
+								'menu_icon'  => 'dashicons-chart-bar',
 							),
 							'options'  => array(
 								array(
@@ -973,7 +998,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 						),
 						array(
 							'title'      => 'Répartitions bénéficiaires',
-							'menu_icon'  => 'dashicons-none flaticon-business-1',
+							'menu_icon'  => 'dashicons-tag',
 							'menu_title' => 'Configuration',
 							'capability' => 'edit_adhesion_paiement',
 							'slug'       => 'edit-tags.php?taxonomy=amps_paiement_category',
@@ -989,24 +1014,25 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 					),
 				),
 				array(
-					'id'       => 'amapress_gestion_intermittence_page',
-					'type'     => 'panel',
-					'settings' => array(
+					'id'         => 'amapress_gestion_intermittence_page',
+					'type'       => 'panel',
+					'capability' => 'edit_intermittence_panier',
+					'settings'   => array(
 						'name'       => 'Espace intermittents',
 						'position'   => '60.4',
-						'capability' => 'manage_intermittence',
+						'capability' => 'edit_intermittence_panier',
 						'icon'       => 'dashicons-none flaticon-business-2',
 					),
-					'options'  => array(
+					'options'    => array(
 //						array(
 //							'type' => 'note',
 //							'desc' => 'ici vous pouvez gérer...'
 //						),
 					),
-					'tabs'     => array(
+					'tabs'       => array(
 						'Configuration de l\'espace intermittents' => array(
 							'desc'       => '',
-							'capability' => 'manage_intermittence',
+							'capability' => 'manage_options',
 							'options'    => array(
 								array(
 									'id'      => 'intermittence_enabled',
@@ -1092,7 +1118,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 									'id'      => 'intermittence-panier-dispo-mail-content',
 									'name'    => 'Contenu du mail',
 									'type'    => 'editor',
-									'default' => wpautop( "Bonjour,\n\nVous recevez ce mail en tant qu'amapien ou intermittent de l'AMAP %%nom_site%%.\n\nUn panier (%%post:panier%%) est proposé à la distribution de %%post:distribution-link%%\n\nSi vous souhaitez le réserver, rendez-vous sur le site de l'AMAP %%nom_site%%, sur la page %%post:liste-paniers%%\n\nPour vous désinscrire de la liste des intermittents : %%lien_desinscription_intermittent%%\n\nEn cas de problème ou de questions sur le fonctionnement des intermittents, veuillez contacter : [[à remplir]].\n\nSi vous avez des questions plus générale sur l'AMAP %%nom_site%%, vous pouvez écrire à [[à remplir]].\n\n%%nom_site%%" ),
+									'default' => wpautop( "Bonjour,\n\nVous recevez ce mail en tant qu'amapien ou intermittent de l'AMAP %%nom_site%%.\n\nUn panier (%%post:panier%%) est proposé à la distribution de %%post:distribution-link%%\n\nSi vous souhaitez le réserver, rendez-vous sur le site de l'AMAP %%nom_site%%, sur la page %%post:liste-paniers%%\n\nPour vous désinscrire de la liste des intermittents : %%lien_desinscription_intermittent%%\n\nEn cas de problème ou de questions sur le fonctionnement des intermittents, veuillez contacter : %%admin_email_link%%.\n\nSi vous avez des questions plus générale sur l'AMAP %%nom_site%%, vous pouvez écrire à %%admin_email_link%%.\n\n%%nom_site%%" ),
 									'desc'    =>
 										AmapressIntermittence_panier::getPlaceholdersHelp(),
 								),
@@ -1340,7 +1366,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 							)
 						),
 					),
-					'subpages' => array(
+					'subpages'   => array(
 						array(
 							'subpage'  => true,
 							'id'       => 'intermittent_page_stats',
@@ -1641,7 +1667,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 //								),
 //							)
 //						),
-						'Pages'           => array(
+						'Pages'                    => array(
 							'id'         => 'amp_pages_config',
 							'desc'       => '',
 							'capability' => 'manage_options',
@@ -1661,6 +1687,12 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 //                                    'name' => 'Page des recettes',
 //                                    'type' => 'select-pages',
 //                                ),
+								array(
+									'id'   => 'auto-post-thumb',
+									'name' => 'Première image à la Une',
+									'desc' => 'Utiliser la première image de chaque article comme image à la Une',
+									'type' => 'checkbox',
+								),
 								array(
 									'id'   => 'mes-infos-page',
 									'name' => 'Page des informations personnelles',
@@ -1686,7 +1718,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 								),
 							)
 						),
-						'Général'         => array(
+						'Général'                  => array(
 							'id'      => 'amp_general_config',
 							'desc'    => '',
 							'options' => array(
@@ -1745,7 +1777,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								),
 							)
 						),
-						'Géolocalisation' => array(
+						'Géolocalisation'          => array(
 							'id'      => 'amp_google_api_config',
 							'desc'    => '',
 							'options' => array(
@@ -1753,7 +1785,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 									'id'         => 'geocode_provider',
 									'name'       => 'Fournisseur de géocodage',
 									'type'       => 'select',
-									'default'    => 'google',
+									'default'    => 'nominatim',
 									'desc'       => 'Choisissez le fournisseur utilisé pour résoudre les adresses',
 									'options'    => [
 										'google'    => 'Google Maps',
@@ -1765,7 +1797,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 									'id'         => 'map_provider',
 									'name'       => 'Fournisseur de cartes',
 									'type'       => 'select',
-									'default'    => 'google',
+									'default'    => 'openstreetmap',
 									'desc'       => 'Choisissez le fournisseur utilisé pour afficher les cartes',
 									'options'    => [
 										'google'        => 'Google Maps',
@@ -1800,25 +1832,25 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								),
 							),
 						),
-						'Conversion PDF'  => array(
+						'Conversion PDF et autres' => array(
 							'id'      => 'amp_convertws_config',
 							'desc'    => '',
 							'options' => array(
 								array(
 									'id'         => 'convertws_url',
-									'name'       => 'Url du convertisseur PDF',
+									'name'       => 'Url du WebService de conversion',
 									'type'       => 'text',
 									'capability' => 'manage_options',
 								),
 								array(
 									'id'         => 'convertws_user',
-									'name'       => 'Compte utilisateur du convertisseur PDF',
+									'name'       => 'Compte utilisateur du  WebService de conversion',
 									'type'       => 'text',
 									'capability' => 'manage_options',
 								),
 								array(
 									'id'          => 'convertws_pass',
-									'name'        => 'Mot de passe du compte du convertisseur PDF',
+									'name'        => 'Mot de passe du compte du  WebService de conversion',
 									'type'        => 'text',
 									'capability'  => 'manage_options',
 									'is_password' => true,
@@ -1826,9 +1858,24 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								array(
 									'type' => 'save',
 								),
+								array(
+									'type' => 'note',
+									'desc' => 'Après avoir enregistré les paramètres ci-dessous, cliquez sur le bouton Tester. Les paramètres sont correctes si un PDF se télécharge et s\'ouvre. Dans le cas contraire, vous obtiendrez un message décrivant le problème.'
+								),
+								array(
+									'name'    => 'Tester',
+									'type'    => 'action-buttons',
+									'buttons' => [
+										[
+											'class'  => 'button button-primary',
+											'text'   => 'Tester la connexion',
+											'action' => 'test_convert_ws',
+										]
+									]
+								),
 							),
 						),
-						'Tests'           => array(
+						'Tests'                    => array(
 							'id'      => 'amp_tests_config',
 							'desc'    => '',
 							'options' => array(
@@ -1870,7 +1917,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 							),
 						),
 						//
-						'Paiements'       => array(
+						'Paiements'                => array(
 							'id'      => 'amp_paiements_config',
 							'desc'    => '',
 							'options' => array(
@@ -2303,6 +2350,12 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 											'default'     => '',
 										),
 										array(
+											'id'      => 'ouvaton_manage_waiting',
+											'name'    => 'Gérer la modération des mails dans Amapress',
+											'type'    => 'checkbox',
+											'default' => false,
+										),
+										array(
 											'type' => 'save',
 										),
 									)
@@ -2335,6 +2388,12 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 											'name'    => 'Secret pour la mise à jour des membres',
 											'type'    => 'text',
 											'default' => uniqid(),
+										),
+										array(
+											'id'      => 'sud-ouest_manage_waiting',
+											'name'    => 'Gérer la modération des mails dans Amapress',
+											'type'    => 'checkbox',
+											'default' => false,
 										),
 										array(
 											'type' => 'save',
@@ -2543,6 +2602,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 					),
 					'tabs'     => array(
 						'Utilisateurs'          => array(
+							'id'         => 'import_users_tab',
 							'desc'       => '',
 							'capability' => 'edit_users',
 							'options'    => array(
@@ -2566,21 +2626,32 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 							)
 						),
 						'Inscriptions contrats' => array(
+							'id'         => 'import_adhesions_tab',
 							'desc'       => '',
 							'capability' => 'edit_adhesion',
 							'options'    => array(
 								array(
-									'type'      => 'save',
-									'use_reset' => false,
-									'save'      => 'Télécharger le modèle - mono contrat',
-									'action'    => 'generate_model_' . AmapressAdhesion::POST_TYPE,
+									'name'    => 'Modèle multi contrat',
+									'type'    => 'action-buttons',
+									'buttons' => [
+										[
+											'class'  => 'button button-primary  button-import-model',
+											'text'   => 'Télécharger le modèle',
+											'action' => 'generate_model_' . AmapressAdhesion::POST_TYPE . '_multi',
+										]
+									]
 								),
 								array(
-									'type'      => 'save',
-									'use_reset' => false,
-									'save'      => 'Télécharger le modèle - multi contrats',
-									'action'    => 'generate_model_' . AmapressAdhesion::POST_TYPE . '_multi',
+									'name'    => 'Modèles mono contrat',
+									'type'    => 'action-buttons',
+									'buttons' => $contrats_model_buttons,
 								),
+//								array(
+//									'type'      => 'save',
+//									'use_reset' => false,
+//									'save'      => 'Télécharger le modèle - mono contrat',
+//									'action'    => 'generate_model_' . AmapressAdhesion::POST_TYPE,
+//								),
 								array(
 									'id'   => 'import_adhesion_default_date_debut',
 									'name' => amapress__( 'Date de début par défaut' ),
@@ -2667,6 +2738,94 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								),
 							)
 						),
+						'Producteurs'           => array(
+							'id'         => 'import_producteurs_tab',
+							'desc'       => '',
+							'capability' => 'edit_producteur',
+							'options'    => array(
+								array(
+									'type' => 'note',
+									'desc' => 'Dans l\'excel modèle téléchargeable ci-dessous, la colonne "Titre" correspond au nom du producteur ou de sa ferme et la colonne "Contenu" à son historique. Les utilisateurs correspondant doivent être créés au préalable'
+								),
+								array(
+									'type'      => 'save',
+									'use_reset' => false,
+									'save'      => 'Télécharger le modèle',
+									'action'    => 'generate_model_' . AmapressProducteur::POST_TYPE,
+								),
+								array(
+									'id'     => 'import_producteurs',
+									'name'   => 'Importer des producteurs',
+									'type'   => 'custom',
+									'custom' => 'amapress_get_producteurs_import_page',
+									'bare'   => true,
+								),
+							)
+						),
+						'Productions'           => array(
+							'id'         => 'import_productions_tab',
+							'desc'       => '',
+							'capability' => 'edit_contrat',
+							'options'    => array(
+								array(
+									'type' => 'note',
+									'desc' => 'Dans l\'excel modèle téléchargeable ci-dessous, la colonne "Titre" correspond au nom de la production (par ex, <i>Légumes, Champignons</i>) et la colonne "Contenu" à sa présentation. Les producteurs correspondant doivent être créés au préalable'
+								),
+								array(
+									'type'      => 'save',
+									'use_reset' => false,
+									'save'      => 'Télécharger le modèle',
+									'action'    => 'generate_model_' . AmapressContrat::POST_TYPE,
+								),
+								array(
+									'id'                => 'import_contrat_default_producteur',
+									'name'              => amapress__( 'Producteur par défaut' ),
+									'type'              => 'select-posts',
+									'post_type'         => AmapressProducteur::INTERNAL_POST_TYPE,
+									'autoselect_single' => true,
+									'desc'              => 'Producteur',
+								),
+								array(
+									'id'     => 'import_productions',
+									'name'   => 'Importer des productions',
+									'type'   => 'custom',
+									'custom' => 'amapress_get_productions_import_page',
+									'bare'   => true,
+								),
+							)
+						),
+						'Produits'              => array(
+							'id'         => 'import_produits_tab',
+							'desc'       => '',
+							'capability' => 'edit_produit',
+							'options'    => array(
+								array(
+									'type' => 'note',
+									'desc' => 'Dans l\'excel modèle téléchargeable ci-dessous, la colonne "Titre" correspond au nom du produit (par ex, <i>Radis ronds, Batavia</i>) et la colonne "Contenu" à sa présentation. Les producteurs correspondant doivent être créés au préalable'
+								),
+								array(
+									'type'      => 'save',
+									'use_reset' => false,
+									'save'      => 'Télécharger le modèle',
+									'action'    => 'generate_model_' . AmapressProduit::POST_TYPE,
+								),
+								array(
+									'id'                => 'import_produit_default_producteur',
+									'name'              => amapress__( 'Producteur par défaut' ),
+									'type'              => 'select-posts',
+									'post_type'         => AmapressProducteur::INTERNAL_POST_TYPE,
+									'autoselect_single' => true,
+									'desc'              => 'Producteur',
+								),
+								array(
+									'id'     => 'import_produits',
+									'name'   => 'Importer des produits',
+									'type'   => 'custom',
+									'custom' => 'amapress_get_produits_import_page',
+									'bare'   => true,
+								),
+							)
+						),
 //                        'Adhésions intermittence' => array(
 //                            'desc' => '',
 //                            'capability' => 'edit_adhesion_intermittence',
@@ -2750,7 +2909,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 						'icon'       => 'dashicons-sos',
 					),
 					'tabs'     => array(
-						'Placeholders - contrat vierge'       => array(
+						'Placeholders - contrat vierge'                 => array(
 							'id'      => 'paper_contrat_placeholders',
 							'desc'    => '',
 							'options' => array(
@@ -2764,7 +2923,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								)
 							)
 						),
-						'Placeholders - production'           => array(
+						'Placeholders - production'                     => array(
 							'id'      => 'pres_prod_contrat_placeholders',
 							'desc'    => '',
 							'options' => array(
@@ -2778,7 +2937,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								)
 							)
 						),
-						'Placeholders - contrat personnalisé' => array(
+						'Placeholders - contrat personnalisé'           => array(
 							'id'      => 'adhesion_contrat_placeholders',
 							'desc'    => '',
 							'options' => array(
@@ -2792,7 +2951,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								)
 							)
 						),
-						'Configuration des paniers (Taille/Quantités)' => array(
+						'Configuration des paniers (Taille/Quantités)'  => array(
 							'id'      => 'conf_paniers',
 							'desc'    => '',
 							'options' => array(
@@ -2815,6 +2974,42 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 									'type'   => 'custom',
 									'custom' => function () {
 										return AmapressAdhesion_paiement::getPlaceholdersHelp( [], true, false );
+									}
+								)
+							)
+						),
+						'Shortcodes'                                    => array(
+							'id'      => 'shortcodes',
+							'desc'    => '',
+							'options' => array(
+								array(
+									'id'     => 'shortcodes_cust',
+									'name'   => 'Shortcodes',
+									'type'   => 'custom',
+									'custom' => function () {
+										$ret = '<table class="placeholders-help">';
+										$ret .= '<thead><tr><th>Shortcode</th><th>Description</th></tr></thead>';
+										$ret .= '<tbody>';
+										global $all_amapress_shortcodes_descs;
+										ksort( $all_amapress_shortcodes_descs );
+										foreach ( $all_amapress_shortcodes_descs as $k => $desc ) {
+											if ( empty( $desc['desc'] ) ) {
+												continue;
+											}
+											$args = '';
+											if ( ! empty( $desc['args'] ) ) {
+												$args = '<ul><li>' . implode( '</li><li>',
+														array_map( function ( $kk, $vv ) {
+															return '<strong>' . esc_html( $kk ) . '</strong>: ' . esc_html( $vv );
+														}, array_keys( $desc['args'] ), array_values( $desc['args'] ) ) ) . '</li></ul>';
+											}
+											$ret .= '<tr><td>' . esc_html( $k ) . '</td><td>' . esc_html( $desc['desc'] ) . $args . '</td></tr>';
+										}
+
+										$ret .= '</tbody>';
+										$ret .= '</table>';
+
+										return $ret;
 									}
 								)
 							)

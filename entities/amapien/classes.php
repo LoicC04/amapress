@@ -249,7 +249,8 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		$cp = $this->getCode_postal();
 		$v  = $this->getVille();
 		if ( ! empty( $v ) ) {
-			return sprintf( '%s, %s %s', $this->getAdresse(), $cp, $v );
+			return preg_replace( '/(?:\s+-\s+)(\d{5})\s+([^,]+),\s*\1\s+\2/', ', $1 $2',
+				sprintf( '%s, %s %s', $this->getAdresse(), $cp, $v ) );
 		} else {
 			return $this->getAdresse();
 		}
@@ -260,7 +261,8 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		$cp = $this->getCode_postal();
 		$v  = $this->getVille();
 		if ( ! empty( $v ) ) {
-			return sprintf( '%s<br/>%s %s', $this->getAdresse(), $cp, $v );
+			return preg_replace( '/(?:\s+-\s+)(\d{5})\s+([^,]+)\<br\/\>\s*\1\s+\2/', ', $1 $2',
+				sprintf( '%s<br/>%s %s', $this->getAdresse(), $cp, $v ) );
 		} else {
 			return $this->getAdresse();
 		}
@@ -337,8 +339,8 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		if ( empty( $tel ) ) {
 			return [];
 		}
-		$tel     = preg_replace( '/\s+/', '', $tel );
 		$tel     = preg_replace( '/\+33/', '0', $tel );
+		$tel     = preg_replace( '/\D+/', '', $tel );
 		$matches = array();
 		$ret     = array();
 		preg_match_all( '/\d{10}/', $tel, $matches, PREG_SET_ORDER );
@@ -423,6 +425,11 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		$this->ensure_init();
 
 		return isset( $this->custom['amapress_user_moyen'] ) ? $this->custom['amapress_user_moyen'] : 'mail';
+	}
+
+	public
+	function getDisplayNameWithAdminEditLink() {
+		return Amapress::makeLink( $this->getEditLink(), $this->getDisplayName(), true, true );
 	}
 
 	public
@@ -782,7 +789,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 				'lien_desinscription_intermittent' => [
 					'desc' => 'Lien de désinscription de la liste des intermittents',
 					'func' => function ( AmapressUser $amapien ) {
-						return amapress_intermittence_desinscription_link();//Amapress::makeLink( $this->getDesinscriptionIntermittenceLink() );
+						return Amapress::makeLink( amapress_intermittence_desinscription_link() );//Amapress::makeLink( $this->getDesinscriptionIntermittenceLink() );
 					}
 				],
 			];

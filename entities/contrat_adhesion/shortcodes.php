@@ -46,6 +46,18 @@ add_action( 'amapress_init', function () {
 			}
 		}
 
+		if ( ! empty( $_REQUEST['coadh3_email'] ) ) {
+			$coadh3_email          = sanitize_email( $_REQUEST['coadh3_email'] );
+			$coadh3_user_firt_name = sanitize_text_field( ! empty( $_REQUEST['coadh3_first_name'] ) ? $_REQUEST['coadh3_first_name'] : '' );
+			$coadh3_user_last_name = sanitize_text_field( ! empty( $_REQUEST['coadh3_last_name'] ) ? $_REQUEST['coadh3_last_name'] : '' );
+
+			$coadh3_user_id = amapress_create_user_if_not_exists( $coadh3_email, $coadh3_user_firt_name, $coadh3_user_last_name, null, null );
+			if ( $coadh3_user_id ) {
+				$amapien = AmapressUser::getBy( $user_id, true );
+				$amapien->addCoadherent( $coadh3_user_id );
+			}
+		}
+
 		wp_redirect_and_exit(
 			add_query_arg( [
 				'step'    => ! empty( $_REQUEST['coords_next_step'] ) ? $_REQUEST['coords_next_step'] : 'contrats',
@@ -307,11 +319,25 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 		}
 	}
 
-	$start_step_url         = esc_attr( add_query_arg( 'step', 'email', remove_query_arg( [
-		'contrat_id',
-		'message'
-	] ) ) );
-	$invalid_access_message = '<p>Accès invalide : veuillez repartir de la <a href="' . $start_step_url . '">première étape</a></p>';
+	if ( is_admin() ) {
+		$start_step_url = admin_url( 'admin.php?page=amapress_gestion_amapiens_page&tab=add_inscription' );
+		if ( isset( $_REQUEST['user_id'] ) ) {
+			$start_step_url = add_query_arg(
+				[
+					'user_id'   => $_REQUEST['user_id'],
+					'assistant' => 1,
+				], $start_step_url
+			);
+		}
+	} else {
+		$start_step_url = add_query_arg( 'step', 'email',
+			remove_query_arg( [
+				'contrat_id',
+				'message'
+			] ) );
+	}
+
+	$invalid_access_message = '<p>Accès invalide : veuillez repartir de la <a href="' . esc_attr( $start_step_url ) . '">première étape</a></p>';
 
 	if ( ! empty( $_REQUEST['message'] ) ) {
 		$message = '';
@@ -365,6 +391,10 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 		$coadh2_user_last_name = '';
 		$coadh2_email          = '';
 
+		$coadh3_user_firt_name = '';
+		$coadh3_user_last_name = '';
+		$coadh3_email          = '';
+
 		$user_message   = 'Vous êtes nouveau dans l’AMAP, complétez vos coordonnées :';
 		$member_message = '<p>Si vous êtes déjà membre de l’AMAP, vous avez certainement utilisé une adresse mail différente.</p>
 <p><a href="' . $start_step_url . '">Changer d’email</a></p>';
@@ -396,6 +426,12 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 				$coadh2_user_last_name = $amapien->getCoAdherent2()->getUser()->last_name;
 				$coadh2_email          = $amapien->getCoAdherent2()->getUser()->user_email;
 			}
+
+			if ( $amapien->getCoAdherent3() ) {
+				$coadh3_user_firt_name = $amapien->getCoAdherent3()->getUser()->first_name;
+				$coadh3_user_last_name = $amapien->getCoAdherent3()->getUser()->last_name;
+				$coadh3_email          = $amapien->getCoAdherent3()->getUser()->user_email;
+			}
 		}
 
 		$adh_pmt = $user ? AmapressAdhesion_paiement::getForUser( $user->ID, $adh_period_date, false ) : null;
@@ -420,13 +456,15 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                 </tr>
                 <tr>
                     <th style="text-align: left; width: auto"><label for="last_name">Nom* : </label></th>
-                    <td><input style="width: 100%" type="text" id="last_name" name="last_name" class="required"
+                    <td><input style="width: 100%" type="text" id="last_name" name="last_name"
+                               class="required single_name"
                                value="<?php echo esc_attr( $user_last_name ) ?>" <?php disabled( ! $edit_names ) ?>/>
                     </td>
                 </tr>
                 <tr>
                     <th style="text-align: left; width: auto"><label for="first_name">Prénom* : </label></th>
-                    <td><input style="width: 100%" type="text" id="first_name" name="first_name" class="required"
+                    <td><input style="width: 100%" type="text" id="first_name" name="first_name"
+                               class="required single_name"
                                value="<?php echo esc_attr( $user_firt_name ) ?>" <?php disabled( ! $edit_names ) ?>/>
                     </td>
                 </tr>
@@ -454,7 +492,7 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                     </th>
                     <td><input <?php disabled( ! empty( $coadh1_email ) ); ?> style="width: 100%" type="text"
                                                                               id="coadh1_email" name="coadh1_email"
-                                                                              class=""
+                                                                              class="email"
                                                                               value="<?php echo esc_attr( $coadh1_email ) ?>"/>
                     </td>
                 </tr>
@@ -463,7 +501,7 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                     <td><input <?php disabled( ! empty( $coadh1_email ) ); ?> style="width: 100%" type="text"
                                                                               id="coadh1_last_name"
                                                                               name="coadh1_last_name"
-                                                                              class="required_if_not_empty"
+                                                                              class="required_if_not_empty single_name"
                                                                               data-if-id="coadh1_email"
                                                                               value="<?php echo esc_attr( $coadh1_user_last_name ) ?>"/>
                     </td>
@@ -473,7 +511,7 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                     <td><input <?php disabled( ! empty( $coadh1_email ) ); ?> style="width: 100%" type="text"
                                                                               id="coadh1_first_name"
                                                                               name="coadh1_first_name"
-                                                                              class="required_if_not_empty"
+                                                                              class="required_if_not_empty single_name"
                                                                               data-if-id="coadh1_email"
                                                                               value="<?php echo esc_attr( $coadh1_user_firt_name ) ?>"/>
                     </td>
@@ -494,7 +532,7 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                     </th>
                     <td><input <?php disabled( ! empty( $coadh2_email ) ); ?> style="width: 100%" type="text"
                                                                               id="coadh2_email" name="coadh2_email"
-                                                                              class=""
+                                                                              class="email"
                                                                               value="<?php echo esc_attr( $coadh2_email ) ?>"/>
                     </td>
                 </tr>
@@ -503,7 +541,7 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                     <td><input <?php disabled( ! empty( $coadh2_email ) ); ?> style="width: 100%" type="text"
                                                                               id="coadh2_last_name"
                                                                               name="coadh2_last_name"
-                                                                              class="required_if_not_empty"
+                                                                              class="required_if_not_empty single_name"
                                                                               data-if-id="coadh2_email"
                                                                               value="<?php echo esc_attr( $coadh2_user_last_name ) ?>"/>
                     </td>
@@ -513,9 +551,44 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
                     <td><input <?php disabled( ! empty( $coadh2_email ) ); ?> style="width: 100%" type="text"
                                                                               id="coadh2_first_name"
                                                                               name="coadh2_first_name"
-                                                                              class="required_if_not_empty"
+                                                                              class="required_if_not_empty single_name"
                                                                               data-if-id="coadh2_email"
                                                                               value="<?php echo esc_attr( $coadh2_user_firt_name ) ?>"/>
+                    </td>
+                </tr>
+            </table>
+            <table style="min-width: 50%">
+                <tr>
+                    <th colspan="2">Co adhérent 3 <em>(si vous payez les contrats à plusieurs)</em></th>
+                </tr>
+                <tr>
+                    <th style="text-align: left; width: auto"><label for="coadh3_email">Son email
+                            : </label>
+                    </th>
+                    <td><input <?php disabled( ! empty( $coadh3_email ) ); ?> style="width: 100%" type="text"
+                                                                              id="coadh3_email" name="coadh3_email"
+                                                                              class="email"
+                                                                              value="<?php echo esc_attr( $coadh3_email ) ?>"/>
+                    </td>
+                </tr>
+                <tr>
+                    <th style="text-align: left; width: auto"><label for="coadh3_last_name">Son nom : </label></th>
+                    <td><input <?php disabled( ! empty( $coadh3_email ) ); ?> style="width: 100%" type="text"
+                                                                              id="coadh3_last_name"
+                                                                              name="coadh3_last_name"
+                                                                              class="required_if_not_empty single_name"
+                                                                              data-if-id="coadh3_email"
+                                                                              value="<?php echo esc_attr( $coadh3_user_last_name ) ?>"/>
+                    </td>
+                </tr>
+                <tr>
+                    <th style="text-align: left; width: auto"><label for="coadh3_first_name">Son prénom : </label></th>
+                    <td><input <?php disabled( ! empty( $coadh3_email ) ); ?> style="width: 100%" type="text"
+                                                                              id="coadh3_first_name"
+                                                                              name="coadh3_first_name"
+                                                                              class="required_if_not_empty single_name"
+                                                                              data-if-id="coadh3_email"
+                                                                              value="<?php echo esc_attr( $coadh3_user_firt_name ) ?>"/>
                     </td>
                 </tr>
             </table>
@@ -702,9 +775,9 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 				] ),
 				'Imprimer', true, true, 'btn btn-default'
 			);
-			echo '<p>Veuillez imprimer le bulletin et le remettre avec votre chèque lors de la première distribution<br/>' . $print_bulletin . '</p>';
+			echo '<p>Veuillez imprimer le bulletin et le remettre avec votre chèque/règlement lors de la première distribution<br/>' . $print_bulletin . '</p>';
 		} else {
-			echo '<p>Veuillez remettre le chèque lors de la première distribution</p>';
+			echo '<p>Veuillez remettre le chèque/règlement lors de la première distribution</p>';
 		}
 
 		echo '<p>Vous pouvez maintenant vous inscrires aux contrats de l\'AMAP :<br/>
@@ -1259,8 +1332,8 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 			$data = array();
 			foreach ( AmapressContrats::get_contrat_quantites( $contrat->ID ) as $quant ) {
 				$row     = array(
-					'produit' => esc_html( $quant->getTitle() ),
-					'prix_unitaire' => esc_html( sprintf( '%.2f€', $quant->getPrix_unitaire()) ),
+					'produit'       => esc_html( $quant->getTitle() ),
+					'prix_unitaire' => esc_html( sprintf( '%.2f€', $quant->getPrix_unitaire() ) ),
 				);
 				$options = $quant->getQuantiteOptions();
 				if ( ! isset( $options['0'] ) ) {
@@ -1496,6 +1569,9 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 //			$last_cheque        = $cheques['remain_amount'];
 			echo "<input type='radio' name='cheques' id='cheques-$nb_cheque' value='$nb_cheque' class='required' /><label for='cheques-$nb_cheque'>$option</label><br/>";
 		}
+		if ( $contrat->getAllow_Cash() ) {
+			echo "<input type='radio' name='cheques' id='cheques-esp' value='-1' class='required' /><label for='cheques-esp'>En espèces</label><br/>";
+		}
 		echo '<br />';
 		if ( ! $admin_mode ) {
 			echo '<label for="inscr_message">Message pour le référent :</label><textarea id="inscr_message" name="message"></textarea>';
@@ -1577,9 +1653,12 @@ Vous pouvez configurer le mail envoyé en fin de chaque inscription <a href="' .
 			'amapress_adhesion_date_debut'       => $start_date,
 			'amapress_adhesion_contrat_instance' => $contrat_id,
 			'amapress_adhesion_message'          => $message,
-			'amapress_adhesion_paiements'        => $cheques,
+			'amapress_adhesion_paiements'        => ( - 1 == $cheques ? 1 : $cheques ),
 			'amapress_adhesion_lieu'             => $lieu_id,
 		];
+		if ( - 1 == $cheques ) {
+			$meta['amapress_adhesion_pmt_type'] = 'esp';
+		}
 		if ( ! empty( $quantite_ids ) ) {
 			$meta['amapress_adhesion_contrat_quantite'] = $quantite_ids;
 		}
@@ -1651,7 +1730,7 @@ Vous allez recevoir un mail de confirmation avec votre contrat dans quelques min
 					] ),
 					'Imprimer', true, true, 'btn btn-default'
 				);
-				echo '<p>Pour finaliser votre inscription, vous devez imprimer ce contrat et le remettre aux référents concernés (' . $inscription->getProperty( 'referents' ) . ') avec les chèques correspondants lors de la prochaine distribution<br />
+				echo '<p>Pour finaliser votre inscription, vous devez imprimer ce contrat et le remettre aux référents concernés (' . $inscription->getProperty( 'referents' ) . ') avec les chèques/règlements correspondants lors de la prochaine distribution<br />
 ' . $print_contrat . '</p>';
 			}
 			if ( Amapress::toBool( $atts['show_contrats'] ) ) {
@@ -1693,7 +1772,7 @@ Vous allez recevoir un mail de confirmation avec votre contrat dans quelques min
 	} else if ( 'the_end' == $step ) {
 		echo '<h4>Félicitations, vous avez terminé vos inscriptions !</h4>';
 		echo '<p>Si vous êtes nouvel adhérent vous allez recevoir un mail vous indiquant comment vous connecter au site et choisir votre mot de passe.</p>';
-		echo '<p>Vous allez recevoir un mail de confirmation pour chacune de vos inscriptions avec le contrat à imprimer et les instructions pour remettre vos chèques aux référents.</p>';
+		echo '<p>Vous allez recevoir un mail de confirmation pour chacune de vos inscriptions avec le contrat à imprimer et les instructions pour remettre vos chèques/règlements aux référents.</p>';
 		echo '<p>(Pensez à regarder vos spams, ces mails peuvent s\'y trouver à cause des contrats joints ou pour expéditeur inconnu de votre carnet d\'adresses)</p>';
 		echo '<p>Vous pouvez maintenant fermer cette fenêtre/onglet et regarder votre messagerie</p>';
 	}
@@ -1740,6 +1819,10 @@ Vous allez recevoir un mail de confirmation avec votre contrat dans quelques min
                 }
                 return true;
             }, "Champ requis");
+
+            jQuery.validator.addMethod("single_name", function (value, element) {
+                return !(/[;\/\\,]/.test(jQuery(element).val()));
+            }, "Merci de ne saisir qu'un seul nom ou prénom. Utilisez les champs de coadhérents pour vos coadhérents.");
 
             jQuery.validator.addMethod(
                 "min_sum",

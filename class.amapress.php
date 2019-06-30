@@ -2397,6 +2397,9 @@ class Amapress {
 		wp_enqueue_script( 'paiement-status-handle', plugin_dir_url( __FILE__ ) . 'js/ajax-paiements.js', array( 'jquery' ) );
 		wp_localize_script( 'paiement-status-handle', 'update_paiement_status', array( 'ajax_url' => admin_url( 'admin-ajax.php' ) ) );
 
+		wp_enqueue_script( 'inscriptions-handle', plugin_dir_url( __FILE__ ) . 'js/ajax-inscriptions.js', array( 'jquery' ) );
+		wp_localize_script( 'inscriptions-handle', 'inscriptions', array( 'ajax_url' => admin_url( 'admin-ajax.php' ) ) );
+
 		wp_enqueue_script( 'jquery.contextMenu', plugin_dir_url( __FILE__ ) . 'js/jquery.contextMenu.min.js', array( 'jquery' ) );
 		wp_enqueue_style( 'jquery.contextMenu', plugin_dir_url( __FILE__ ) . 'css/contextMenu/jquery.contextMenu.min.css' );
 
@@ -2476,6 +2479,10 @@ class Amapress {
 
 		wp_enqueue_script( 'jquery.validate', plugins_url( '/js/jquery-validate/jquery.validate.min.js', AMAPRESS__PLUGIN_FILE ), array( 'jquery' ) );
 		wp_enqueue_script( 'jquery.validate-fr', plugins_url( '/js/jquery-validate/localization/messages_fr.js', AMAPRESS__PLUGIN_FILE ), array( 'jquery.validate' ) );
+		wp_enqueue_script( 'jquery.ui.datepicker.validation', plugins_url( '/js/jquery.ui.datepicker.validation.min.js', AMAPRESS__PLUGIN_FILE ), array(
+			'jquery.validate',
+			'jquery-ui-datepicker'
+		) );
 
 		wp_enqueue_style( 'dashicons' );
 	}
@@ -2893,9 +2900,7 @@ class Amapress {
 
 	/* render custom post type archives meta box */
 	public static function wp_nav_menu_amapress_meta_box() {
-		global $nav_menu_selected_id;
 		/* get custom post types with archive support */
-		//$post_types = get_post_types( array( 'show_in_nav_menus' => true, 'has_archive' => true ), 'object' );
 
 		$items  = array();
 		$items2 = array();
@@ -2908,15 +2913,15 @@ class Amapress {
 
 			$item = new stdClass();
 
-			$item->object_id = $i ++;
-			//$item->db_id = 0;
-			$item->object = 'archive_' . $post_type;
-			//$item->menu_item_parent = 0;
-			$item->type  = 'amapress-custom';
-			$item->title = $post_conf['plural'];
-			$item->url   = get_post_type_archive_link( $post_type );
-			//$item->target = '';
-			//$item->attr_title = '';
+			$item->object_id        = $i ++;
+			$item->db_id            = 0;
+			$item->object           = 'archive_' . $post_type;
+			$item->menu_item_parent = 0;
+			$item->type             = 'amapress-custom';
+			$item->title            = $post_conf['plural'];
+			$item->url              = get_post_type_archive_link( $post_type );
+			$item->target           = '';
+			$item->attr_title       = '';
 			if ( empty( $item->classes ) ) {
 				$item->classes = array();
 			}
@@ -2928,19 +2933,19 @@ class Amapress {
 		foreach ( AmapressEntities::$special_pages as $post_type => $post_conf ) {
 			$item = new stdClass();
 
-			$item->object_id = $i ++;
-			//$item->db_id = 0;
-			$item->object = 'amapress_link_' . trim( $post_type, '/' );
-			//$item->menu_item_parent = 0;
-			$item->type  = 'amapress-custom-link';
-			$item->title = $post_conf['name'];
-			$item->url   = $post_type;
-			//$item->target = '';
-			//$item->attr_title = '';
+			$item->object_id        = $i ++;
+			$item->db_id            = 0;
+			$item->object           = 'amapress_link_' . trim( $post_type, '/' );
+			$item->menu_item_parent = 0;
+			$item->type             = 'amapress-custom-link';
+			$item->title            = $post_conf['name'];
+			$item->url              = $post_type;
+			$item->target           = '';
+			$item->attr_title       = '';
 			if ( empty( $item->classes ) ) {
 				$item->classes = array();
 			}
-			//$item->xfn = '';
+			$item->xfn = '';
 
 			$items2[] = $item;
 		}
@@ -3109,7 +3114,7 @@ class Amapress {
 		return null;
 	}
 
-	public static function get_icon( $name ) {
+	public static function get_icon( $name, $alt = '' ) {
 		if ( empty( $name ) ) {
 			return '';
 		}
@@ -3117,10 +3122,11 @@ class Amapress {
 			return $name;
 		}
 
+		$alt = esc_attr( $alt );
 		if ( preg_match( "/fa-|glyphicon-|ion-|wi-|map-icon-|octicon-|typcn-|el-|md-/", $name ) ) {
-			return "<i class='$name'></i>";
+			return "<i class='$name' title='$alt'></i>";
 		} else {
-			return "<span class='$name'></span>";
+			return "<span class='$name' title='$alt'></span>";
 		}
 	}
 
@@ -3131,6 +3137,11 @@ class Amapress {
 	public static function plugin_activation() {
 		//if ( version_compare( $GLOBALS['wp_version'], AKISMET__MINIMUM_WP_VERSION, '<' ) ) {
 		//}
+
+		if ( - 1 === version_compare( phpversion(), AMAPRESS_MINIMUM_PHP_VERSION ) ) {
+			/* translators: 1: Current PHP version 2: Required PHP version. */
+			die( sprintf( esc_html__( 'Votre version de PHP (%1$s) est en dessous de la version requise par Amapress : %2$s.', 'amapress' ), esc_html( phpversion() ), esc_html( AMAPRESS_MINIMUM_PHP_VERSION ) ) );
+		}
 	}
 
 	/**
@@ -3291,6 +3302,7 @@ class Amapress {
 	}
 
 	public static function sendXLSXFromPHPExcelObject( $objPHPExcel, $excel_file_name ) {
+		@ob_clean();
 		// Redirect output to a client’s web browser (Excel2007)
 		header( 'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' );
 		header( 'Content-Disposition: attachment;filename="' . $excel_file_name . '"' );
@@ -3512,7 +3524,7 @@ class Amapress {
 		}
 	}
 
-	public static function convertToPDF( $filename ) {
+	public static function convertToPDF( $filename, $throw_if_fail = false ) {
 		$convertws_url  = Amapress::getOption( 'convertws_url' );
 		$convertws_user = Amapress::getOption( 'convertws_user' );
 		$convertws_pass = Amapress::getOption( 'convertws_pass' );
@@ -3520,6 +3532,8 @@ class Amapress {
 		if ( empty( $convertws_url ) || empty( $convertws_user ) || empty( $convertws_pass ) ) {
 			return $filename;
 		}
+
+		$convertws_url = trailingslashit( $convertws_url ) . 'convert2pdf.php';
 
 		$info         = pathinfo( $filename );
 		$pdf_filename = ( $info['dirname'] ? $info['dirname'] . DIRECTORY_SEPARATOR : '' )
@@ -3549,12 +3563,20 @@ class Amapress {
 
 				return $pdf_filename;
 			} else {
-				error_log( $resp->getReasonPhrase() );
+				if ( $throw_if_fail ) {
+					throw new Exception( $resp->getReasonPhrase() );
+				} else {
+					error_log( $resp->getReasonPhrase() );
+				}
 
 				return $filename;
 			}
 		} catch ( Exception $ex ) {
-			error_log( $ex->getMessage() );
+			if ( $throw_if_fail ) {
+				wp_die( $ex->getMessage() );
+			} else {
+				error_log( $ex->getMessage() );
+			}
 
 			return $filename;
 		}

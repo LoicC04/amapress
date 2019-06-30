@@ -217,7 +217,7 @@ class TitanFrameworkOptionDate extends TitanFrameworkOption {
 		}
 
 		printf( '<input class="input-date%s%s %s" name="%s" placeholder="%s" id="%s" type="text" value="%s" autocomplete="%s" /> <p class="description">%s</p>',
-			( $this->settings['date'] ? ' date' : '' ),
+			( $this->settings['date'] ? ' date dpDate' : '' ),
 			( $this->settings['time'] ? ' time' : '' ),
 			$this->settings['required'] ? 'required' : '',
 			$this->getID(),

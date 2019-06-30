@@ -114,8 +114,16 @@ class AmapressContrat_instance extends TitanEntity {
 		parent::__construct( $post_id );
 	}
 
+	public function hasPanier_CustomContent() {
+		return $this->getCustom( 'amapress_contrat_instance_has_pancust', 0 );
+	}
+
 	public function getManage_Cheques() {
-		return $this->getCustom( 'amapress_contrat_manage_paiements', 1 );
+		return $this->getCustom( 'amapress_contrat_instance_manage_paiements', 1 );
+	}
+
+	public function getAllow_Cash() {
+		return $this->getCustom( 'amapress_contrat_instance_allow_cash', 0 );
 	}
 
 	public function getModelTitle() {
@@ -199,6 +207,43 @@ class AmapressContrat_instance extends TitanEntity {
 
 	public function getDate_fin() {
 		return $this->getCustomAsInt( 'amapress_contrat_instance_date_fin' );
+	}
+
+	public function getSampleQuantiteCSV() {
+		$quants             = AmapressContrats::get_contrat_quantites( $this->ID );
+		$has_distinct_value = ( count( $quants ) == count( array_unique( array_map( function ( $q ) {
+				/** @var AmapressContrat_quantite $q */
+				return $q->getQuantite();
+			}, $quants ) ) ) );
+		$contrat_ret        = [
+			''
+		];
+		if ( ! $this->isQuantiteVariable() && 1 == count( $quants ) ) {
+			$contrat_ret[] = 'X';
+		}
+
+		foreach ( $quants as $q ) {
+			$contrat_ret[] = $q->getTitle();
+			$contrat_ret[] = $q->getCode();
+			if ( $has_distinct_value ) {
+				$contrat_ret[] = strval( $q->getQuantite() );
+				if ( $this->isQuantiteVariable() ) {
+					$contrat_ret[] = 'Multiple de ' . $q->getQuantite();
+				}
+			}
+			if ( $this->isQuantiteVariable() ) {
+				foreach ( $q->getQuantiteOptions() as $v ) {
+					$contrat_ret[] = $v . ' ' . $q->getCode();
+					$contrat_ret[] = $v . ' x ' . $q->getCode();
+				}
+			}
+		}
+		if ( $this->isQuantiteMultiple() && count( $quants ) > 1 ) {
+			$contrat_ret[] = 'Par ex: X ' . $quants[0]->getCode() . ', Y ' . $quants[1]->getCode();
+			$contrat_ret[] = 'Par ex: X x ' . $quants[0]->getCode() . ', Y x ' . $quants[1]->getCode();
+		}
+
+		return $contrat_ret;
 	}
 
 	/** @return AmapressLieu_distribution[] */
@@ -445,8 +490,8 @@ class AmapressContrat_instance extends TitanEntity {
 		return $rattrapage;
 	}
 
-	public function getFormattedDatesDistribMois( $first_date_distrib ) {
-		$dates         = $this->getRemainingDates( $first_date_distrib );
+	public function getFormattedDatesDistribMois( $first_date_distrib, $quantite_id = null ) {
+		$dates         = $this->getRemainingDates( $first_date_distrib, $quantite_id );
 		$grouped_dates = from( $dates )->groupBy( function ( $d ) {
 			return date_i18n( 'F Y', $d );
 		} );
@@ -578,7 +623,7 @@ class AmapressContrat_instance extends TitanEntity {
 			}
 		];
 		$ret['nb_paiements']                     = [
-			'desc' => 'Nombre de chèques possibles',
+			'desc' => 'Nombre de chèques/règlements possibles',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return implode( ', ', $adh->getPossiblePaiements() );
 			}
@@ -747,6 +792,96 @@ class AmapressContrat_instance extends TitanEntity {
 					) );
 			}
 		];
+		$ret['quantites_table_dates'] = [
+			'desc' => 'Table des quantités avec dates spécifiques',
+			'func' => function ( AmapressContrat_instance $adh ) use ( $first_date_distrib ) {
+				$columns   = [];
+				$columns[] = array(
+					'title' => 'Quantité',
+					'data'  => 'quantite',
+				);
+				$columns[] = array(
+					'title' => 'Description',
+					'data'  => 'quantite_description',
+				);
+				$columns[] = array(
+					'title' => 'Nombre de distributions',
+					'data'  => 'quantite_nb_distrib',
+				);
+				$columns[] = array(
+					'title' => 'Dates de distributions',
+					'data'  => 'quantite_dates_distrib',
+				);
+				$columns[] = array(
+					'title' => 'Prix unitaire',
+					'data'  => 'quantite_prix_unitaire',
+				);
+				if ( $adh->isPanierVariable() || $adh->isQuantiteVariable() ) {
+					$columns[] = array(
+						'title' => 'Unité',
+						'data'  => 'quantite_unite',
+					);
+				}
+				$lines = $adh->getQuantiteTables( $first_date_distrib );
+				static $id = 1;
+
+				return amapress_get_datatable( 'quant-table' . ( $id ++ ), $columns, $lines,
+					array(
+						'paging'       => false,
+						'searching'    => false,
+						'nowrap'       => false,
+						'responsive'   => false,
+						'init_as_html' => true,
+					) );
+			}
+		];
+		$ret['quantites_table_dates_total'] = [
+			'desc' => 'Table des quantités avec total et dates spécifiques',
+			'func' => function ( AmapressContrat_instance $adh ) use ( $first_date_distrib ) {
+				$columns   = [];
+				$columns[] = array(
+					'title' => 'Quantité',
+					'data'  => 'quantite',
+				);
+				$columns[] = array(
+					'title' => 'Description',
+					'data'  => 'quantite_description',
+				);
+				$columns[] = array(
+					'title' => 'Nombre de distributions',
+					'data'  => 'quantite_nb_distrib',
+				);
+				$columns[] = array(
+					'title' => 'Dates de distributions',
+					'data'  => 'quantite_dates_distrib',
+				);
+				$columns[] = array(
+					'title' => 'Prix unitaire',
+					'data'  => 'quantite_prix_unitaire',
+				);
+				if ( $adh->isPanierVariable() || $adh->isQuantiteVariable() ) {
+					$columns[] = array(
+						'title' => 'Unité',
+						'data'  => 'quantite_unite',
+					);
+				}
+				$columns[] = array(
+					'title' => 'Total',
+					'data'  => 'quantite_total',
+				);
+				$lines     = $adh->getQuantiteTables( $first_date_distrib );
+				static $id = 1;
+
+				return amapress_get_datatable( 'quant-table' . ( $id ++ ), $columns, $lines,
+					array(
+						'paging'       => false,
+						'searching'    => false,
+						'nowrap'       => false,
+						'responsive'   => false,
+						'init_as_html' => true,
+					) );
+			}
+		];
 
 		return $ret;
 	}
@@ -756,23 +891,40 @@ class AmapressContrat_instance extends TitanEntity {
 		$quants = AmapressContrats::get_contrat_quantites( $this->ID );
 		foreach ( $quants as $quant ) {
 			$row                           = [];
-			$remaining_dates               = count( $this->getRemainingDates( $first_date_distrib, $quant->ID ) );
-			$remaining_distrib             = $this->getRemainingDatesWithFactors( $first_date_distrib, $quant->ID );
+			$remaining_dates               = $this->getRemainingDates( $first_date_distrib, $quant->ID );
+			$remaining_dates_count         = count( $remaining_dates );
+			$remaining_distrib             = $this->getRemainingDatesWithFactors( $first_date_distrib, $quant->ID, true );
+			$remaining_distrib_sum         = $this->getRemainingDatesWithFactors( $first_date_distrib, $quant->ID );
 			$row["quantite"]               = $quant->getTitle();
 			$row["quantite_code"]          = $quant->getCode();
-			$row["quantite_nb_dates"]      = $remaining_dates;
-			$row["quantite_nb_distrib"]    = $remaining_distrib;
-			$row["quantite_total"]         = Amapress::formatPrice( $quant->getPrix_unitaire() * $remaining_distrib );
+			$row["quantite_nb_dates"]      = $remaining_dates_count;
+			$row["quantite_nb_distrib"]    = $remaining_distrib_sum;
+			$row["quantite_dates_distrib"] = implode( ', ', array_map( function ( $d, $f ) {
+				if ( abs( $f - 1.0 ) < 0.001 ) {
+					return date_i18n( 'd/m/Y', $d );
+				} else if ( abs( $f - 2.0 ) < 0.001 ) {
+					return date_i18n( 'd/m/Y', $d ) . '(double)';
+				} else {
+					return date_i18n( 'd/m/Y', $d ) . '(' . $f . ')';
+				}
+			}, array_keys( $remaining_distrib ), array_values( $remaining_dates ) ) );
+			$row["quantite_dates"]         = implode( ', ', array_map( function ( $d ) {
+				return date_i18n( 'd/m/Y', $d );
+			}, $remaining_dates ) );
+			$row["quantite_total"]         = Amapress::formatPrice( $quant->getPrix_unitaire() * $remaining_distrib_sum );
 			$row["quantite_prix_unitaire"] = Amapress::formatPrice( $quant->getPrix_unitaire() );
 			$row["quantite_description"]   = $quant->getDescription();
 			$row["quantite_unite"]         = $quant->getPriceUnitDisplay();
 			$paiements                     = [];
 			foreach ( $this->getPossiblePaiements() as $nb_cheque ) {
-				$ch = $this->getChequeOptionsForTotal( $nb_cheque, $quant->getPrix_unitaire() * $remaining_distrib );
+				$ch = $this->getChequeOptionsForTotal( $nb_cheque, $quant->getPrix_unitaire() * $remaining_distrib_sum );
 				if ( ! isset( $ch['desc'] ) ) {
 					continue;
 				}
 				$paiements[] = $ch['desc'];
+			}
+			if ( $this->getAllow_Cash() ) {
+				$paiements[] = 'En espèces';
 			}
 			$row["quantite_paiements"] = '[] ' . implode( "<br />[] ", $paiements );
 			$lines[]                   = $row;
@@ -815,11 +967,15 @@ class AmapressContrat_instance extends TitanEntity {
 			$ret["quantite_simple"]        = '(Tableau quantité) Libellé quantité';
 			$ret["quantite_code"]          = '(Tableau quantité) Code quantité';
 			$ret["quantite_nb_distrib"]    = '(Tableau quantité) Nombre de distribution restantes';
+			$ret["quantite_nb_dates"]      = '(Tableau quantité) Nombre de dates de distribution restantes';
+			$ret["quantite_dates_distrib"] = '(Tableau quantité) Distribution restantes avec rattrapages';
+			$ret["quantite_dates"]         = '(Tableau quantité) Dates de distribution restantes';
 			$ret["quantite_total"]         = '(Tableau quantité) Prix pour la quuantité x nombre distrib';
 			$ret["quantite_prix_unitaire"] = '(Tableau quantité) Prix à l\'unité';
 			$ret["quantite_description"]   = '(Tableau quantité) Description de la quantité';
 			$ret["quantite_unite"]         = '(Tableau quantité) Unité de la quantité';
 			$ret["quantite_paiements"]     = '(Tableau quantité) Possibilités de paiements';
+
 		}
 
 		return Amapress::getPlaceholdersHelpTable( 'contrat_inst-placeholders', $ret,
@@ -861,6 +1017,9 @@ class AmapressContrat_instance extends TitanEntity {
 					continue;
 				}
 				$paiements[] = $ch['desc'];
+			}
+			if ( $this->getAllow_Cash() ) {
+				$paiements[] = 'En espèces';
 			}
 			$placeholders["quantite_paiements#$i"] = '[] ' . implode( "\n[] ", $paiements );
 			$i                                     += 1;
@@ -1045,17 +1204,26 @@ class AmapressContrat_instance extends TitanEntity {
 		} );
 	}
 
-	public function getRemainingDatesWithFactors( $start_date, $quantite_id = null ) {
-		$dates         = $this->getListe_dates();
-		$dates         = array_filter( $dates, function ( $d ) use ( $start_date ) {
+	public function getRemainingDatesWithFactors( $start_date, $quantite_id = null, $return_array = false ) {
+		$dates = $this->getListe_dates();
+		$dates = array_filter( $dates, function ( $d ) use ( $start_date ) {
 			return $d >= $start_date;
 		} );
-		$dates_factors = 0;
-		foreach ( $dates as $d ) {
-			$dates_factors += $this->getDateFactor( $d, $quantite_id );
-		}
+		if ( $return_array ) {
+			$ret = [];
+			foreach ( $dates as $d ) {
+				$ret[ $d ] = $this->getDateFactor( $d, $quantite_id );
+			}
 
-		return $dates_factors;
+			return $ret;
+		} else {
+			$dates_factors = 0;
+			foreach ( $dates as $d ) {
+				$dates_factors += $this->getDateFactor( $d, $quantite_id );
+			}
+
+			return $dates_factors;
+		}
 	}
 
 	public function getInscriptionsStats() {
@@ -1318,7 +1486,7 @@ class AmapressContrat_quantite extends TitanEntity {
 
 	public
 	function formatValue(
-		$value
+		$value, $one_unit_display = '1', $no_unit_suffix = '', $no_unit_fraction_suffix = ''
 	) {
 		if ( $this->getPriceUnit() == 'kg' ) {
 			if ( $value < 1 ) {
@@ -1334,17 +1502,19 @@ class AmapressContrat_quantite extends TitanEntity {
 			}
 		} else {
 			if ( abs( $value - 0.25 ) < 0.001 ) {
-				return '1/4';
+				return '1/4' . $no_unit_fraction_suffix;
 			} else if ( abs( $value - 0.333 ) < 0.001 ) {
-				return '2/3';
+				return '2/3' . $no_unit_fraction_suffix;
 			} else if ( abs( $value - 0.5 ) < 0.001 ) {
-				return '1/2';
+				return '1/2' . $no_unit_fraction_suffix;
 			} else if ( abs( $value - 0.666 ) < 0.001 ) {
-				return '2/3';
+				return '2/3' . $no_unit_fraction_suffix;
 			} else if ( abs( $value - 0.75 ) < 0.001 ) {
-				return '3/4';
+				return '3/4' . $no_unit_fraction_suffix;
+			} else if ( abs( $value - 1 ) < 0.001 ) {
+				return $one_unit_display;
 			} else {
-				return round( $value, 2 );
+				return round( $value, 2 ) . $no_unit_suffix;
 			}
 		}
 	}
@@ -1416,7 +1586,7 @@ AND CAST($wpdb->postmeta.meta_value as SIGNED) NOT IN (
 SELECT $wpdb->posts.ID FROM $wpdb->posts WHERE $wpdb->posts.post_type = '" . AmapressContrat_instance::INTERNAL_POST_TYPE . "'
 ) ) )
 AND $wpdb->posts.post_type = '" . AmapressContrat_quantite::INTERNAL_POST_TYPE . "'
-GROUP BY wp_posts.ID" );
+GROUP BY $wpdb->posts.ID" );
 
 		$wpdb->query( 'START TRANSACTION' );
 		foreach ( $orphans as $post_id ) {

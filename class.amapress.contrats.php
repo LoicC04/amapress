@@ -18,7 +18,13 @@ class AmapressContrats {
 	public static $initiated = false;
 
 	public static function init() {
-		amapress_register_shortcode( 'adhesions', array( 'AmapressContrats', 'adhesions_shortcode' ) );
+		amapress_register_shortcode( 'adhesions',
+			array( 'AmapressContrats', 'adhesions_shortcode' ),
+			[
+				'desc' => 'Liste des contrats de l\'amapien',
+				'args' => [
+				]
+			] );
 
 		// THE AJAX ADD ACTIONS
 		add_action( 'wp_ajax_update_contrat_status_action', array(
@@ -41,6 +47,21 @@ class AmapressContrats {
 		}
 
 		return Amapress::add_days( $date, - $renouv_days );
+	}
+
+	/** @return AmapressContrat_instance[] */
+	public static function get_contrat_to_generate() {
+		$contrats         = AmapressContrats::get_active_contrat_instances();
+		$contrats_tocheck = array();
+		foreach ( $contrats as $contrat ) {
+			$res = false;
+			AmapressContrats::get_contrat_status( $contrat->ID, $res );
+			if ( $res ) {
+				$contrats_tocheck[] = $contrat;
+			}
+		}
+
+		return $contrats_tocheck;
 	}
 
 	public static function get_contrat_status( $contrat_id, &$need_generate ) {
@@ -738,6 +759,9 @@ class AmapressContrats {
 		$key     = "amapress_get_active_adhesions_{$filter}_{$key_ids}_{$contrat_quantite_id}_{$lieu_id}_{$date}_{$ignore_renouv_delta}";
 		$res     = wp_cache_get( $key );
 		if ( false === $res ) {
+			if ( null == $date ) {
+				$date = amapress_time();
+			}
 			if ( is_array( $contrat_id ) ) {
 				$abo_ids = $contrat_id;
 			} else {
@@ -795,7 +819,7 @@ class AmapressContrats {
 					),
 					array(
 						'key'     => 'amapress_adhesion_date_fin',
-						'value'   => Amapress::end_of_day( amapress_time() ),
+						'value'   => Amapress::start_of_day( $date ),
 						'compare' => '>=',
 						'type'    => 'NUMERIC',
 					),

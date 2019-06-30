@@ -44,6 +44,7 @@ function amapress_register_entities_amap_event( $entities ) {
 					}
 				}
 			}
+			TitanFrameworkOption::echoFullEditLinkAndWarning();
 		},
 		'fields'             => array(
 			'public'      => array(
@@ -54,7 +55,7 @@ function amapress_register_entities_amap_event( $entities ) {
 			'date'        => array(
 				'name'       => amapress__( 'Date de l\'évènement' ),
 				'type'       => 'date',
-				'time'       => true,
+				'time'       => false,
 				'required'   => true,
 				'desc'       => 'Date évènement',
 				'group'      => '1/ Horaires',
@@ -146,11 +147,17 @@ function amapress_register_entities_amap_event( $entities ) {
 			'participants' => array(
 				'name'         => amapress__( 'Participants' ),
 				'type'         => 'select-users',
+				'readonly'     => true,
 				'autocomplete' => true,
 				'multiple'     => true,
 				'tags'         => true,
 				'desc'         => 'Participants',
 				'group'        => '3/ Participants',
+				'after_option' => function ( $option ) {
+					/** @var TitanFrameworkOption $option */
+					$visite = new AmapressAmap_event( $option->getPostID() );
+					echo '<p>Les inscription se gère <a href="' . esc_attr( $visite->getPermalink() ) . '" target="_blank">ici</a> pour cette évènement</p>';
+				},
 			),
 		),
 	);

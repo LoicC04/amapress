@@ -95,7 +95,7 @@ class AmapressAssemblee_generale extends Amapress_EventBase {
 					'category' => 'Assemblées générales',
 					'priority' => 70,
 					'label'    => 'Assemblée',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_assemblee_icon", 'dashicons dashicons-admin-post' ) ),
+					'icon'     => 'fa fa-university',
 					'alt'      => 'Vous êtes inscript pour l\'assemblée générale du ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );
@@ -110,7 +110,7 @@ class AmapressAssemblee_generale extends Amapress_EventBase {
 					'lieu'     => $asm_lieu,
 					'priority' => 70,
 					'label'    => 'Assemblée',
-					'icon'     => Amapress::get_icon( Amapress::getOption( "agenda_assemblee_inscription_icon" ) ),
+					'icon'     => 'fa fa-university',
 					'content'  => 'Vous êtes inscript pour l\'assemblée générale du ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );
@@ -125,15 +125,12 @@ class AmapressAssemblee_generale extends Amapress_EventBase {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
-		$participants = unserialize( get_post_meta( $this->ID, 'amapress_assemblee_generale_participants', true ) );
-		if ( ! $participants ) {
-			$participants = array();
-		}
+		$participants = $this->getParticipantsIds();
 		if ( in_array( $user_id, $participants ) ) {
 			return 'already_in_list';
 		} else {
 			$participants[] = $user_id;
-			update_post_meta( $this->ID, 'amapress_assemblee_generale_participants', $participants );
+			$this->setCustom( 'amapress_assemblee_generale_participants', $participants );
 
 			amapress_mail_current_user_inscr( $this, $user_id, 'assemble' );
 
