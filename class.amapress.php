@@ -726,6 +726,12 @@ class Amapress {
 			'delete'  => true,
 			'publish' => true,
 		) );
+		self::add_post_role( 'administrator', 'mailing_group', 'mailing_groups', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => true,
+			'publish' => true,
+		) );
 
 		$r = get_role( 'administrator' );
 		$r->add_cap( 'manage_fournisseurs' );
@@ -765,6 +771,12 @@ class Amapress {
 			'edit'    => true,
 			'delete'  => false,
 			'publish' => true,
+		) );
+		self::add_post_role( 'producteur', 'mailing_group', 'mailing_groups', array(
+			'read'    => true,
+			'edit'    => false,
+			'delete'  => false,
+			'publish' => false,
 		) );
 
 		$r = get_role( 'producteur' );
@@ -877,6 +889,12 @@ class Amapress {
 			'edit'    => true,
 			'delete'  => true,
 			'publish' => true,
+		) );
+		self::add_post_role( 'tresorier', 'mailing_group', 'mailing_groups', array(
+			'read'    => true,
+			'edit'    => false,
+			'delete'  => false,
+			'publish' => false,
 		) );
 
 		$r = get_role( 'tresorier' );
@@ -1033,6 +1051,12 @@ class Amapress {
 		self::add_post_role( 'coordinateur_amap', 'mailinglist', 'mailinglists', array(
 			'read'    => true,
 			'edit'    => true,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'coordinateur_amap', 'mailing_group', 'mailing_groups', array(
+			'read'    => true,
+			'edit'    => false,
 			'delete'  => false,
 			'publish' => false,
 		) );
@@ -1251,6 +1275,12 @@ class Amapress {
 			'delete'  => false,
 			'publish' => false,
 		) );
+		self::add_post_role( 'responsable_amap', 'mailing_group', 'mailing_groups', array(
+			'read'    => true,
+			'edit'    => false,
+			'delete'  => false,
+			'publish' => false,
+		) );
 
 		$r = get_role( 'responsable_amap' );
 		$r->add_cap( 'manage_fournisseurs' );
@@ -1433,6 +1463,12 @@ class Amapress {
 		self::add_post_role( 'referent', 'mailinglist', 'mailinglists', array(
 			'read'    => true,
 			'edit'    => true,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'referent', 'mailing_group', 'mailing_groups', array(
+			'read'    => true,
+			'edit'    => false,
 			'delete'  => false,
 			'publish' => false,
 		) );
@@ -1792,6 +1828,11 @@ class Amapress {
 			if ( array_key_exists( 'menu_position', $conf ) ) {
 				$create_options['menu_position'] = $conf['menu_position'];
 			}
+			if ( array_key_exists( 'can_export', $conf ) ) {
+				$create_options['can_export'] = $conf['can_export'];
+			} else {
+				$create_options['can_export'] = false;
+			}
 			$internal_post_type = isset( $conf['internal_name'] ) ? $conf['internal_name'] : 'amps_' . $name;
 			register_post_type( $internal_post_type, $create_options );
 
@@ -2012,7 +2053,153 @@ class Amapress {
 		}
 	}
 
-	private static function generate_test( $id, $name, &$generated_ids = array() ) {
+	public static function generate_full_amap( $anonymize = true ) {
+		require_once 'demos/AmapDemoBase.php';
+
+		$ret                = '';
+		$generated_ids      = [];
+		$around_address_lat = Amapress::get_lieux()[0]->getAdresseLatitude();
+		$around_address_lng = Amapress::get_lieux()[0]->getAdresseLongitude();
+
+		$user_roles_terms = AmapDemoBase::dumpTerms( AmapressUser::AMAP_ROLE );
+		$produits_terms   = AmapDemoBase::dumpTerms( AmapressProduit::CATEGORY );
+		$recettes_terms   = AmapDemoBase::dumpTerms( AmapressRecette::CATEGORY );
+
+		$ret .= '$this->createTerms(' . var_export( $user_roles_terms, true ) . ', \'' . AmapressUser::AMAP_ROLE . '\');' . "\n";
+		$ret .= '$this->createTerms(' . var_export( $produits_terms, true ) . ', \'' . AmapressProduit::CATEGORY . '\');' . "\n";
+		$ret .= '$this->createTerms(' . var_export( $recettes_terms, true ) . ', \'' . AmapressRecette::CATEGORY . '\');' . "\n";
+
+		$update_user_callback = function ( $user, &$userdata, &$usermeta ) use ( $around_address_lat, $around_address_lng, $anonymize ) {
+			if ( $anonymize ) {
+				$rnd                                     = AmapDemoBase::generateRandomAddress( $around_address_lat, $around_address_lng, 2000 );
+				$usermeta['amapress_user_long']          = ! empty( $rnd ) ? $rnd['lon'] : '';
+				$usermeta['amapress_user_lat']           = ! empty( $rnd ) ? $rnd['lat'] : '';
+				$usermeta['amapress_user_location_type'] = 'ROOFTOP';
+				$usermeta['amapress_user_adresse']       = ! empty( $rnd ) ? $rnd['address'] : '';
+				$usermeta['amapress_user_code_postal']   = ! empty( $rnd ) ? $rnd['postcode'] : '';
+				$usermeta['amapress_user_ville']         = ! empty( $rnd ) ? $rnd['city'] : '';
+			}
+			unset( $usermeta['amapress_user_co-adherents'] );
+			unset( $usermeta['amapress_user_allow_show_email'] );
+			unset( $usermeta['amapress_user_allow_show_adresse'] );
+			unset( $usermeta['amapress_user_allow_show_tel_fixe'] );
+			unset( $usermeta['amapress_user_allow_show_tel_mobile'] );
+			unset( $usermeta['amapress_user_allow_show_avatar'] );
+		};
+		$update_post_callback = function ( $post, &$postdata, &$postmeta ) {
+			if ( AmapressLieu_distribution::INTERNAL_POST_TYPE == $post['post_type'] ) {
+//'amapress_lieu_distribution_adresse
+//'amapress_lieu_distribution_code_postal
+//'amapress_lieu_distribution_ville
+//'amapress_lieu_distribution_long
+//'amapress_lieu_distribution_lat
+//'amapress_lieu_distribution_location_type
+			} else if ( AmapressProducteur::INTERNAL_POST_TYPE == $post['post_type'] ) {
+				//amapress_producteur_adresse_exploitation
+				//amapress_producteur_adresse_exploitation_lat
+				//amapress_producteur_adresse_exploitation_long
+				//amapress_producteur_adresse_exploitation_location_type
+				unset( $postmeta['amapress_producteur_resume'] );
+				unset( $postmeta['amapress_producteur_presentation'] );
+				unset( $postmeta['amapress_producteur_historique'] );
+			} else if ( AmapressAdhesion::INTERNAL_POST_TYPE == $post['post_type'] ) {
+				if ( isset( $postmeta['amapress_adhesion_contrat_quantite'] ) ) {
+					$arr  = $postmeta['amapress_adhesion_contrat_quantite'];
+					$arr2 = [];
+					foreach ( $arr as $k => $v ) {
+						$arr2[ $k ] = "posts[$v]";
+					}
+					$postmeta['amapress_adhesion_contrat_quantite'] = $arr2;
+				}
+				if ( isset( $postmeta['amapress_adhesion_contrat_quantite_factors'] ) ) {
+					$arr  = $postmeta['amapress_adhesion_contrat_quantite_factors'];
+					$arr2 = [];
+					foreach ( $arr as $k => $v ) {
+						$arr2["posts[$k]"] = $v;
+					}
+					$postmeta['amapress_adhesion_contrat_quantite_factors'] = $arr2;
+				}
+				unset( $postmeta['amapress_adhesion_message'] );
+			}
+			unset( $postmeta['amapress_intermittence_panier_adh_cancel_message'] );
+			unset( $postmeta['amapress_intermittence_panier_adh_message'] );
+			unset( $postmeta['amapress_lieu_distribution_instructions_privee'] );
+			unset( $postmeta['amapress_lieu_distribution_contact_externe'] );
+		};
+		$relative_time        = 0;
+		$media                = [];
+
+
+		//TODO paniers intermittents
+		$ret .= self::generate_test( AmapressAdhesionPeriod::getCurrent()->ID, AmapressAdhesionPeriod::POST_TYPE, $generated_ids, true, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+		foreach ( AmapressContrats::get_active_contrat_instances_ids() as $contrat_instances_id ) {
+			$ret .= self::generate_test( $contrat_instances_id, AmapressContrat_instance::POST_TYPE, $generated_ids, false, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+			foreach ( AmapressContrats::get_contrat_quantites( $contrat_instances_id ) as $q ) {
+				$ret .= self::generate_test( $q->ID, AmapressContrat_quantite::POST_TYPE, $generated_ids, false, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+			}
+		}
+		foreach ( AmapressContrats::get_active_contrat_instances_ids() as $contrat_instances_id ) {
+			foreach ( AmapressContrats::get_active_adhesions_ids( $contrat_instances_id ) as $adhesion_id ) {
+				$ret .= self::generate_test( $adhesion_id, AmapressAdhesion::POST_TYPE, $generated_ids, true, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+			}
+//		    foreach (AmapressContrats::get_all_paiements($contrat_instances_id) as $amapien_paiement) {
+//			    $ret .= self::generate_test($amapien_paiement->ID, AmapressAmapien_paiement::POST_TYPE, $generated_ids, true);
+//		    }
+			foreach ( get_posts( 'post_type=amps_panier&posts_per_page=-1&amapress_contrat_inst=' . $contrat_instances_id ) as $post ) {
+				$ret .= self::generate_test( $post->ID, AmapressPanier::POST_TYPE, $generated_ids, true, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+			}
+			foreach ( get_posts( 'post_type=amps_distribution&posts_per_page=-1&amapress_contrat_inst=' . $contrat_instances_id ) as $post ) {
+				$ret .= self::generate_test( $post->ID, AmapressDistribution::POST_TYPE, $generated_ids, true, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+			}
+		}
+		foreach ( get_posts( 'post_type=amps_inter_panier&posts_per_page=-1' ) as $post ) {
+			$ret .= self::generate_test( $post->ID, AmapressIntermittence_panier::POST_TYPE, $generated_ids, true, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+		}
+		//post_type=amps_visite
+		//post_type=amps_amap_event
+		//post_type=amps_produit
+		//post_type=amps_recette
+		foreach ( get_posts( 'post_type=amps_visite&posts_per_page=-1' ) as $post ) {
+			$ret .= self::generate_test( $post->ID, AmapressVisite::POST_TYPE, $generated_ids, true, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+		}
+		foreach ( get_posts( 'post_type=amps_amap_event&posts_per_page=-1' ) as $post ) {
+			$ret .= self::generate_test( $post->ID, AmapressAmap_event::POST_TYPE, $generated_ids, false, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+		}
+		foreach ( get_posts( 'post_type=amps_produit&posts_per_page=-1' ) as $post ) {
+			$ret .= self::generate_test( $post->ID, AmapressProduit::POST_TYPE, $generated_ids, false, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+		}
+		foreach ( get_posts( 'post_type=amps_recette&posts_per_page=-1' ) as $post ) {
+			$ret .= self::generate_test( $post->ID, AmapressRecette::POST_TYPE, $generated_ids, false, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize );
+		}
+
+		$ret = preg_replace( '/amapress_producteur_referent_(\d+)&#039;/', 'amapress_producteur_referent_\'. $this->posts[\'$1\']', $ret );
+		$ret = preg_replace( '/amapress_contrat_referent_(\d+)&#039;/', 'amapress_contrat_referent_\'. $this->posts[\'$1\']', $ret );
+
+//		foreach ( $media as $k => $v ) {
+//			$ret = "\$this->medias['$k'] = '$v';\n" . $ret;
+//		}
+
+		return $ret;
+	}
+
+	private static function generate_test(
+		$id, $name,
+		&$generated_ids = array(),
+		$unset_post_title = false,
+		$relative_time = 0,
+		$update_user_callback = null,
+		$update_post_callback = null,
+		&$media = array(),
+		$anonymize = true
+	) {
+
+		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+			return '';
+		}
+
+		if ( ! $relative_time ) {
+			$relative_time = amapress_time();
+		}
 //	    global $menu, $submenu;
 //	    $the_menu = [];
 //		foreach ($menu as $m) {
@@ -2026,17 +2213,21 @@ class Amapress {
 //		var_export($the_menu);
 //		die();
 
+		require_once 'vendor/fzaninotto/faker/src/autoload.php';
+		$faker = Faker\Factory::create( 'fr_FR' );
+
 		$fields      = AmapressEntities::getPostTypeFields( $name );
 		$field_names = array_keys( $fields );
 
-		$ret = '';
+		$id_affect = '';
+		$ret       = '';
 		if ( 'user' == $name ) {
 			if ( in_array( "u$id", $generated_ids ) ) {
 				return '';
 			}
-			$generated_ids[] = "u$id";
-			$user            = get_user_by( 'ID', $id );
-			$user_meta       = array_map( function ( $v ) {
+			$generated_ids[]           = "u$id";
+			$user                      = get_user_by( 'ID', $id );
+			$user_meta                 = array_map( function ( $v ) {
 				if ( is_array( $v ) ) {
 					if ( count( $v ) > 1 ) {
 						return $v;
@@ -2047,72 +2238,154 @@ class Amapress {
 					return $v;
 				}
 			}, get_user_meta( $id ) );
-			$ret             .= '<pre>';
-			$ret             .= "\$this->users['$id'] = self::factory()->user->create(\n";
-			$ret             .= "['role' => '{$user->roles[0]}']\n";
-			$ret             .= ");\n";
+			$user_data                 = [
+				'role'       => $user->roles[0],
+				'first_name' => $anonymize ? $faker->firstName : $user->first_name,
+				'last_name'  => $anonymize ? $faker->lastName : $user->last_name,
+			];
+			$user_data['display_name'] = $user_data['first_name'] . ' ' . $user_data['last_name'];
+			if ( $anonymize ) {
+				$user_data['user_login'] = AmapressUsers::generate_unique_username( $user_data['first_name'] . '.' . $user_data['last_name'] );
+				$user_data['user_email'] = $user_data['user_login'] . '@' . $faker->safeEmailDomain;
+			} else {
+				$user_data['user_login'] = $user->user_login;
+				$user_data['user_email'] = $user->user_email;
+			}
+			if ( null != $update_user_callback && is_callable( $update_user_callback, false ) ) {
+				call_user_func_array( $update_user_callback, [ $user, &$user_data, &$user_meta ] );
+			}
+
+			$ret .= '<pre>';
+			$ret .= "\$this->users['$id'] = \$this->createUser(";
+			$ret .= var_export( $user_data, true );
+			$ret .= ");\n";
+
+			if ( $anonymize ) {
+				$user_meta['amapress_user_telephone']  = $faker->phoneNumber;
+				$user_meta['amapress_user_telephone2'] = $faker->mobileNumber;
+			}
+			unset( $user_meta['amapress_user_telephone3'] );
+			unset( $user_meta['amapress_user_telephone4'] );
+			unset( $user_meta['amapress_user_avatar'] );
+			unset( $user_meta['amapress_user_messages'] );
+			$user_meta['amapress_user_autogen'] = 'true';
 			foreach ( $user_meta as $k => $v ) {
-				if ( ( ! in_array( $k, $field_names ) && strpos( $k, 'amapress_' ) !== 0 ) || empty( $v ) ) {
+				if ( ( ! in_array( $k, $field_names ) && ( strpos( $k, 'amapress_' ) !== 0 ) ) || empty( $v ) ) {
 					continue;
 				}
-				$v_export = var_export( $v, true );
+				$v_export = esc_html( var_export( $v, true ) );
 				if ( isset( $fields[ $k ] ) ) {
 					if ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type']
 					     || 'multicheck-users' == $fields[ $k ]['type'] || 'multicheck-posts' == $fields[ $k ]['type'] ) {
+						$v_exports = [];
 						foreach ( Amapress::get_array( $v ) as $sub_id ) {
 							$ret = self::generate_test( intval( $sub_id ),
 									amapress_simplify_post_type( isset( $fields[ $k ]['post_type'] ) ? $fields[ $k ]['post_type'] : 'user' ),
-									$generated_ids ) . $ret;
+									$generated_ids, $unset_post_title, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize ) . $ret;
 
 							if ( 'select-users' == $fields[ $k ]['type'] || 'multicheck-users' == $fields[ $k ]['type'] ) {
-								$v_export = "\$this->users['$sub_id']";
+								$v_exports[] = "users[$sub_id]";
 							} else {
-								$v_export = "\$this->posts['$sub_id']";
+								$v_exports[] = "posts[$sub_id]";
 							}
+						}
+						if ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type'] ) {
+							$v_export = $v_exports[0];
+						} else {
+							$v_export = $v_exports;
 						}
 					}
 				}
 
 				$ret .= "update_user_meta(\$this->users['$id'], '$k', $v_export);\n";
 			}
-			$ret .= '</pre>';
+			$ret       .= '</pre>';
+			$id_affect = "\$this->users['$id']";
 		} else {
 			if ( in_array( "p$id", $generated_ids ) ) {
 				return '';
 			}
+
+			$fields['_thumbnail_id'] = [
+				'type' => 'upload',
+			];
+			$field_names[]           = '_thumbnail_id';
+
 			$generated_ids[] = "p$id";
 			$post            = get_post( $id, ARRAY_A );
 			$post_meta       = get_post_custom( $id );
 			if ( empty( $post_meta ) ) {
 				$post_meta = array();
 			}
+			if ( $unset_post_title ) {
+				unset( $post['post_title'] );
+			}
 			//foreach ( $post_meta as $k => $v ) {
 			//	amapress_dump( $k );
 			//	amapress_dump( $v );
 			//}
-			$post_meta          = array_map( function ( $v ) {
+			$post_meta = array_map( function ( $v ) {
 				return TitanEntity::prepare_custom_field_value( $v );
 			}, $post_meta );
+			if ( null != $update_post_callback && is_callable( $update_post_callback, false ) ) {
+				call_user_func_array( $update_post_callback, [ $post, &$post, &$post_meta ] );
+			}
 			$filtered_post_meta = [];
 			foreach ( $post_meta as $k => $v ) {
 				if ( ( ! in_array( $k, $field_names ) && strpos( $k, 'amapress_' ) !== 0 ) || empty( $v ) ) {
 					continue;
 				}
-				if ( isset( $fields[ $k ] ) ) {
-					if ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type']
-					     || 'multicheck-users' == $fields[ $k ]['type'] || 'multicheck-posts' == $fields[ $k ]['type'] ) {
-						foreach ( Amapress::get_array( $v ) as $sub_id ) {
-							$ret = self::generate_test( intval( $sub_id ),
-									amapress_simplify_post_type( isset( $fields[ $k ]['post_type'] ) ? $fields[ $k ]['post_type'] : 'user' ),
-									$generated_ids ) . $ret;
-							if ( 'select-users' == $fields[ $k ]['type'] || 'multicheck-users' == $fields[ $k ]['type'] ) {
-								$v = "\$this->users['$sub_id']";
-							} else {
-								$v = "\$this->posts['$sub_id']";
-							}
-						}
+				if ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type']
+				     || 'multicheck-users' == $fields[ $k ]['type'] || 'multicheck-posts' == $fields[ $k ]['type'] ) {
+					$vs = [];
+					foreach ( Amapress::get_array( $v ) as $sub_id ) {
+						$ret = self::generate_test( intval( $sub_id ),
+								amapress_simplify_post_type( isset( $fields[ $k ]['post_type'] ) ? $fields[ $k ]['post_type'] : 'user' ),
+								$generated_ids, $unset_post_title, $relative_time, $update_user_callback, $update_post_callback, $media, $anonymize ) . $ret;
 
+						if ( 'select-users' == $fields[ $k ]['type'] || 'multicheck-users' == $fields[ $k ]['type'] ) {
+							$vs[] = "users[$sub_id]";
+						} else {
+							$vs[] = "posts[$sub_id]";
+						}
 					}
+					if ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type'] ) {
+						$v = $vs[0];
+					} else {
+						$v = $vs;
+					}
+				} else if ( '_thumbnail_id' == $k || 'upload' == $fields[ $k ]['type'] ) {
+					if ( is_array( $v ) ) {
+						$v = array_shift( $v );
+					}
+
+					$bits_base64 = '';
+					$ext         = '';
+					if ( ! isset( $_GET['no_attach'] ) ) {
+						$file = get_attached_file( intval( $v ) );
+						$ext  = '.' . strtolower( pathinfo( $file, PATHINFO_EXTENSION ) );
+						if ( filesize( $file ) > 512 * 1024 ) {
+							$bits_base64 = false;
+						} else {
+							$bits_base64 = base64_encode( @file_get_contents( $file ) );
+							$bits_base64 = chunk_split( $bits_base64, 76, "\r\n" );
+						}
+					}
+					if ( ! empty( $bits_base64 ) ) {
+						$attach_name           = 'amp_attach' . $v . $ext;
+						$media[ $attach_name ] = $bits_base64;
+						$v                     = 'attachm("' . $attach_name . '", $this->medias["' . $attach_name . '"])¤';
+					} else {
+						$v = 0;
+					}
+				} else if ( 'multidate' == $fields[ $k ]['type'] ) {
+					$v = 'implode(", ", [' . implode( ', ', array_map( function ( $d ) use ( $relative_time ) {
+							return 'date_i18n("d/m/Y", $now+' . ( intval( $d ) - Amapress::start_of_day( $relative_time ) ) . ')';
+						}, array_map(
+							'TitanEntity::to_date',
+							TitanEntity::get_array( $v ) ) ) ) . '])¤';
+				} else if ( 'date' == $fields[ $k ]['type'] ) {
+					$v = 'now+' . ( intval( $v ) - Amapress::start_of_day( $relative_time ) );
 				}
 				$filtered_post_meta[ $k ] = $v;
 			}
@@ -2121,6 +2394,11 @@ class Amapress {
 			unset( $post['post_author'] );
 			unset( $post['guid'] );
 			unset( $post['post_name'] );
+			unset( $post['post_date'] );
+			unset( $post['post_date_gmt'] );
+			unset( $post['post_modified'] );
+			unset( $post['post_modified_gmt'] );
+			unset( $post['filter'] );
 			foreach ( $post as $k => $v ) {
 				if ( empty( $v ) ) {
 					unset( $post[ $k ] );
@@ -2128,13 +2406,42 @@ class Amapress {
 			}
 			$post['meta_input'] = $filtered_post_meta;
 
-			$ret .= '<pre>';
-			$ret .= "\$this->posts['$id'] = self::factory()->post->create(\n";
-			$ret .= var_export( $post, true );
-			$ret .= ");\n";
-			$ret .= '</pre>';
+			$ret       .= '<pre>';
+			$ret       .= "\$this->posts['$id'] = \$this->createPost(\n";
+			$ret       .= esc_html( var_export( $post, true ) );
+			$ret       .= ");\n";
+			$ret       .= '</pre>';
+			$id_affect = "\$this->posts['$id']";
 		}
-		$ret = preg_replace( '/\'(\$this-\>(?:posts|users)\[\'\d+\'])\'/', '$1', $ret );
+
+		$ret = preg_replace( '/&#039;(posts|users)\[(\d+)\]&#039;/', '\$this->$1[\'$2\']', $ret );
+		$ret = preg_replace( '/&#039;(now\s*\+\s*-?\d+)&#039;/', '\$$1', $ret );
+		$ret = preg_replace( '/&#039;(implode\([^¤]+)¤&#039;/', '$1', $ret );
+		$ret = preg_replace( '/&#039;attachm(\([^¤]+)¤&#039;/', '\$this->insertPostFromBitsBase64$1', $ret );
+
+		foreach (
+			[
+				AmapressUser::AMAP_ROLE,
+				AmapressRecette::CATEGORY,
+				AmapressProduit::CATEGORY
+			] as $taxonomy
+		) {
+			/** @var WP_Term[] $terms */
+			$terms     = wp_get_object_terms( $id, $taxonomy, array( 'fields' => 'all', 'orderby' => 'term_id' ) );
+			$new_terms = [];
+			foreach ( $terms as $term ) {
+				$new_terms[] = '$this->taxonomies[\'' . $taxonomy . '\'][\'' . $term->term_id . '\']';
+			}
+			if ( ! empty( $new_terms ) ) {
+				$ret .= 'wp_set_object_terms(' . $id_affect . ', [' . implode( ',', $new_terms ) . '], \'' . $taxonomy . '\');' . "\n";
+			}
+		}
+
+//		$amapress = [];
+//		foreach (wp_load_alloptions() as $k => $v) {
+//			if (strpos($k, 'amapress_') === 0)
+//				$amapress[$k] = $v;
+//		}
 
 		return $ret;
 	}
@@ -2392,6 +2699,7 @@ class Amapress {
 		wp_enqueue_style( 'amapress-adminbar', plugins_url( '/css/adminbar.css?v=' . $plugin_version, __FILE__ ) );
 		wp_enqueue_script( 'amapress-script', plugins_url( '/js/amapress.js?v=' . $plugin_version, __FILE__ ), array( 'jquery' ) );
 		wp_enqueue_script( 'jquery-ui-selectmenu' );
+		wp_enqueue_script( 'jquery-ui-accordion' );
 		wp_enqueue_script( 'contrat-status-handle', plugin_dir_url( __FILE__ ) . 'js/ajax-contrats.js', array( 'jquery' ) );
 		wp_localize_script( 'contrat-status-handle', 'update_contrat_status', array( 'ajax_url' => admin_url( 'admin-ajax.php' ) ) );
 		wp_enqueue_script( 'paiement-status-handle', plugin_dir_url( __FILE__ ) . 'js/ajax-paiements.js', array( 'jquery' ) );
@@ -2521,10 +2829,12 @@ class Amapress {
 	}
 
 	static function amapress_this_month_dashboard_widget_function() {
-		$week_paniers   = AmapressPanier::get_paniers( null, Amapress::add_a_month( amapress_time() ) );
-		$week_dists     = AmapressDistribution::get_distributions( null, Amapress::add_a_month( amapress_time() ) );
-		$week_visites   = AmapressVisite::get_visites( null, Amapress::add_a_month( amapress_time() ) );
-		$week_paiements = AmapressAmapien_paiement::get_paiements( null, Amapress::add_a_month( amapress_time() ) );
+		$start_date     = Amapress::start_of_week( amapress_time() );
+		$end_date       = Amapress::add_a_month( amapress_time() );
+		$week_paniers   = AmapressPanier::get_paniers( $start_date, $end_date );
+		$week_dists     = AmapressDistribution::get_distributions( $start_date, $end_date );
+		$week_visites   = AmapressVisite::get_visites( $start_date, $end_date );
+		$week_paiements = AmapressAmapien_paiement::get_paiements( $start_date, $end_date );
 
 		echo '<p>Paniers :</p>';
 		if ( count( $week_paniers ) == 0 ) {
@@ -2597,10 +2907,12 @@ class Amapress {
 	}
 
 	static function amapress_this_week_dashboard_widget_function() {
-		$week_paniers   = AmapressPanier::get_paniers( null, Amapress::add_a_week( amapress_time() ) );
-		$week_dists     = AmapressDistribution::get_distributions( null, Amapress::add_a_week( amapress_time() ) );
-		$week_visites   = AmapressVisite::get_visites( null, Amapress::add_a_week( amapress_time() ) );
-		$week_paiements = AmapressAmapien_paiement::get_paiements( null, Amapress::add_a_week( amapress_time() ) );
+		$start_date     = Amapress::start_of_week( amapress_time() );
+		$end_date       = Amapress::add_a_week( amapress_time() );
+		$week_paniers   = AmapressPanier::get_paniers( $start_date, $end_date );
+		$week_dists     = AmapressDistribution::get_distributions( $start_date, $end_date );
+		$week_visites   = AmapressVisite::get_visites( $start_date, $end_date );
+		$week_paiements = AmapressAmapien_paiement::get_paiements( $start_date, $end_date );
 
 		echo '<p>Paniers :</p>';
 		if ( count( $week_paniers ) == 0 ) {
@@ -2925,7 +3237,7 @@ class Amapress {
 			if ( empty( $item->classes ) ) {
 				$item->classes = array();
 			}
-			//$item->xfn = '';
+			$item->xfn = '';
 
 			$items[] = $item;
 		}
@@ -3228,6 +3540,8 @@ class Amapress {
 	public static function sendDocumentFile( $full_file_name, $out_file_name ) {
 		if ( strpos( $out_file_name, '.docx' ) !== false ) {
 			header( 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document' );
+		} else if ( strpos( $out_file_name, '.xlsx' ) !== false ) {
+			header( 'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' );
 		} else if ( strpos( $out_file_name, '.odt' ) !== false ) {
 			header( 'Content-Type: application/vnd.oasis.opendocument.text' );
 		} else if ( strpos( $out_file_name, '.pdf' ) !== false ) {
@@ -3339,6 +3653,24 @@ class Amapress {
 		$objWriter->save( $filename );
 
 		return $filename;
+	}
+
+	public static function getContratGenericUrl() {
+		return trailingslashit( AMAPRESS__PLUGIN_URL ) . 'templates/contrat_generique.docx';
+	}
+
+	public static function getArchivesDir() {
+		$dir     = wp_upload_dir()['basedir'] . '/amapress-archives/';
+		$created = wp_mkdir_p( $dir );
+		if ( $created ) {
+			$handle = @fopen( $dir . '.htaccess', "w" );
+			fwrite( $handle, 'DENY FROM ALL' );
+			fclose( $handle );
+			$handle = @fopen( $dir . 'index.php', "w" );
+			fclose( $handle );
+		}
+
+		return $dir;
 	}
 
 	/**
@@ -3459,6 +3791,10 @@ class Amapress {
 		}
 
 		return $href;
+	}
+
+	public static function get_collectif_page_href() {
+		return self::get_page_with_shortcode_href( 'amapiens-role-list', 'amp_collectif_href' );
 	}
 
 	public static function get_inscription_distrib_page_href() {

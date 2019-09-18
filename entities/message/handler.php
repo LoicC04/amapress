@@ -185,6 +185,8 @@ function amapress_send_message(
 			add_filter( 'wp_mail_from_name', $set_from_name );
 		}
 
+		$from_dn = trim( str_replace( array( '"', "'", "\r", "\n" ), '', $from_dn ) );
+		$from_dn = '"' . $from_dn . '"';
 
 //        add_filter( 'wp_mail_content_type', 'amapress_wpmail_content_type' );
 		$headers[] = 'Content-Type: text/html; charset=UTF-8';
@@ -194,7 +196,10 @@ function amapress_send_message(
 				//$headers[] = "Reply-to: $from_dn <$from_email>";
 				/** @var AmapressUser $name */
 				foreach ( $emails_indiv as $email => $name ) {
-					$to          = "{$name->getDisplayName()} <$email>";
+					$name_string = $name->getDisplayName();
+					$name_string = trim( str_replace( array( '"', "'", "\r", "\n" ), '', $name_string ) );
+					$name_string = '"' . $name_string . '"';
+					$to          = "$name_string <$email>";
 					$new_subject = amapress_replace_mail_placeholders( $subject, $name, $entity );
 					$new_content = amapress_replace_mail_placeholders( $content, $name, $entity );
 					amapress_wp_mail( $to, $new_subject, $new_content, $headers, $attachments, $cc, $bcc );
@@ -370,13 +375,7 @@ function amapress_message_get_targets() {
 	$ret = array();
 	amapress_add_message_target( $ret, "post_type=amps_producteur|amapress_producteur_user", "Les producteurs", 'producteur' );
 	amapress_add_message_target( $ret, "user:role=responsable_amap", "Les responsables AMAP", 'resp-amap' );
-	$refs = [ 'amapress_producteur_referent', 'amapress_producteur_referent2', 'amapress_producteur_referent3' ];
-	foreach ( Amapress::get_lieu_ids() as $lieu_id ) {
-		$refs[] = "amapress_producteur_referent_$lieu_id";
-		$refs[] = "amapress_producteur_referent2_$lieu_id";
-		$refs[] = "amapress_producteur_referent3_$lieu_id";
-	}
-	amapress_add_message_target( $ret, "post_type=amps_producteur|" . implode( ',', $refs ), "Les referents producteurs", "referent-producteur" );
+	amapress_add_message_target( $ret, "user:amapress_role=referent_producteur", "Les referents producteurs", "referent-producteur" );
 	amapress_add_message_target( $ret, "post_type=amps_lieu|amapress_lieu_distribution_referent", "Les referents lieux de distribution", "referent-lieu" );
 	$res['Responsables'] = $ret;
 

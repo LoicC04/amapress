@@ -42,6 +42,7 @@ class ComposerStaticInit1b27907b0b8cf08fd0453c0309cfa11f
 	        'Psr\\Http\\Message\\' => 17,
 	        'PhpOffice\\PhpWord\\' => 18,
 	        'PhpOffice\\Common\\'  => 17,
+	        'PhpImap\\'            => 8,
         ),
 	    'G' =>
         array (
@@ -49,6 +50,10 @@ class ComposerStaticInit1b27907b0b8cf08fd0453c0309cfa11f
             'GuzzleHttp\\Promise\\' => 19,
             'GuzzleHttp\\' => 11,
         ),
+	    'F' =>
+		    array(
+			    'Faker\\' => 6,
+		    ),
 	    'D' =>
         array (
             'Doctrine\\Instantiator\\' => 22,
@@ -98,6 +103,10 @@ class ComposerStaticInit1b27907b0b8cf08fd0453c0309cfa11f
 		    array(
 			    0 => __DIR__ . '/..' . '/phpoffice/common/src/Common',
 		    ),
+	    'PhpImap\\'                   =>
+		    array(
+			    0 => __DIR__ . '/..' . '/php-imap/php-imap/src/PhpImap',
+		    ),
 	    'GuzzleHttp\\Psr7\\'          =>
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/psr7/src',
@@ -110,6 +119,10 @@ class ComposerStaticInit1b27907b0b8cf08fd0453c0309cfa11f
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/guzzle/src',
         ),
+	    'Faker\\'                     =>
+		    array(
+			    0 => __DIR__ . '/..' . '/fzaninotto/faker/src/Faker',
+		    ),
 	    'Doctrine\\Instantiator\\'    =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/instantiator/src/Doctrine/Instantiator',

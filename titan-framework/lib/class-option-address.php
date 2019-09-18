@@ -20,26 +20,28 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 	);
 
 	public static function lookup_address( $string ) {
-		if ( empty( $string ) ) {
+		if ( empty( $string ) || ',' == trim( $string ) ) {
 			return null;
 		}
 
-		$string = preg_replace( '/(?:\s+-\s+)(\d{5})\s+([^,]+),\s*\1\s+\2/', ', $1 $2', $string );
-
 		$string = preg_replace( '/\s+/', " ", trim( $string ) );
+		$string = preg_replace( '/(?:\s+-\s+|,\s*)?(\d{5}|2[AB]\d{3})\s+([^,]+)(?:,\s*\1\s+\2)+/i', ', $1 $2', $string );
+
 		if ( 'google' == self::$geoprovider ) {
 			$string      = urlencode( $string );
 			$key         = self::$google_map_api_key;
 			$details_url = "https://maps.googleapis.com/maps/api/geocode/json?address={$string}&sensor=false&key={$key}";
 
-			$ch = curl_init();
-			curl_setopt( $ch, CURLOPT_URL, $details_url );
-			curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
-			$response = json_decode( curl_exec( $ch ), true );
+			$request = wp_remote_get( $details_url );
+			if ( is_wp_error( $request ) ) {
+				return $request;
+			}
+
+			$response = json_decode( wp_remote_retrieve_body( $request ), true );
 
 			if ( $response['status'] != 'OK' ) {
 				$res = $response['status'];
-				error_log( "Google Maps resolution failed: $res" );
+				error_log( "Google Maps resolution failed ($res): $string" );
 
 				return null;
 			}
@@ -55,16 +57,18 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 			$string      = urlencode( $string );
 			$details_url = "https://nominatim.openstreetmap.org/search?q={$string}&format=json";
 
-			$ch = curl_init();
-			curl_setopt( $ch, CURLOPT_URL, $details_url );
-			curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
-			curl_setopt( $ch, CURLOPT_REFERER, wp_get_referer() );
-			curl_setopt( $ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 5.1; rv:31.0) Gecko/20100101 Firefox/31.0' );
-			$res      = curl_exec( $ch );
-			$response = json_decode( $res, true );
+
+			$request = wp_remote_get( $details_url, [
+				'headers' => 'Referer: ' . wp_get_referer()
+			] );
+			if ( is_wp_error( $request ) ) {
+				return $request;
+			}
+
+			$response = json_decode( wp_remote_retrieve_body( $request ), true );
 
 			if ( ! is_array( $response ) || empty( $response ) ) {
-				error_log( "Nominatim resolution failed: $res" );
+				error_log( "Nominatim resolution failed: $details_url" );
 
 				return null;
 			}
@@ -112,14 +116,21 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 		}
 
 		$address = self::lookup_address( $address_content );
-		if ( $address ) {
+		if ( $address && ! is_wp_error( $address ) ) {
 			call_user_func( $save_fn, $postID, "{$id}_long", $address['longitude'] );
 			call_user_func( $save_fn, $postID, "{$id}_lat", $address['latitude'] );
 			call_user_func( $save_fn, $postID, "{$id}_location_type", $address['location_type'] );
+			call_user_func( $delete_fn, $postID, "{$id}_loc_err" );
 		} else {
 			call_user_func( $delete_fn, $postID, "{$id}_long" );
 			call_user_func( $delete_fn, $postID, "{$id}_lat" );
 			call_user_func( $delete_fn, $postID, "{$id}_location_type" );
+			if ( is_wp_error( $address ) ) {
+				/** @var WP_Error $address */
+				call_user_func( $save_fn, $postID, "{$id}_loc_err", $address->get_error_message() );
+			} else {
+				call_user_func( $delete_fn, $postID, "{$id}_loc_err" );
+			}
 		}
 
 		return ! $this->settings['use_as_field'];
@@ -157,10 +168,14 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 				echo '<p class="' . $id . ' localized-address">Localisé <a target="_blank" href="http://maps.google.com/maps?q=' . $lat . ',' . $lng . '">Voir sur Google Maps</a></p>';
 			}
 		} else {
+			$loc_err = call_user_func( $get_fn, $postID, "{$id}_loc_err", true );
+			if ( ! empty( $loc_err ) ) {
+				$loc_err = " ($loc_err)";
+			}
 			if ( 'google' == self::$geoprovider && empty( self::$google_map_api_key ) ) {
-				echo '<p class="' . $id . ' unlocalized-address"><strong>Pas de clé Google API configurée</strong> - Adresse non localisée</p>';
+				echo "<p class='$id unlocalized-address'><strong>Pas de clé Google API configurée</strong> - Adresse non localisée$loc_err</p>";
 			} else {
-				echo '<p class="' . $id . ' unlocalized-address">Adresse non localisée</p>';
+				echo "<p class='$id unlocalized-address'>Adresse non localisée$loc_err</p>";
 			}
 		}
 	}

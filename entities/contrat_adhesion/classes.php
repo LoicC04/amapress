@@ -180,10 +180,26 @@ class AmapressAdhesion extends TitanEntity {
 	public static function getProperties() {
 		if ( null == self::$properties ) {
 			$ret                                     = [];
+			$ret['inscription_admin_link']           = [
+				'desc' => 'Lien vers l\'inscription (Tableau de Bord>Gestion Contrat>Inscriptions)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return Amapress::makeLink( $adh->getAdminEditLink(), $adh->getAdherent()->getDisplayName() );
+				}
+			];
 			$ret['contrat_type']                     = [
 				'desc' => 'Type du contrat (par ex, Légumes)',
 				'func' => function ( AmapressAdhesion $adh ) {
 					return $adh->getContrat_instance()->getModelTitle();
+				}
+			];
+			$ret['contrat_titre_complet']            = [
+				'desc' => 'Nom du contrat (par ex, Légumes 09/2018-08/2019 - Semaine A)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					if ( ! empty( $adh->getContrat_instance()->getSubName() ) ) {
+						return $adh->getContrat_instance()->getTitle() . ' - ' . $adh->getContrat_instance()->getSubName();
+					} else {
+						return $adh->getContrat_instance()->getTitle();
+					}
 				}
 			];
 			$ret['contrat_titre']                    = [
@@ -216,6 +232,18 @@ class AmapressAdhesion extends TitanEntity {
 					return date_i18n( 'd/m/Y', $adh->getDate_fin() );
 				}
 			];
+			$ret['date_debut_lettre']                = [
+				'desc' => 'Date début du contrat (par ex, 22 septembre 2018)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return date_i18n( 'j M Y', $adh->getDate_debut() );
+				}
+			];
+			$ret['date_fin_lettre']                  = [
+				'desc' => 'Date fin du contrat (par ex, 22 septembre 2018)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return date_i18n( 'j M Y', $adh->getDate_fin() );
+				}
+			];
 			$ret['date_debut_complete']              = [
 				'desc' => 'Date début du contrat (par ex, jeudi 22 septembre 2018)',
 				'func' => function ( AmapressAdhesion $adh ) {
@@ -226,6 +254,12 @@ class AmapressAdhesion extends TitanEntity {
 				'desc' => 'Date fin du contrat (par ex, jeudi 22 septembre 2018)',
 				'func' => function ( AmapressAdhesion $adh ) {
 					return date_i18n( 'l j M Y', $adh->getDate_fin() );
+				}
+			];
+			$ret['mention_speciale'] = [
+				'desc' => 'Champ Mention spéciale du contrat',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getContrat_instance()->getSpecialMention();
 				}
 			];
 			$ret['tous_referents']                   = [
@@ -240,7 +274,7 @@ class AmapressAdhesion extends TitanEntity {
 
 							return $ref->getDisplayName();
 						},
-						$adh->getContrat_instance()->getModel()->getProducteur()->getReferentsIds()
+						$adh->getContrat_instance()->getModel()->getReferentsIds()
 					) ) );
 				}
 			];
@@ -256,8 +290,14 @@ class AmapressAdhesion extends TitanEntity {
 
 							return $ref->getDisplayName() . '(' . $ref->getEmail() . ')';
 						},
-						$adh->getContrat_instance()->getModel()->getProducteur()->getReferentsIds()
+						$adh->getContrat_instance()->getModel()->getReferentsIds()
 					) ) );
+				}
+			];
+			$ret['message']                          = [
+				'desc' => 'Mssage aux référents lors de l\'inscription',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getMessage();
 				}
 			];
 			$ret['referents']                        = [
@@ -272,7 +312,7 @@ class AmapressAdhesion extends TitanEntity {
 
 							return $ref->getDisplayName();
 						},
-						$adh->getContrat_instance()->getModel()->getProducteur()->getReferentsIds( $adh->getLieuId() )
+						$adh->getContrat_instance()->getModel()->getReferentsIds( $adh->getLieuId() )
 					) ) );
 				}
 			];
@@ -288,7 +328,7 @@ class AmapressAdhesion extends TitanEntity {
 
 							return $ref->getDisplayName() . '(' . $ref->getEmail() . ')';
 						},
-						$adh->getContrat_instance()->getModel()->getProducteur()->getReferentsIds( $adh->getLieuId() )
+						$adh->getContrat_instance()->getModel()->getReferentsIds( $adh->getLieuId() )
 					) ) );
 				}
 			];
@@ -296,6 +336,12 @@ class AmapressAdhesion extends TitanEntity {
 				'desc' => 'Prénom Nom adhérent',
 				'func' => function ( AmapressAdhesion $adh ) {
 					return $adh->getAdherent()->getDisplayName();
+				}
+			];
+			$ret['adherent.type'] = [
+				'desc' => 'Type d\'adhérent (Principal, Co-adhérent...)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getAdherent()->getAdherentTypeDisplay();
 				}
 			];
 			$ret['adherent.nom']                     = [
@@ -326,6 +372,103 @@ class AmapressAdhesion extends TitanEntity {
 				'desc' => 'Email adhérent',
 				'func' => function ( AmapressAdhesion $adh ) {
 					return $adh->getAdherent()->getEmail();
+				}
+			];
+			$ret['coadherents.noms'] = [
+				'desc' => 'Liste des co-adhérents (Prénom, Nom)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getAdherent()->getCoAdherentsList();
+
+				}
+			];
+			$ret['coadherents.contacts'] = [
+				'desc' => 'Liste des co-adhérents (Prénom, Nom, Emails, Tel)',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getAdherent()->getCoAdherentsList( true );
+				}
+			];
+			$ret['coadherent']                       = [
+				'desc' => 'Prénom Nom co-adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					$coadh = $adh->getAdherent2();
+					if ( ! $coadh ) {
+						$coadh = $adh->getAdherent()->getFirstCoAdherent();
+						if ( ! $coadh ) {
+							return '';
+						}
+					}
+
+					return $coadh->getDisplayName();
+				}
+			];
+			$ret['coadherent.nom']                   = [
+				'desc' => 'Nom co-adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					$coadh = $adh->getAdherent2();
+					if ( ! $coadh ) {
+						$coadh = $adh->getAdherent()->getFirstCoAdherent();
+						if ( ! $coadh ) {
+							return '';
+						}
+					}
+
+					return $coadh->getUser()->last_name;
+				}
+			];
+			$ret['coadherent.prenom']                = [
+				'desc' => 'Prénom co-adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					$coadh = $adh->getAdherent2();
+					if ( ! $coadh ) {
+						$coadh = $adh->getAdherent()->getFirstCoAdherent();
+						if ( ! $coadh ) {
+							return '';
+						}
+					}
+
+					return $coadh->getUser()->first_name;
+				}
+			];
+			$ret['coadherent.adresse']               = [
+				'desc' => 'Adresse co-adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					$coadh = $adh->getAdherent2();
+					if ( ! $coadh ) {
+						$coadh = $adh->getAdherent()->getFirstCoAdherent();
+						if ( ! $coadh ) {
+							return '';
+						}
+					}
+
+					return $coadh->getFormattedAdresse();
+				}
+			];
+			$ret['coadherent.tel']                   = [
+				'desc' => 'Téléphone co-adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					$coadh = $adh->getAdherent2();
+					if ( ! $coadh ) {
+						$coadh = $adh->getAdherent()->getFirstCoAdherent();
+						if ( ! $coadh ) {
+							return '';
+						}
+					}
+
+					return $coadh->getTelephone();
+				}
+			];
+			$ret['coadherent.email']                 = [
+				'desc' => 'Email co-adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					$coadh = $adh->getAdherent2();
+					if ( ! $coadh ) {
+						$coadh = $adh->getAdherent()->getFirstCoAdherent();
+						if ( ! $coadh ) {
+							return '';
+						}
+					}
+
+					return $coadh->getEmail();
 				}
 			];
 			$ret['producteur.nom']                   = [
@@ -394,6 +537,12 @@ class AmapressAdhesion extends TitanEntity {
 					return date_i18n( 'H:i', $adh->getLieu()->getHeure_fin() );
 				}
 			];
+			$ret['lieu_adresse']                     = [
+				'desc' => 'Adresse du lieu de distribution',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getLieu()->getFormattedAdresse();
+				}
+			];
 			$ret['contrat_debut']                    = [
 				'desc' => 'Début du contrat (mois/année)',
 				'func' => function ( AmapressAdhesion $adh ) {
@@ -421,6 +570,10 @@ class AmapressAdhesion extends TitanEntity {
 			$ret['nb_paiements']                     = [
 				'desc' => 'Nombre de règlements/chèques choisi',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( ! $adh->getContrat_instance()->getManage_Cheques() ) {
+						return 'en direct';
+					}
+
 					return $adh->getPaiements();
 				}
 			];
@@ -487,6 +640,9 @@ class AmapressAdhesion extends TitanEntity {
 			$ret['option_paiements']                 = [
 				'desc' => 'Option de paiement choisie',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( ! $adh->getContrat_instance()->getManage_Cheques() ) {
+						return strip_tags( $adh->getContrat_instance()->getPaiementsMention() );
+					}
 					if ( 'esp' == $adh->getMainPaiementType() ) {
 						return 'En espèces';
 					}
@@ -1304,7 +1460,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		$key = "AmapressAdhesion::getUserActiveAdhesions_{$date}_{$user_id}_{$abo_key}_{$include_futur}";
 		$res = wp_cache_get( $key );
 		if ( false === $res ) {
-			$user_ids = AmapressContrats::get_related_users( $user_id, $allow_not_logged );
+			$user_ids = AmapressContrats::get_related_users( $user_id, $allow_not_logged, $date );
 			if ( empty( $user_ids ) ) {
 				return [];
 			}
@@ -1543,6 +1699,40 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		amapress_wp_mail( $amapien->getAllEmails(), $mail_subject, $mail_content, [
 			'Reply-To: ' . implode( ',', $refs_mails )
 		], $attachments );
+	}
+
+	public function sendReferentsNotificationMail( $send_contrat = false, $notify_email = null ) {
+		$inscription = $this;
+		$amapien     = $inscription->getAdherent();
+
+		$mail_subject = Amapress::getOption( 'online_subscription_referents-mail-subject' );
+		$mail_content = Amapress::getOption( 'online_subscription_referents-mail-content' );
+
+		$mail_subject = amapress_replace_mail_placeholders( $mail_subject, $amapien, $inscription );
+		$mail_content = amapress_replace_mail_placeholders( $mail_content, $amapien, $inscription );
+
+		$referents = [];
+		foreach ( $inscription->getContrat_instance()->getReferentsIds() as $ref_id ) {
+			$user_obj  = AmapressUser::getBy( $ref_id );
+			$referents = array_merge( $referents, $user_obj->getAllEmails() );
+		}
+
+		$attachments = [];
+		if ( $send_contrat ) {
+			$doc_file = $inscription->generateContratDoc( false );
+			if ( ! empty( $doc_file ) ) {
+				$attachments[] = $doc_file;
+			}
+		}
+		$headers = [ 'Reply-To: ' . implode( ',', $inscription->getAdherent()->getAllEmails() ) ];
+
+		amapress_wp_mail(
+			$referents,
+			$mail_subject,
+			$mail_content,
+			$headers, $attachments,
+			$notify_email
+		);
 	}
 
 	public function preparePaiements() {

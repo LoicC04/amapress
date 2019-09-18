@@ -20,11 +20,13 @@ class TitanFrameworkOptionRelatedPosts extends TitanFrameworkOption {
 		'empty_text'               => '',
 		'show_on'                  => 'edit-only',
 		'show_table'               => true,
+		'show_column_values'       => false,
 		'include_columns'          => array(),
 		'exclude_columns'          => array(),
 		'datatable_options'        => array(),
 		'column_options'           => array(),
 		'related_posts_count_func' => null,
+		'related_posts_count_link' => true,
 	);
 
 	private function evalQuery( $postID = null ) {
@@ -68,9 +70,27 @@ class TitanFrameworkOptionRelatedPosts extends TitanFrameworkOption {
 
 	public function columnDisplayValue( $post_id ) {
 		$query = $this->evalQuery( $post_id );
-		$count = $this->getRelatedPostsCount( $post_id );
-		$edit  = admin_url( 'edit.php' );
-		echo "<a href='$edit?{$query}'>{$count}</a>";
+		if ( $this->settings['show_column_values'] ) {
+			$txt = implode( ', ', array_map(
+				function ( $p ) {
+					/** @var WP_Post $p */
+					return Amapress::makeLink( admin_url( 'post.php?post=' . $p->ID . '&action=edit' ), $p->post_title );
+				}, get_posts( $query )
+			) );
+			echo $txt;
+		} else {
+			$count                    = $this->getRelatedPostsCount( $post_id );
+			$related_posts_count_link = $this->settings['related_posts_count_link'];
+			if ( is_callable( $related_posts_count_link, false ) ) {
+				$related_posts_count_link = call_user_func( $related_posts_count_link, $post_id );
+			}
+			if ( ! $related_posts_count_link ) {
+				echo $count;
+			} else {
+				$edit = admin_url( 'edit.php' );
+				echo "<a href='$edit?{$query}'>{$count}</a>";
+			}
+		}
 	}
 
 	public function columnExportValue( $post_id ) {

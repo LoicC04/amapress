@@ -308,8 +308,8 @@ class AmapressDistribution extends Amapress_EventBase {
 		return in_array( $this->getLieuId(), $user_lieu_ids );
 	}
 
-	public function inscrireResponsable( $user_id, $role = 0 ) {
-		if ( ! amapress_is_user_logged_in() ) {
+	public function inscrireResponsable( $user_id, $role = 0, $allow_anonymous = false ) {
+		if ( ! $allow_anonymous && ! amapress_is_user_logged_in() ) {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
@@ -358,8 +358,8 @@ class AmapressDistribution extends Amapress_EventBase {
 		}
 	}
 
-	public function desinscrireResponsable( $user_id ) {
-		if ( ! amapress_is_user_logged_in() ) {
+	public function desinscrireResponsable( $user_id, $allow_anonymous = false ) {
+		if ( ! $allow_anonymous && ! amapress_is_user_logged_in() ) {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
@@ -1024,7 +1024,7 @@ class AmapressDistribution extends Amapress_EventBase {
 
 	/** @return AmapressDistribution[] */
 	public
-	static function getNextDistribs(
+	static function getNextDistribsUserResponsable(
 		$date = null, $weeks = 1, $user_id = null
 	) {
 		$is_resp_amap = amapress_can_access_admin();
