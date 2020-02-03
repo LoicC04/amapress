@@ -411,18 +411,25 @@ class AmapressUsers {
 			[
 				'desc' => 'Trombinoscope des membres de l\'AMAP',
 				'args' => [
+					'show_principal_only' => '(Par défaut "true") N\'afficher que les lieux principaux',
+					'show_amap_roles'     => '(par défaut false) Affichage des différents "Rôles dans l\'AMAP"',
 				]
 			] );
 		amapress_register_shortcode( 'trombinoscope_lieu', array( 'AmapressUsers', 'trombinoscope_lieu_shortcode' ),
 			[
 				'desc' => 'Trombinoscope des membres d\'un lieu de distribution de l\'AMAP',
 				'args' => [
+					'lieu'            => 'Filtre de lieux de distributions',
+					'show_amap_roles' => '(par défaut false) Affichage des différents "Rôles dans l\'AMAP"',
 				]
 			] );
 		amapress_register_shortcode( 'trombinoscope_role', array( 'AmapressUsers', 'trombinoscope_role_shortcode' ),
 			[
 				'desc' => 'Trombinoscope des membres avec un certain role',
 				'args' => [
+					'role'      => '(Par défaut "all") Affiche les amapiens d\'un rôle particulier : all, producteurs, responsables (membres du collectif), referents_lieux, referents_producteurs, amapiens, resp_distrib_cette_semaine, resp_distrib_semaine_prochaine, amap_role_xxx (où xxx est le slug du "Rôle dans l\'AMAP")',
+					'lieu'      => 'Filtre de lieux de distributions',
+					'searchbox' => '(Par défaut “true”) Afficher une barre de recherche',
 				]
 			] );
 		// enqueue and localise scripts
@@ -561,9 +568,9 @@ class AmapressUsers {
 		global $pagenow;
 		if ( 'user-new.php' == $pagenow && ! is_multisite() ) {
 			echo '<script type="text/javascript">
-jQuery(function() {
-              jQuery(".form-field").has("#url").hide();
-              jQuery(".form-field").has("#user_login").hide();
+jQuery(function($) {
+              $(".form-field").has("#url").hide();
+              $(".form-field").has("#user_login").hide();
 });
 </script>';
 
@@ -855,6 +862,14 @@ jQuery(function() {
 			if ( count( $users ) == 0 ) {
 				return 'Pas de responsable(s) inscrit(s)';
 			}
+		} elseif ( strpos( $role, 'amap_role_' ) === 0 ) {
+			$users = get_users( wp_parse_args(
+				array( 'amapress_role' => $role ),
+				$base_query ) );
+
+			if ( count( $users ) == 0 ) {
+				return 'Pas de membre';
+			}
 		} else {
 			$users = array();
 		}
@@ -891,17 +906,17 @@ jQuery(function() {
 		return $user_id;
 	}
 
-	public static function trombinoscope_shortcode() {
+	public static function trombinoscope_shortcode( $atts ) {
 		if ( ! amapress_is_user_logged_in() ) {
 			return '';
 		}
 
+		$atts = shortcode_atts( array(
+			'show_principal_only' => true,
+			'show_amap_roles'     => false,
+		), $atts );
+
 		$lieu_ids = AmapressUsers::get_user_lieu_ids( amapress_current_user_id() );
-		$lieux    = get_posts( array(
-			'post_type'      => 'amps_lieu',
-			'posts_per_page' => - 1,
-			'include'        => $lieu_ids
-		) );
 
 		ob_start();
 
@@ -917,10 +932,24 @@ jQuery(function() {
 		amapress_echo_panel_start( 'Les référents lieux de distribution' );
 		echo do_shortcode( '[trombinoscope_role role=referents_lieux]' );
 		amapress_echo_panel_end();
+		if ( Amapress::toBool( $atts['show_amap_roles'] ) ) {
+			foreach ( amapress_get_amap_roles() as $role ) {
+				amapress_echo_panel_start( 'Rôle "' . $role->name . '"' );
+				echo do_shortcode( '[trombinoscope_role role=amap_role_' . $role->slug . ' lieu=' . $lieu_id . ']' );
+				amapress_echo_panel_end();
+			}
+		}
 
+		$lieux = Amapress::get_lieux();
 		foreach ( $lieux as $lieu ) {
+			if ( ! empty( $lieu_ids ) && ! in_array( $lieu->ID, $lieu_ids ) ) {
+				continue;
+			}
+			if ( $atts['show_principal_only'] && ! $lieu->isPrincipal() ) {
+				continue;
+			}
 			if ( count( $lieux ) > 1 ) {
-				echo '<h2>' . $lieu->post_title . '</h2>';
+				echo '<h2>' . esc_html( $lieu->getTitle() ) . '</h2>';
 			}
 			echo do_shortcode( '[trombinoscope_lieu lieu=' . $lieu->ID . ']' );
 		}
@@ -936,7 +965,8 @@ jQuery(function() {
 		}
 
 		$atts = shortcode_atts( array(
-			'lieu' => null,
+			'lieu'            => null,
+			'show_amap_roles' => false,
 		), $atts, 'trombinoscope_lieu' );
 
 		$lieu_id = Amapress::get_lieu_id( $atts['lieu'] );
@@ -958,6 +988,13 @@ jQuery(function() {
 			amapress_echo_panel_start( 'Les responsables de l\'AMAP dans ce lieu' );
 			echo do_shortcode( '[trombinoscope_role role=responsables lieu=' . $lieu_id . ']' );
 			amapress_echo_panel_end();
+		}
+		if ( Amapress::toBool( $atts['show_amap_roles'] ) ) {
+			foreach ( amapress_get_amap_roles() as $role ) {
+				amapress_echo_panel_start( 'Rôle "' . $role->name . '"' );
+				echo do_shortcode( '[trombinoscope_role role=amap_role_' . $role->slug . ' lieu=' . $lieu_id . ']' );
+				amapress_echo_panel_end();
+			}
 		}
 		amapress_echo_panel_start( 'Les amapiens', null, 'amap-panel-amapiens' );
 		echo do_shortcode( '[trombinoscope_role role=amapiens lieu=' . $lieu_id . ']' );
@@ -1220,26 +1257,6 @@ jQuery(function() {
 	}
 
 	public static function resolveUserFullAdress( $user_id, $address_text ) {
-		$address = TitanFrameworkOptionAddress::lookup_address( $address_text );
-		if ( $address && ! is_wp_error( $address ) ) {
-			update_user_meta( $user_id, 'amapress_user_long', $address['longitude'] );
-			update_user_meta( $user_id, 'amapress_user_lat', $address['latitude'] );
-			update_user_meta( $user_id, 'amapress_user_location_type', $address['location_type'] );
-			delete_user_meta( $user_id, 'amapress_user_loc_err' );
-
-			return true;
-		} else {
-			delete_user_meta( $user_id, 'amapress_user_long' );
-			delete_user_meta( $user_id, 'amapress_user_lat' );
-			delete_user_meta( $user_id, 'amapress_user_location_type' );
-			if ( is_wp_error( $address ) ) {
-				/** @var WP_Error $address */
-				update_user_meta( $user_id, "amapress_user_loc_err", $address->get_error_message() );
-			} else {
-				delete_user_meta( $user_id, "amapress_user_loc_err" );
-			}
-
-			return false;
-		}
+		return Amapress::updateLocalisation( $user_id, true, '', $address_text );
 	}
 }

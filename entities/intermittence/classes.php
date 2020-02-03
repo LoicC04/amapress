@@ -498,9 +498,10 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 		return 'ok';
 	}
 
-	public static function getPlaceholdersHelp( $additional_helps = [] ) {
+	public static function getPlaceholdersHelp( $additional_helps = [], $for_recall = true ) {
 		return Amapress::getPlaceholdersHelpTable( 'intermit-placeholders',
-			Amapress::getPlaceholdersHelpForProperties( self::getProperties() ), 'du panier intermittent', $additional_helps );
+			Amapress::getPlaceholdersHelpForProperties( self::getProperties() ), 'du panier intermittent',
+			$additional_helps, $for_recall ? 'recall' : true );
 	}
 
 	private static $properties = null;
@@ -824,13 +825,13 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 						'ev_id'    => "intermittence-{$this->ID}-to-exchange",
 						'date'     => $date,
 						'date_end' => $date_end,
-						'class'    => "agenda-intermittence",
+						'class'    => "agenda-inter agenda-inter-my-to-exchange",
 						'type'     => 'intermittence',
 						'category' => 'Paniers à échanger',
 						'priority' => 10,
 						'lieu'     => $this->getRealLieu(),
 						'label'    => 'A échanger ' . $this->getPaniersTitles( false ),
-						'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
+						'icon'     => AMAPRESS__PLUGIN_URL . 'images/panier_mytoexchange.jpg',
 						'alt'      => 'Votre panier ' . $this->getPaniersTitles( true, true ) . ' reste à échanger',
 						'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 					) );
@@ -839,13 +840,13 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 						'ev_id'    => "intermittence-{$this->ID}-exchanged",
 						'date'     => $date,
 						'date_end' => $date_end,
-						'class'    => "agenda-intermittence",
+						'class'    => "agenda-inter agenda-inter-exchanged",
 						'type'     => 'intermittence',
 						'category' => 'Paniers échangé',
 						'priority' => 5,
 						'lieu'     => $this->getRealLieu(),
 						'label'    => 'Echange ' . $this->getPaniersTitles( false ),
-						'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
+						'icon'     => AMAPRESS__PLUGIN_URL . 'images/panier_exchanged.jpg',
 						'alt'      => 'Votre panier ' . $this->getPaniersTitles( true, true ) . ' a été échanger',
 						'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 					) );
@@ -855,13 +856,13 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 					'ev_id'    => "intermittence-{$this->ID}-recup",
 					'date'     => $date,
 					'date_end' => $date_end,
-					'class'    => "agenda-inter-panier-recup",
+					'class'    => "agenda-inter agenda-inter-panier-recup",
 					'type'     => 'inter-recup',
 					'category' => 'Paniers à récupérer',
 					'priority' => 15,
 					'lieu'     => $this->getRealLieu(),
 					'label'    => 'Récupérer panier ' . $this->getPaniersTitles( false ),
-					'icon'     => Amapress::getOption( "agenda_intermittence_icon" ),
+					'icon'     => AMAPRESS__PLUGIN_URL . 'images/panier_torecup.jpg',
 					'alt'      => 'Panier ' . $this->getPaniersTitles( true, true ) . ' de ' . $this->getAdherent()->getDisplayName() . ' à récupérer',
 					'href'     => Amapress::getPageLink( 'mes-paniers-intermittents-page' )
 				) );
@@ -874,62 +875,19 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 							'ev_id'    => "intermittence-{$this->ID}-to-exchange",
 							'date'     => $date,
 							'date_end' => $date_end,
-							'class'    => "agenda-intermittence",
+							'class'    => "agenda-inter agenda-inter-to-exchange",
 							'type'     => 'intermittence',
 							'category' => 'Paniers dispo',
 							'priority' => 10,
 							'lieu'     => $this->getRealLieu(),
 							'label'    => 'A échanger ' . $this->getPaniersTitles( false ),
-							'icon'     => 'fa fa-shopping-basket',
+							'icon'     => AMAPRESS__PLUGIN_URL . 'images/panier_avail.jpg',
 							'alt'      => 'Panier ' . $this->getPaniersTitles( true, true ) . ' à échanger',
 							'href'     => $paniers_url
 						) );
 					}
 				}
 			}
-
-//            //user
-//            $date = self::get_intermittence_panier_date_and_hour($event->ID, 'start');
-//            $date_end = self::get_intermittence_panier_date_and_hour($event->ID, 'end');
-//            if ($panier->getAdherent()->ID == $user_id) {
-//                if ($panier->getStatus() == 'to_exchange') {
-//                    $ret[] = array(
-//                        'ev_id' => "intermittence-{$event->ID}-to-exchange",
-//                        'date' => $date,
-//                        'date_end' => $date_end,
-//                        'class' => "agenda-intermittence",
-//                        'type' => 'intermittence',
-//                        'lieu' => $panier->getLieu()->ID,
-//                        'label' => 'A échanger '.$panier->getPanier()->getTitle(),
-//                        'icon' => self::get_icon(Amapress::getOption("agenda_intermittence_icon")),
-//                        'alt' => 'Votre panier '.$panier->getPanier()->getTitle().' reste à échanger',
-//                        'href' => Amapress::getPageLink('mes-paniers-intermittents-page'));
-//                } else {
-//                    $ret[] = array(
-//                        'ev_id' => "intermittence-{$event->ID}-exchanged",
-//                        'date' => $date,
-//                        'date_end' => $date_end,
-//                        'class' => "agenda-intermittence",
-//                        'type' => 'intermittence',
-//                        'lieu' => $panier->getLieu()->ID,
-//                        'label' => 'Echange '.$panier->getPanier()->getTitle(),
-//                        'icon' => Amapress::get_icon(Amapress::getOption("agenda_intermittence_icon")),
-//                        'alt' => 'Votre panier '.$panier->getPanier()->getTitle().' a été échanger',
-//                        'href' => Amapress::getPageLink('mes-paniers-intermittents-page'));
-//                }
-//            } else if ($panier->getRepreneur() != null && $panier->getRepreneur()->ID == $user_id) {
-//                $ret[] = array(
-//                    'ev_id' => "intermittence-{$event->ID}-recup",
-//                    'date' => $date,
-//                    'date_end' => $date_end,
-//                    'class' => "agenda-inter-panier-recup",
-//                    'type' => 'inter-recup',
-//                    'lieu' => $panier->getLieu()->ID,
-//                    'label' => 'Récupérer panier '.$panier->getPanier()->getTitle(),
-//                    'icon' => Amapress::get_icon(Amapress::getOption("agenda_intermittence_icon")),
-//                    'alt' => 'Panier '.$panier->getPanier()->getTitle().' de '.$panier->getAdherent()->getDisplayName().' à récupérer',
-//                    'href' => Amapress::getPageLink('mes-paniers-intermittents-page'));
-//            }
 		}
 
 		return $ret;

@@ -71,6 +71,28 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Affiche le nombre d\'années écoulée depuis une autre année',
 			'args' => [
+				'year' => 'Année de départ du décompte d\'années'
+			]
+		] );
+	amapress_register_shortcode( 'amapress-panel', function ( $atts, $content ) {
+		$atts = shortcode_atts(
+			[
+				'title'    => '',
+				'esc_html' => true,
+			],
+			$atts
+		);
+		if ( Amapress::toBool( $atts['esc_html'] ) ) {
+			return amapress_get_panel_start( $atts['title'] ) . $content . amapress_get_panel_end();
+		} else {
+			return amapress_get_panel_start_no_esc( $atts['title'] ) . $content . amapress_get_panel_end();
+		}
+	},
+		[
+			'desc' => 'Affiche un encadré avec titre',
+			'args' => [
+				'title'    => 'Titre de l\'encadré',
+				'esc_html' => '(true par défaut) encoder le titre'
 			]
 		] );
 	amapress_register_shortcode( 'paged_gallery', 'amapress_generic_paged_gallery_shortcode',
@@ -89,18 +111,33 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Gallerie des recettes',
 			'args' => [
+				'produits'    => 'Filtre de produits',
+				'cat'         => 'Filtre de catégories',
+				'cat__not_in' => 'Inverse filtre de catégories',
+				'if_empty'    => '(Par défaut “Pas encore de recette”) Texte à afficher quand il n\’y a pas de recettes à afficher',
+				'size'        => '(Par défaut “thumbnail”) Taille de l\’aperçu',
+				'searchbox'   => '(Par défaut “true”) Afficher une barre de recherche',
 			]
 		] );
 	amapress_register_shortcode( 'produits', 'amapress_produits_shortcode',
 		[
 			'desc' => 'Gallerie de produits',
 			'args' => [
+				'producteur'  => 'Filtre producteurs',
+				'recette'     => 'Filtre recettes',
+				'cat'         => 'Filtre catégories',
+				'cat__not_in' => 'Inverse filtre catégories',
+				'if_empty'    => '(Par défaut “Pas encore de produits”) Texte à afficher quand il n\’y a pas de recettes à afficher',
+				'size'        => '(Par défaut “thumbnail”) Taille de l\’aperçu',
+				'searchbox'   => '(Par défaut “true”) Afficher une barre de recherche',
 			]
 		] );
 	amapress_register_shortcode( 'lieu-map', 'amapress_lieu_map_shortcode',
 		[
 			'desc' => 'Emplacement d\'un lieu (carte et StreetView)',
 			'args' => [
+				'lieu' => 'Afficher la carte du lieu indiqué',
+				'mode' => '(Par défaut “map”) Mode d’affichage. Si Gooogle est votre afficheur de carte, alors vous pouvez choisir : map, map+streetview ou streetview',
 			]
 		] );
 	amapress_register_shortcode( 'user-map', 'amapress_user_map_shortcode',
@@ -113,6 +150,8 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Emplacement d\'un producteur',
 			'args' => [
+				'lieu' => 'Afficher la carte du lieu indiqué',
+				'mode' => '(Par défaut “map”) Mode d’affichage. Si Gooogle est votre afficheur de carte, alors vous pouvez choisir : map, map+streetview ou streetview',
 			]
 		] );
 	amapress_register_shortcode( 'amapien-avatar', 'amapress_amapien_avatar_shortcode',
@@ -125,12 +164,23 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Historique d\'inscription des responsables aux distributions',
 			'args' => [
+				'show_email'      => '(Par défaut “default”) Afficher les emails',
+				'show_tel'        => '(Par défaut “default”) Afficher les numéros de téléphones',
+				'show_tel_fixe'   => '(Par défaut “default”) Afficher les numéros de téléphones fixes',
+				'show_tel_mobile' => '(Par défaut “default”) Afficher les numéros de téléphones mobiles',
+				'show_adresse'    => '(Par défaut “default”) Afficher les adresses',
+				'show_avatar'     => '(Par défaut “default”) Afficher les avatars des amapiens',
+				'show_roles'      => '(Par défaut “default”) Afficher les rôles des membres du collectif',
+				'show_title'      => '(Par défaut “true”) Afficher les noms des lieux',
+				'past_weeks'      => '(Par défaut “5”) Nombre de semaines d’historique des distributions',
+				'lieu'            => 'Filtre de lieu',
 			]
 		] );
 	amapress_register_shortcode( 'liste-inscription-distrib', function ( $args ) {
 		$args         = shortcode_atts(
 			[
 				'lieu'       => 0,
+				'max_dates'  => 52,
 				'show_title' => 'false',
 			],
 			$args
@@ -139,11 +189,11 @@ function amapress_register_shortcodes() {
 		if ( ! empty( $args['lieu'] ) ) {
 			$dist_lieu_id = Amapress::resolve_post_id( $dist_lieu_id, AmapressLieu_distribution::INTERNAL_POST_TYPE );
 
-			return do_shortcode( '[inscription-distrib for_pdf=true show_title=' . $args['show_title'] . ' for_emargement=true show_past=false show_adresse=false show_roles=false show_for_resp=true show_avatar=true max_dates=52 lieu=' . $dist_lieu_id . ']' );
+			return do_shortcode( '[inscription-distrib for_pdf=true show_title=' . $args['show_title'] . ' for_emargement=true show_past=false show_adresse=false show_roles=false show_for_resp=true show_avatar=true max_dates=' . $args['max_dates'] . ' lieu=' . $dist_lieu_id . ']' );
 		} else {
 			$ret = '';
 			foreach ( Amapress::get_lieu_ids() as $lieu_id ) {
-				$ret .= do_shortcode( '[inscription-distrib for_pdf=true show_title=' . $args['show_title'] . ' for_emargement=true show_past=false show_adresse=false show_roles=false show_for_resp=true show_avatar=true max_dates=52 lieu=' . $lieu_id . ']' );
+				$ret .= do_shortcode( '[inscription-distrib for_pdf=true show_title=' . $args['show_title'] . ' for_emargement=true show_past=false show_adresse=false show_roles=false show_for_resp=true show_avatar=true max_dates=' . $args['max_dates'] . ' lieu=' . $lieu_id . ']' );
 			}
 
 			return $ret;
@@ -152,36 +202,89 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Liste statique des inscrits des responsables aux distributions',
 			'args' => [
+				'show_title' => '(Par défaut “true”) Afficher les noms des lieux',
+				'max_dates'  => '(Par défaut “-1”) Nombre maximum de distributions à venir à afficher',
+				'lieu'       => 'Filtre de lieu',
 			]
 		] );
 	amapress_register_shortcode( 'inscription-distrib', 'amapress_inscription_distrib_shortcode',
 		[
 			'desc' => 'Inscriptions comme responsable de distributions',
 			'args' => [
+				'show_past'              => '(Par défaut “false”) Afficher les distributions passées',
+				'show_next'              => '(Par défaut “true”) Afficher les distributions à venir',
+				'show_email'             => '(Par défaut “default”) Afficher les emails',
+				'show_tel'               => '(Par défaut “default”) Afficher les numéros de téléphones',
+				'show_tel_fixe'          => '(Par défaut “default”) Afficher les numéros de téléphones fixes',
+				'show_tel_mobile'        => '(Par défaut “default”) Afficher les numéros de téléphones mobiles',
+				'show_adresse'           => '(Par défaut “default”) Afficher les adresses',
+				'show_avatar'            => '(Par défaut “default”) Afficher les avatars des amapiens',
+				'show_roles'             => '(Par défaut “default”) Afficher les rôles des membres du collectif',
+				'show_title'             => '(Par défaut “true”) Afficher les noms des lieux',
+				'past_weeks'             => '(Par défaut “5”) Nombre de semaines d’historique des distributions',
+				'max_dates'              => '(Par défaut “-1”) Nombre maximum de distributions à venir à afficher',
+				'lieu'                   => 'Filtre de lieu',
+				'column_date_width'      => '(Par défaut 5em) Largeur de la colonne Dates/Produits',
+				'show_contrats_desc'     => '(Par défaut “true”) Afficher la liste des contrats pour chaque date',
+				'show_contrats_count'    => '(Par défaut “false”) Afficher le nombre de contrats pour chaque date',
+				'inscr_all_distrib'      => '(Par défaut “false”) Autoriser tous les amapiens à s’inscrire même sur les lieux pour lesquels ils n’ont pas de contrat',
+				'allow_resp_dist_manage' => '(Par défaut “false”) Autoriser les responsables de distributions à gérer les inscriptions le temps de la semaine où ils sont inscrits',
 			]
 		] );
 	amapress_register_shortcode( 'anon-inscription-distrib', 'amapress_inscription_distrib_shortcode',
 		[
 			'desc' => 'Inscriptions comme responsable de distributions',
 			'args' => [
+				'key'                    => '(Par exemple : ' . uniqid() . uniqid() . ') Clé de sécurisation de l\'accès à cet assistant d\'inscription aux distributions sans connexion',
+				'show_past'              => '(Par défaut “false”) Afficher les distributions passées',
+				'show_next'              => '(Par défaut “true”) Afficher les distributions à venir',
+				'show_email'             => '(Par défaut “default”) Afficher les emails',
+				'show_tel'               => '(Par défaut “default”) Afficher les numéros de téléphones',
+				'show_tel_fixe'          => '(Par défaut “default”) Afficher les numéros de téléphones fixes',
+				'show_tel_mobile'        => '(Par défaut “default”) Afficher les numéros de téléphones mobiles',
+				'show_adresse'           => '(Par défaut “default”) Afficher les adresses',
+				'show_avatar'            => '(Par défaut “default”) Afficher les avatars des amapiens',
+				'show_roles'             => '(Par défaut “default”) Afficher les rôles des membres du collectif',
+				'show_title'             => '(Par défaut “true”) Afficher les noms des lieux',
+				'past_weeks'             => '(Par défaut “5”) Nombre de semaines d’historique des distributions',
+				'max_dates'              => '(Par défaut “-1”) Nombre maximum de distributions à venir à afficher',
+				'lieu'                   => 'Filtre de lieu',
+				'column_date_width'      => '(Par défaut 5em) Largeur de la colonne Dates/Produits',
+				'show_contrats_desc'     => '(Par défaut “true”) Afficher la liste des contrats pour chaque date',
+				'show_contrats_count'    => '(Par défaut “false”) Afficher le nombre de contrats pour chaque date',
+				'inscr_all_distrib'      => '(Par défaut “false”) Autoriser tous les amapiens à s’inscrire même sur les lieux pour lesquels ils n’ont pas de contrat',
+				'allow_resp_dist_manage' => '(Par défaut “false”) Autoriser les responsables de distributions à gérer les inscriptions le temps de la semaine où ils sont inscrits',
 			]
 		] );
 	amapress_register_shortcode( 'resp-distrib-contacts', 'amapress_responsables_distrib_shortcode',
 		[
 			'desc' => 'Contacts des responsables de distribution',
 			'args' => [
+				'distrib' => '(Par défaut "2") Afficher les responsables pour ce nombre de distributions à venir'
 			]
 		] );
 	amapress_register_shortcode( 'inscription-visite', 'amapress_inscription_visite_shortcode',
 		[
 			'desc' => 'Inscripions aux visites à la ferme',
 			'args' => [
+				'show_email'      => '(Par défaut “default”) Afficher les emails',
+				'show_tel'        => '(Par défaut “default”) Afficher les numéros de téléphones',
+				'show_tel_fixe'   => '(Par défaut “default”) Afficher les numéros de téléphones fixes',
+				'show_tel_mobile' => '(Par défaut “default”) Afficher les numéros de téléphones mobiles',
+				'show_adresse'    => '(Par défaut “default”) Afficher les adresses',
+				'show_avatar'     => '(Par défaut “default”) Afficher les avatars des amapiens',
 			]
 		] );
 	amapress_register_shortcode( 'inscription-amap-event', 'amapress_inscription_amap_event_shortcode',
 		[
 			'desc' => 'Inscriptions aux évènements AMAP',
 			'args' => [
+				'show_email'      => '(Par défaut “default”) Afficher les emails',
+				'show_tel'        => '(Par défaut “default”) Afficher les numéros de téléphones',
+				'show_tel_fixe'   => '(Par défaut “default”) Afficher les numéros de téléphones fixes',
+				'show_tel_mobile' => '(Par défaut “default”) Afficher les numéros de téléphones mobiles',
+				'show_adresse'    => '(Par défaut “default”) Afficher les adresses',
+				'show_avatar'     => '(Par défaut “default”) Afficher les avatars des amapiens',
 			]
 		] );
 
@@ -197,6 +300,7 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Inscription d\'un amapien à la liste des intermittents',
 			'args' => [
+				'show_info' => '(Par défaut “yes”) Afficher les informations d\’inscription à la liste des intermittents',
 			]
 		] );
 	amapress_register_shortcode( 'intermittents-desinscription', 'amapress_intermittence_desinscription_shortcode',
@@ -209,7 +313,7 @@ function amapress_register_shortcodes() {
 
 	amapress_register_shortcode( 'adhesion-request-count', 'amapress_adhesion_request_count_shortcode',
 		[
-			'desc' => '',
+			'desc' => 'Nombre de demandes d\'adhésions en attente',
 			'args' => [
 			]
 		] );
@@ -222,24 +326,44 @@ function amapress_register_shortcodes() {
 		] );
 	amapress_register_shortcode( 'amapress-ics-viewer', 'amapress_fullcalendar',
 		[
-			'desc' => 'Calendrier de l\'AMAP',
+			'desc' => 'Afficheur de calendrier ICAL/ICS',
 			'args' => [
+				'header_left'   => '(Par défaut “prev,next today”) Option de personnalisation de l\’entête partie gauche, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'header_center' => '(Par défaut “title”) Option de personnalisation de l\’entête partie centrale, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'header_right'  => '(Par défaut “month,listMonth,listWeek”) Option de personnalisation de l\’entête partie droite, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'min_time'      => '(Par défaut “08:00:00”) Heure minimale affichée',
+				'max_time'      => '(Par défaut “22:00:00”) Heure maximale affichée',
+				'default_view'  => '(Par défaut “listMonth”) Type d’affichage <a href=”https://fullcalendar.io/docs#main”>Option Views de fullcalendar</a>',
+				'url'           => 'Url du calendrier à afficher (ICS)',
+				'icon_size'     => '(Par défaut, 1em) Taille des icônes des évènements',
 			]
 		] );
 	amapress_register_shortcode( 'amapress-amapien-agenda-viewer', function ( $atts ) {
-		$atts        = wp_parse_args( $atts );
-		$atts['url'] = Amapress_Agenda_ICAL_Export::get_link_href( false );
+		$atts        = shortcode_atts(
+			[ 'since_days' => 30 ],
+			$atts );
+		$atts['url'] = Amapress_Agenda_ICAL_Export::get_link_href( false, intval( $atts['since_days'] ) );
 
 		return amapress_fullcalendar( $atts );
 	},
 		[
 			'desc' => 'Calendrier de l\'amapien',
 			'args' => [
+				'since_days'    => '(Par défaut 30) Nombre de jours d\'historique de l\'agenda',
+				'header_left'   => '(Par défaut “prev,next today”) Option de personnalisation de l\’entête partie gauche, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'header_center' => '(Par défaut “title”) Option de personnalisation de l\’entête partie centrale, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'header_right'  => '(Par défaut “month,listMonth,listWeek”) Option de personnalisation de l\’entête partie droite, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'min_time'      => '(Par défaut “08:00:00”) Heure minimale affichée',
+				'max_time'      => '(Par défaut “22:00:00”) Heure maximale affichée',
+				'icon_size'     => '(Par défaut, 1em) Taille des icônes des évènements',
+				'default_view'  => '(Par défaut “listMonth”) Type d’affichage <a href=”https://fullcalendar.io/docs#main”>Option Views de fullcalendar</a>',
 			]
 		] );
 	amapress_register_shortcode( 'amapress-public-agenda-viewer', function ( $atts ) {
-		$atts        = wp_parse_args( $atts );
-		$atts['url'] = Amapress_Agenda_ICAL_Export::get_link_href( true );
+		$atts        = shortcode_atts(
+			[ 'since_days' => 30, 'url' => '' ],
+			$atts );
+		$atts['url'] = Amapress_Agenda_ICAL_Export::get_link_href( true, intval( $atts['since_days'] ) );
 		amapress_consider_logged( false );
 		$ret = amapress_fullcalendar( $atts );
 		amapress_consider_logged( true );
@@ -249,6 +373,14 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Calendrier publique de l\'AMAP',
 			'args' => [
+				'since_days'    => '(Par défaut 30) Nombre de jours d\'historique de l\'agenda',
+				'header_left'   => '(Par défaut “prev,next today”) Option de personnalisation de l\’entête partie gauche, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'header_center' => '(Par défaut “title”) Option de personnalisation de l\’entête partie centrale, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'header_right'  => '(Par défaut “month,listMonth,listWeek”) Option de personnalisation de l\’entête partie droite, voir <a href=”https://fullcalendar.io/docs/header” target=”_blank”>Options de fullcalendar</a>',
+				'min_time'      => '(Par défaut “08:00:00”) Heure minimale affichée',
+				'max_time'      => '(Par défaut “22:00:00”) Heure maximale affichée',
+				'icon_size'     => '(Par défaut, 1em) Taille des icônes des évènements',
+				'default_view'  => '(Par défaut “listMonth”) Type d’affichage <a href=”https://fullcalendar.io/docs#main”>Option Views de fullcalendar</a>',
 			]
 		] );
 
@@ -270,6 +402,9 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Paniers proposés/échangés par un amapien',
 			'args' => [
+				'show_history' => '(Par défaut “false”) Afficher l\’historique des échanges de paniers de l\’amapien/intermittent',
+				'history_days' => '(Par défaut “180”) Nombre de jour de l\’historique',
+				'show_futur'   => '(Par défaut “true”) Afficher les échanges à venir',
 			]
 		] );
 	amapress_register_shortcode( 'amapien-paniers-intermittents-count', 'amapress_user_paniers_intermittents_count_shortcode',
@@ -282,6 +417,8 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Paniers disponibles sur la liste des intermittents',
 			'args' => [
+				'contrat'        => 'Permet de filtrer les contrats pour lesquels les paneirs à échanger sont affichés',
+				'allow_amapiens' => '(Par défaut “true”) Autoriser les amapiens à réserver des paniers',
 			]
 		] );
 	amapress_register_shortcode( 'les-paniers-intermittents-count', 'amapress_all_paniers_intermittents_count_shortcode',
@@ -295,37 +432,101 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Permet l\'inscription aux contrats complémentaires en cours d\'année',
 			'args' => [
+				'allow_inscriptions'               => '(booléen, true par défaut) : autorise l\'inscription aux contrats',
+				'allow_adhesion'                   => '(booléen, true par défaut) : autorise l\'adhésion à l\'AMAP',
+				'filter_multi_contrat'             => '(booléen, false par défaut) : en cas de variante de contrat Semaine A/B/AB, ne pas autoriser un amapien à s\'inscrire à plusieurs variantes',
+				'agreement'                   => '(booléen, false par défaut) : afficher une étape de réglement intérieur de l\'AMAP (configurable dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' ), 'Tableau de bord > Gestion Contrats > onglet Assistant - Pré-inscription en ligne' ) . ')',
+				'check_principal'             => '(booléen, true par défaut) : vérifier qu\'un contrat principal est actif. Peut être désactivé globalement dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=contrat_config' ), 'Tableau de bord>Gestion Contrats>Configuration, onglet Contrats' ),
+				'send_adhesion_confirm'       => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour son adhésion à l\'AMAP',
+				'allow_inscription_all_dates' => '(booléen, false par défaut) : autoriser l\'inscription à partir de toutes les dates, y compris celles après la date de clôture du contrat',
+				'send_contrat_confirm'        => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour chacune de ses inscriptions aux contrats',
+				'send_referents'              => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux référents',
+				'send_tresoriers'             => '(booléen, true par défaut) : envoyer une notification pour les nouvelles adhésions aux trésoriers',
+				'adhesion_shift_weeks'        => '(0 par défaut) Nombre de semaines de décalage entre le début des contrats et la période d\'Adhésion',
+				'paniers_modulables_editor_height' => '(350 par défaut) Hauteur de l\'éditeur de paniers modulables (en px)',
+				'show_adherents_infos'             => '(true par défaut) Afficher les infos sur l\'ahdérent et ses co-adhérents',
+				'contact_referents'                => '(true par défaut) Affiche un lien de contact des référents dans la liste des contrats déjà souscrit (étape 4/8)',
+				'before_close_hours'               => '(24 par défaut) Clôturer la possibilité d\'inscription pour la prochaine distribution X heures avant',
+				'paiements_info_required'          => '(false par défaut) Rendre la saisie des numéros de chèques obligatoire (adhésion AMAP et inscriptions aux contrats)',
+				'max_produit_label_width'          => '(par défaut, 10em) Largeur maximal de la colonne Produit pour les inscriptions Paniers Modulables'
 			]
 		] );
 	amapress_register_shortcode( 'inscription-en-ligne', 'amapress_self_inscription',
 		[
-			'desc' => 'Permet les inscriptions en ligne',
+			'desc' => 'Permet les inscriptions en ligne (amapien non connecté et nouveaux, sécurisée par une clé secrète)',
 			'args' => [
-				'key'                   => 'Clé de sécurisation de l\'accès à l\'Assistant de Préinscription en ligne',
-				'filter_multi_contrat'  => '(booléen, false par défaut) : en cas de variante de contrat Semaine A/B/AB, ne pas autoriser un amapien à s\'inscrire à plusieurs variantes',
-				'agreement'             => '(booléen, false par défaut) : afficher une étape de réglement intérieur de l\'AMAP (configurable dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' ), 'Tableau de bord > Gestion Contrats > onglet Assistant - Pré-inscription en ligne' ) . ')',
-				'check_principal'       => '(booléen, true par défaut) : vérifier qu\'un contrat principal est actif',
-				'adhesion'              => '(booléen, true par défaut) : afficher une étape Adhésion à l\'AMAP',
-				'send_referents'        => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux référents',
-				'send_tresoriers'       => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux trésoriers',
-				'edit_names'            => '(booléen, true par défaut) : autoriser l\'édition des noms pour une réinscription',
-				'only_contrats'         => 'Filtrage des contrats affichés (par ID). Permet de faire une page dédiée à l\'inscription à un contrat donné avec une autre clé',
-				'shorturl'              => 'Url raccourcie de la page sur laquelle se trouve cet Assistant de Préinscription en ligne',
-				'adhesion_shift_weeks'  => '(0 par défaut) Nombre de semaines de décalage entre le début des contrats et la période d\'Adhésion',
-				'max_coadherents'       => '(3 par défaut) Nombre maximum de co-adhérents',
-				'mob_phone_required'    => '(false par défaut) Téléphones (mobiles) requis',
-				'allow_remove_coadhs'   => '(false par défaut) Autoriser la suppression des co-adhérents',
-				'track_no_renews'       => '(false par défaut) Afficher une case "Je ne souhaite pas renouveler" et une zone Motif à l\'étape 1',
-				'track_no_renews_email' => '(email administrateir par défaut) Envoyer l\'email de notification de non renouvellement à cette adresse',
-				'notify_email'                  => '(vide par défaut) Envoyer les emails de notification (Changement co-adhérents, Non renouvellement, Adhésion, Inscription) en copie à cette/ces adresse(s)',
-				'show_adherents_infos'          => '(true par défaut) Afficher les infos sur l\'ahdérent et ses co-adhérents',
-				'allow_coadherents_inscription' => '(true par défaut) Autoriser l\'inscription aux contrats par les co-adhérents',
-				'allow_coadherents_access'      => '(true par défaut) Autoriser l\accès aux co-adhérents',
-				'allow_coadherents_adhesion'    => '(true par défaut) Autoriser l\'adhésion à l\'AMAP par les co-adhérents',
-				'show_coadherents_address'      => '(false par défaut) Afficher la saisie d\'adresse pour les co-adhérents',
-				'contact_referents'             => '(true par défaut) Affiche un lien de contact des référents dans la liste des contrats déjà souscrit (étape 4/8)',
-				'before_close_hours'            => '(24 par défaut) Clôturer la possibilité d\'inscription pour la prochaine distribution X heures avant',
-				'email'                         => '(adresse email de l\'administrateur par défaut)Email de contact pour demander l\'accès à l\'Assistant ou en cas de problème',
+				'key'                              => 'Clé de sécurisation de l\'accès à l\'Assistant de Préinscription en ligne',
+				'filter_multi_contrat'             => '(booléen, false par défaut) : en cas de variante de contrat Semaine A/B/AB, ne pas autoriser un amapien à s\'inscrire à plusieurs variantes',
+				'agreement'                        => '(booléen, false par défaut) : afficher une étape de réglement intérieur de l\'AMAP (configurable dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' ), 'Tableau de bord > Gestion Contrats > onglet Assistant - Pré-inscription en ligne' ) . ')',
+				'check_principal'                  => '(booléen, true par défaut) : vérifier qu\'un contrat principal est actif. Peut être désactivé globalement dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=contrat_config' ), 'Tableau de bord>Gestion Contrats>Configuration, onglet Contrats' ),
+				'adhesion'                         => '(booléen, true par défaut) : afficher une étape Adhésion à l\'AMAP',
+				'allow_inscription_all_dates'      => '(booléen, false par défaut) : autoriser l\'inscription à partir de toutes les dates, y compris celles après la date de clôture du contrat',
+				'send_adhesion_confirm'            => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour son adhésion à l\'AMAP',
+				'send_contrat_confirm'             => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour chacune de ses inscriptions aux contrats',
+				'send_referents'                   => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux référents',
+				'send_tresoriers'                  => '(booléen, true par défaut) : envoyer une notification pour les nouvelles adhésions aux trésoriers',
+				'edit_names'                       => '(booléen, true par défaut) : autoriser l\'édition des noms pour une réinscription',
+				'only_contrats'                    => 'Filtrage des contrats affichés (par ID). Permet de faire une page dédiée à l\'inscription à un contrat donné avec une autre clé',
+				'shorturl'                         => 'Url raccourcie de la page sur laquelle se trouve cet Assistant de Préinscription en ligne',
+				'adhesion_shift_weeks'             => '(0 par défaut) Nombre de semaines de décalage entre le début des contrats et la période d\'Adhésion',
+				'max_coadherents'                  => '(3 par défaut) Nombre maximum de co-adhérents',
+				'mob_phone_required'               => '(false par défaut) Téléphones (mobiles) requis',
+				'allow_remove_coadhs'              => '(false par défaut) Autoriser la suppression des co-adhérents',
+				'track_no_renews'                  => '(false par défaut) Afficher une case "Je ne souhaite pas renouveler" et une zone Motif à l\'étape 1',
+				'track_no_renews_email'            => '(email administrateir par défaut) Envoyer l\'email de notification de non renouvellement à cette adresse',
+				'notify_email'                     => '(vide par défaut) Envoyer les emails de notification (Changement co-adhérents, Non renouvellement, Adhésion, Inscription) en copie à cette/ces adresse(s)',
+				'paniers_modulables_editor_height' => '(350 par défaut) Hauteur de l\'éditeur de paniers modulables (en px)',
+				'show_adherents_infos'             => '(true par défaut) Afficher les infos sur l\'ahdérent et ses co-adhérents',
+				'allow_coadherents_inscription'    => '(true par défaut) Autoriser l\'inscription aux contrats par les co-adhérents',
+				'allow_coadherents_access'         => '(true par défaut) Autoriser l\accès aux co-adhérents',
+				'allow_coadherents_adhesion'       => '(true par défaut) Autoriser l\'adhésion à l\'AMAP par les co-adhérents',
+				'show_coadherents_address'         => '(false par défaut) Afficher la saisie d\'adresse pour les co-adhérents',
+				'show_delivery_details'            => '(false par défaut) Afficher un lien Récapitulatif des livraisons',
+				'show_calendar_delivs'             => '(false par défaut) Afficher un lien Calendrier des livraisons',
+				'show_due_amounts'                 => '(false par défaut) Afficher un lien Récapitulatif des sommes dues',
+				'contact_referents'                => '(true par défaut) Affiche un lien de contact des référents dans la liste des contrats déjà souscrit (étape 4/8)',
+				'before_close_hours'               => '(24 par défaut) Clôturer la possibilité d\'inscription pour la prochaine distribution X heures avant',
+				'paiements_info_required'          => '(false par défaut) Rendre la saisie des numéros de chèques obligatoire (adhésion AMAP et inscriptions aux contrats)',
+				'email'                            => '(adresse email de l\'administrateur par défaut)Email de contact pour demander l\'accès à l\'Assistant ou en cas de problème',
+				'max_produit_label_width'          => '(par défaut, 10em) Largeur maximal de la colonne Produit pour les inscriptions Paniers Modulables'
+			]
+		] );
+	amapress_register_shortcode( 'inscription-en-ligne-connecte', 'amapress_logged_self_inscription',
+		[
+			'desc' => 'Permet les inscriptions en ligne (amapien connecté)',
+			'args' => [
+				'filter_multi_contrat'             => '(booléen, false par défaut) : en cas de variante de contrat Semaine A/B/AB, ne pas autoriser un amapien à s\'inscrire à plusieurs variantes',
+				'agreement'                        => '(booléen, false par défaut) : afficher une étape de réglement intérieur de l\'AMAP (configurable dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' ), 'Tableau de bord > Gestion Contrats > onglet Assistant - Pré-inscription en ligne' ) . ')',
+				'check_principal'                  => '(booléen, true par défaut) : vérifier qu\'un contrat principal est actif. Peut être désactivé globalement dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=contrat_config' ), 'Tableau de bord>Gestion Contrats>Configuration, onglet Contrats' ),
+				'adhesion'                         => '(booléen, true par défaut) : afficher une étape Adhésion à l\'AMAP',
+				'allow_inscription_all_dates'      => '(booléen, false par défaut) : autoriser l\'inscription à partir de toutes les dates, y compris celles après la date de clôture du contrat',
+				'send_adhesion_confirm'            => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour son adhésion à l\'AMAP',
+				'send_contrat_confirm'             => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour chacune de ses inscriptions aux contrats',
+				'send_referents'                   => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux référents',
+				'send_tresoriers'                  => '(booléen, true par défaut) : envoyer une notification pour les nouvelles adhésions aux trésoriers',
+				'edit_names'                       => '(booléen, true par défaut) : autoriser l\'édition des noms pour une réinscription',
+				'only_contrats'                    => 'Filtrage des contrats affichés (par ID). Permet de faire une page dédiée à l\'inscription à un contrat donné avec une autre clé',
+				'adhesion_shift_weeks'             => '(0 par défaut) Nombre de semaines de décalage entre le début des contrats et la période d\'Adhésion',
+				'max_coadherents'                  => '(3 par défaut) Nombre maximum de co-adhérents',
+				'mob_phone_required'               => '(false par défaut) Téléphones (mobiles) requis',
+				'allow_remove_coadhs'              => '(false par défaut) Autoriser la suppression des co-adhérents',
+				'track_no_renews'                  => '(false par défaut) Afficher une case "Je ne souhaite pas renouveler" et une zone Motif à l\'étape 1',
+				'track_no_renews_email'            => '(email administrateir par défaut) Envoyer l\'email de notification de non renouvellement à cette adresse',
+				'notify_email'                     => '(vide par défaut) Envoyer les emails de notification (Changement co-adhérents, Non renouvellement, Adhésion, Inscription) en copie à cette/ces adresse(s)',
+				'paniers_modulables_editor_height' => '(350 par défaut) Hauteur de l\'éditeur de paniers modulables (en px)',
+				'show_adherents_infos'             => '(true par défaut) Afficher les infos sur l\'ahdérent et ses co-adhérents',
+				'allow_coadherents_inscription'    => '(true par défaut) Autoriser l\'inscription aux contrats par les co-adhérents',
+				'allow_coadherents_access'         => '(true par défaut) Autoriser l\accès aux co-adhérents',
+				'allow_coadherents_adhesion'       => '(true par défaut) Autoriser l\'adhésion à l\'AMAP par les co-adhérents',
+				'show_coadherents_address'         => '(false par défaut) Afficher la saisie d\'adresse pour les co-adhérents',
+				'show_delivery_details'            => '(false par défaut) Afficher un lien Récapitulatif des livraisons',
+				'show_due_amounts'                 => '(false par défaut) Afficher un lien Récapitulatif des sommes dues',
+				'show_calendar_delivs'             => '(false par défaut) Afficher un lien Calendrier des livraisons',
+				'contact_referents'                => '(true par défaut) Affiche un lien de contact des référents dans la liste des contrats déjà souscrit (étape 4/8)',
+				'before_close_hours'               => '(24 par défaut) Clôturer la possibilité d\'inscription pour la prochaine distribution X heures avant',
+				'paiements_info_required'          => '(false par défaut) Rendre la saisie des numéros de chèques obligatoire (adhésion AMAP et inscriptions aux contrats)',
+				'email'                            => '(adresse email de l\'administrateur par défaut)Email de contact pour demander l\'accès à l\'Assistant ou en cas de problème',
+				'max_produit_label_width'          => '(par défaut, 10em) Largeur maximal de la colonne Produit pour les inscriptions Paniers Modulables'
 			]
 		] );
 
@@ -333,6 +534,9 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Paniers réservés par un intermittent',
 			'args' => [
+				'show_history' => '(Par défaut “false”)  Afficher l\’historique des échanges de paniers de l\’amapien/intermittent',
+				'history_days' => '(Par défaut “30”) Nombre de jour de l\’historique',
+				'show_futur'   => '(Par défaut “true”) Afficher les échanges à venir',
 			]
 		] );
 
@@ -341,12 +545,28 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Carte des amapiens',
 			'args' => [
+				'lieu'            => 'Afficher les amapiens ayant un contrat dans le lieu de distribution indiqué',
+				'show_email'      => '(Par défaut “default”) Afficher les emails des amapiens',
+				'show_tel'        => '(Par défaut “default”) Afficher les numéros de téléphones des amapiens',
+				'show_tel_fixe'   => '(Par défaut “default”) Afficher les numéros de fixes des amapiens',
+				'show_tel_mobile' => '(Par défaut “default”) Afficher les numéros de portables des amapiens',
+				'show_adresse'    => '(Par défaut “default”) Afficher les adresses des amapiens',
+				'show_avatar'     => '(Par défaut “default”) Afficher les photos des amapiens',
+				'show_lieu'       => '(Par défaut “default”) Afficher le nom du lieu de distribution',
 			]
 		] );
 	amapress_register_shortcode( 'amapiens-role-list', 'amapress_amapiens_role_list_shortcode',
 		[
 			'desc' => 'Liste des membres du collectif de l\'AMAP',
 			'args' => [
+				'lieu'            => 'Afficher les membres du collectif du lieu de distribution indiqué',
+				'show_prod'       => '(Par défaut “false”) Afficher les producteurs',
+				'show_email'      => '(Par défaut “force”) Afficher les emails des membres du collectif',
+				'show_tel'        => '(Par défaut “default”) Afficher les numéros de téléphones des membres du collectif',
+				'show_tel_fixe'   => '(Par défaut “default”) Afficher les numéros de fixes des membres du collectif',
+				'show_tel_mobile' => '(Par défaut “force”) Afficher les numéros de portables des membres du collectif',
+				'show_adresse'    => '(Par défaut “default”) Afficher les adresses des membres du collectif',
+				'show_avatar'     => '(Par défaut “default”) Afficher les photos des membres du collectif',
 			]
 		] );
 	amapress_register_shortcode( 'user-info', 'amapress_user_info_shortcode' );
@@ -467,6 +687,57 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Affiche le contenu du shortcode suivant une condition (connecté, non connecté, membre du collectif, intermittent, responsable de distribution)',
 			'args' => [
+				'role' => '(Par défaut "logged") Afficher le contenu de ce shortcode uniquement si l\'amapien est dans un des rôles suivants : logged, not_logged, intermittent, no_contrat, responsable_distrib (est responsable de distribution cette semaine), responsable_amap (peut accéder au Tableau de Bord), contrat_xxx (a un contrat xxx)'
+			]
+		] );
+
+	amapress_register_shortcode( 'responsable-distrib-info', function ( $atts ) {
+		amapress_ensure_no_cache();
+
+		$atts = shortcode_atts(
+			[
+				'distribution_link' => 'true',
+				'emargement_link'   => 'true'
+			], $atts
+		);
+
+		$ret = '';
+		if ( AmapressDistributions::isCurrentUserResponsableThisWeek() ) {
+			$next_distrib = AmapressDistribution::getNextDistribution( null, null, Amapress::start_of_week( amapress_time() ) );
+			if ( ! $next_distrib ) {
+				return '';
+			}
+			$ret = '<div class="resp-distrib-this-week"><p>Vous êtes responsable de distribution '
+			       . ( Amapress::toBool( $atts['distribution_link'] ) ?
+					Amapress::makeLink( $next_distrib->getPermalink(), 'cette semaine' ) :
+					'cette semaine' ) . '(' . date_i18n( 'd/m/Y', $next_distrib->getDate() ) . ')';
+			if ( Amapress::toBool( $atts['emargement_link'] ) ) {
+				$ret .= '<br/>' . Amapress::makeLink( $next_distrib->getListeEmargementHref(), 'Liste d\'émargement' );
+			}
+			$ret .= '</p></div>';
+		} elseif ( AmapressDistributions::isCurrentUserResponsableNextWeek() ) {
+			$next_distrib = AmapressDistribution::getNextDistribution( null, null, Amapress::add_a_week( Amapress::start_of_week( amapress_time() ) ) );
+			if ( ! $next_distrib ) {
+				return '';
+			}
+
+			$ret = '<div class="resp-distrib-this-week"><p>Vous êtes responsable de distribution '
+			       . ( Amapress::toBool( $atts['distribution_link'] ) ?
+					Amapress::makeLink( $next_distrib->getPermalink(), 'la semaine prochaine' ) :
+					'la semaine prochaine' ) . '(' . date_i18n( 'd/m/Y', $next_distrib->getDate() ) . ')';
+			if ( Amapress::toBool( $atts['emargement_link'] ) ) {
+				$ret .= '<br/>' . Amapress::makeLink( $next_distrib->getListeEmargementHref(), 'Liste d\'émargement' );
+			}
+			$ret .= '</p></div>';
+		}
+
+		return $ret;
+	},
+		[
+			'desc' => 'Afficher un message "Vous êtes responsable de distribution cette semaine/la semaine prochaine"',
+			'args' => [
+				'distribution_link' => '(Par défaut true) affiche un lien vers la distribution.',
+				'emargement_link'   => '(Par défaut true) affiche un lien vers la liste d\'émargement.',
 			]
 		] );
 
@@ -482,14 +753,40 @@ function amapress_register_shortcodes() {
 		] );
 
 	amapress_register_shortcode( 'agenda-url', function ( $atts ) {
-		$id  = 'agenda-url-' . md5( uniqid() );
-		$url = esc_attr( Amapress_Agenda_ICAL_Export::get_link_href() );
+		$atts = shortcode_atts(
+			[ 'since_days' => 30 ],
+			$atts );
+		$id   = 'agenda-url-' . md5( uniqid() );
+		$url  = esc_attr( Amapress_Agenda_ICAL_Export::get_link_href( false, intval( $atts['since_days'] ) ) );
 
-		return "<div class='input-group'><input id='$id' type='text' value='$url' class='form-control' style='max-width: 80%' /><span class='input-group-addon'><button class='btn btn-secondary copy-agenda-url' type='button' data-clipboard-target='#{$id}'><span class='fa fa-copy' /></button></span><script type='text/javascript'>jQuery(function() { new Clipboard('.copy-agenda-url'); });</script></div>";
+		return "<div class='input-group'><input id='$id' type='text' value='$url' class='form-control' style='max-width: 80%' /><span class='input-group-addon'><button class='btn btn-secondary copy-agenda-url' type='button' data-clipboard-target='#{$id}'><span class='fa fa-copy' /></button></span><script type='text/javascript'>jQuery(function($) { new Clipboard('.copy-agenda-url'); });</script></div>";
 	},
 		[
 			'desc' => 'Copieur de lien de configuration de la synchronisation d\'un calendrier ICAL dans l\'agenda de l\'amapien',
 			'args' => [
+				'since_days' => '(Par défaut 30) Nombre de jours d\'historique de l\'agenda',
+			]
+		] );
+
+	amapress_register_shortcode( 'agenda-url-button', function ( $atts ) {
+		$atts = shortcode_atts(
+			[
+				'since_days' => 30,
+				'title'      => 'Ajouter mon calendrier AMAP à mon agenda'
+			],
+			$atts );
+		$id   = 'agenda-url_btn-' . md5( uniqid() );
+		$url  = Amapress_Agenda_ICAL_Export::get_link_href( false, intval( $atts['since_days'] ) );
+		$url  = preg_replace( '/^http/', 'webcal', $url );
+		$url  = esc_attr( $url );
+
+		return Amapress::makeButtonLink( $url, $atts['title'], true, true, 'btn btn-default btn-add-cal' );
+	},
+		[
+			'desc' => 'Bouton d\'ajout de synchronisation de son calendrier (ICAL) dans l\'agenda de l\'amapien',
+			'args' => [
+				'since_days' => '(Par défaut 30) Nombre de jours d\'historique de l\'agenda',
+				'title'      => '(Par défaut Ajouter mon calendrier AMAP à mon agenda) Titre du bouton',
 			]
 		] );
 
@@ -519,6 +816,7 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Affiche le calendrier de la page d\'accueil',
 			'args' => [
+				'title' => '(Par défaut “yes”) Afficher le titre de la section',
 			]
 		] );
 	amapress_register_shortcode( 'front_produits', function ( $atts ) {
@@ -552,6 +850,7 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Affiche la liste des producteurs/productions pour la page d\'acceuil',
 			'args' => [
+				'title' => '(Par défaut “yes”) Afficher le titre de la section',
 			]
 		] );
 	amapress_register_shortcode( 'front_nous_trouver', function ( $atts ) {
@@ -574,6 +873,7 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Affiche la carte des lieux de distributions pour la page d\'accueil',
 			'args' => [
+				'title' => '(Par défaut “yes”) Afficher le titre de la section',
 			]
 		] );
 	amapress_register_shortcode( 'front_default_grid', function ( $atts ) {
@@ -603,6 +903,10 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Affiche les infos de la page d\'accueil (calendrier, productions, carte)',
 			'args' => [
+				'title'            => '(Par défaut “yes”) Afficher le titre des trois sections (Agenda/Produits/Carte) de la grille par défaut',
+				'agenda-classes'   => '(Par défaut “col-lg-4 col-md-6 col-sm-6 col-xs-12”) Nom des classes CSS appliquées pour le formatage de la grille',
+				'produits-classes' => '(Par défaut “col-lg-4 col-md-6 col-sm-6 col-xs-12”) Nom des classes CSS appliquées pour le formatage de la grille',
+				'map-classes'      => '(Par défaut “col-lg-4 col-md-12 col-sm-12 col-xs-12”) Nom des classes CSS appliquées pour le formatage de la grille',
 			]
 		] );
 
@@ -632,6 +936,12 @@ function amapress_register_shortcodes() {
 			if ( ! empty( $desc ) ) {
 				$li .= "<br/><em>$desc</em>";
 			}
+			if ( current_user_can( 'list_users' ) ) {
+				$li .= '<br/>' . Amapress::makeLink( $mailing_list_configuration->getAdminMembersLink(), 'Voir les membres', true, true );
+			}
+			if ( current_user_can( 'manage_options' ) ) {
+				$li .= '<br/>' . Amapress::makeLink( $mailing_list_configuration->getAdminEditLink(), 'Voir la configuration', true, true );
+			}
 			$li        .= '</li>';
 			$entries[] = $li;
 		}
@@ -646,6 +956,12 @@ function amapress_register_shortcodes() {
 			if ( ! empty( $desc ) ) {
 				$li .= "<br/><em>$desc</em>";
 			}
+			if ( current_user_can( 'list_users' ) ) {
+				$li .= '<br/>' . Amapress::makeLink( $ml->getAdminMembersLink(), 'Voir les membres', true, true );
+			}
+			if ( current_user_can( 'manage_options' ) ) {
+				$li .= '<br/>' . Amapress::makeLink( $ml->getAdminEditLink(), 'Voir la configuration', true, true );
+			}
 			$li        .= '</li>';
 			$entries[] = $li;
 		}
@@ -659,6 +975,7 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Liste des liste de diffusions (SYMPA/SudOuest/Emails groupés) configurées sur le site',
 			'args' => [
+				'sms' => '(Par défaut “yes”) Afficher un lien SMS-To contenant tous les membres de chaque liste de diffusion',
 			]
 		] );
 }

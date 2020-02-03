@@ -93,8 +93,9 @@ class Amapress_Import_Users_CSV {
 		}
 		$fields = array_merge( array_combine( $data_keys, $data_keys ), $meta_keys );
 
-		$options = array();
-		$headers = array();
+		$options      = array();
+		$headers      = array();
+		$headers_desc = array();
 		foreach ( $fields as $key => $field ) {
 			$arg = [
 				'key'       => $key,
@@ -103,10 +104,12 @@ class Amapress_Import_Users_CSV {
 				'post_type' => 'user',
 			];
 			if ( in_array( $field, $taxonomies_names ) ) {
-				$headers[ $key ] = $taxonomies_names[ $field ];
-				$options[ $key ] = $taxonomies_values[ $field ];
+				$headers[ $key ]      = $taxonomies_names[ $field ];
+				$headers_desc[ $key ] = 'Saisir une ou plusieurs des étiquettes suivantes séparées par des virgules';
+				$options[ $key ]      = $taxonomies_values[ $field ];
 			} else {
 				$header = apply_filters( "amapress_users_get_field_display_name", $field );
+				$desc   = apply_filters( "amapress_users_get_field_desc", '', $field );
 				if ( empty( $header ) ) {
 					unset( $fields[ $key ] );
 					continue;
@@ -115,6 +118,9 @@ class Amapress_Import_Users_CSV {
 				$option          = AmapressEntities::getTfOption( 'user', $field );
 				if ( $option ) {
 					$options[ $key ] = $option->getSamplesForCSV( $arg );
+					if ( empty( $desc ) ) {
+						$desc = $option->getDesc();
+					}
 				} else if ( 'role' == $key || 'roles' == $key ) {
 					global $wp_roles;
 					$roles = [];
@@ -125,9 +131,13 @@ class Amapress_Import_Users_CSV {
 						$roles[] = $role['name'];
 					}
 					$options[ $key ] = $roles;
+					if ( empty( $desc ) ) {
+						$desc = 'Choisir un rôle pour l\'utilisateur';
+					}
 				} else {
 					$options[ $key ] = array();
 				}
+				$headers_desc[ $key ] = wp_strip_all_tags( $desc );
 			}
 		}
 
@@ -148,6 +158,10 @@ class Amapress_Import_Users_CSV {
 		$col   = 0;
 		foreach ( $headers as $key => $h ) {
 			$sheet->setCellValueByColumnAndRow( $col, 1, $h );
+			if ( ! empty( $headers_desc[ $key ] ) ) {
+				$sheet->getCommentByColumnAndRow( $col, 1 )->getText()->createTextRun( $headers_desc[ $key ] );
+				$sheet->getCommentByColumnAndRow( $col, 1 )->setVisible( false );
+			}
 			$sheet->getStyleByColumnAndRow( $col, 1 )->applyFromArray( array(
 				'font' => array(
 					'bold'   => true,
@@ -564,8 +578,8 @@ class Amapress_Import_Users_CSV {
 						$login = strtolower( $userdata['first_name'] . '.' . $userdata['last_name'] );
 						$user  = get_user_by( 'login', $login );
 						if ( $user ) {
-							$user_link         = Amapress::makeLink( admin_url( 'user-edit.php?user_id=' . $user->ID ), $login );
-							$search_link       = Amapress::makeLink( admin_url( 'users.php?s=' . $userdata['last_name'] ), 'Rechercher ' . $userdata['last_name'] );
+							$user_link         = Amapress::makeLink( admin_url( 'user-edit.php?user_id=' . $user->ID ), $login, true, true );
+							$search_link       = Amapress::makeLink( admin_url( 'users.php?s=' . $userdata['last_name'] ), 'Rechercher ' . $userdata['last_name'], true, true );
 							$errors[ $rkey ][] = new WP_Error( 'user_with_different_mail', "User with login '$user_link' already exists with email {$user->user_email}. $search_link" );
 							continue;
 						}
@@ -677,9 +691,10 @@ class Amapress_Import_Users_CSV {
 	/**
 	 * Log errors to a file
 	 *
+	 * @param WP_Error[][] $errors
+	 *
 	 * @since 0.2
 	 *
-	 * @param WP_Error[][] $errors
 	 */
 	private static function log_errors( $errors ) {
 		if ( empty( $errors ) ) {

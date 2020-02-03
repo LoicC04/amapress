@@ -321,6 +321,9 @@ function amapress_paiements_count_editor( $post_id ) {
 		if ( $adhesion->getContrat_instance()->getAllow_Cash() ) {
 			$ret .= '<div><strong>Règlement en espèces autorisé</strong></div>';
 		}
+		if ( $adhesion->getContrat_instance()->getAllow_Transfer() ) {
+			$ret .= '<div><strong>Règlement par virement autorisé</strong></div>';
+		}
 	}
 
 	return $ret;
@@ -444,7 +447,10 @@ function amapress_paiements_editor( $post_id ) {
 	            	if ("esp" === type) {
 	            	    fields.prop("disabled", true);
 	            	    fields.val("Esp.");
-	            	} else if ("chq" === type) {
+	            	} else if ("vir" === type) {
+	            		fields.prop("disabled", true);
+	            	    fields.val("Vir.");
+	            	} else if ("chq" === type || "dlv" === type) {
 	            	    fields.prop("disabled", false);
 	            	}
 	            };
@@ -537,7 +543,7 @@ function amapress_paiements_editor( $post_id ) {
 	$def_id   = - 1;
 	foreach ( $contrat_paiements as $paiement ) {
 		$id       = $paiement ? $paiement->ID : $def_id --;
-		$pmt_type = esc_attr( $paiement ? $paiement->getType() : 'chq' );
+		$pmt_type = esc_attr( $paiement ? $paiement->getType() : $adhesion->getMainPaiementType() );
 		$numero   = esc_attr( $paiement ? $paiement->getNumero() : '' );
 		$banque   = esc_attr( $paiement ? $paiement->getBanque() : '' );
 		$adherent = esc_attr( $paiement ? $paiement->getEmetteur() : $adhesion->getAdherent()->getDisplayName() );
@@ -590,6 +596,8 @@ function amapress_paiements_editor( $post_id ) {
 <td class='paiement-type'><select name='amapress_paiements_details[$id][type]' style='width: 50px'>
 <option value='chq' " . selected( $pmt_type, 'chq', false ) . ">Chèque</option>
 <option value='esp' " . selected( $pmt_type, 'esp', false ) . ">Espèces</option>
+<option value='vir' " . selected( $pmt_type, 'vir', false ) . ">Virement</option>
+<option value='dlv' " . selected( $pmt_type, 'dlv', false ) . ">A la livraison</option>
 </select></td>
 <td class='paiement-numero'><input class='recopy-context-menu' style=\"width: 100%\"  name='amapress_paiements_details[$id][numero]' placeholder='' maxlength='1000' type='text' value='$numero' /></td>
 <td class='paiement-adherent'><input class='recopy-context-menu adherent_select' style=\"width: 100%\" name='amapress_paiements_details[$id][adherent]' placeholder='' maxlength='1000' type='text' value='$adherent' /></td>
@@ -643,13 +651,13 @@ function amapress_save_paiements_editor( $adhesion_id ) {
 				'meta_input'   => array(
 					'amapress_contrat_paiement_adhesion'         => $adhesion_id,
 					'amapress_contrat_paiement_contrat_instance' => $contrat_instance_id,
-					'amapress_contrat_paiement_date'             => $quant_data['date'],
-					'amapress_contrat_paiement_status'           => $quant_data['status'],
-					'amapress_contrat_paiement_type'             => $quant_data['type'],
-					'amapress_contrat_paiement_amount'           => $refresh ? 0 : $quant_data['amount'],
-					'amapress_contrat_paiement_numero'           => isset( $quant_data['numero'] ) ? $quant_data['numero'] : '',
-					'amapress_contrat_paiement_emetteur'         => $quant_data['adherent'],
-					'amapress_contrat_paiement_banque'           => ( 'esp' == $quant_data['type'] ? 'Esp.' : $quant_data['banque'] ),
+					'amapress_contrat_paiement_date'     => $quant_data['date'],
+					'amapress_contrat_paiement_status'   => $quant_data['status'],
+					'amapress_contrat_paiement_type'     => $quant_data['type'],
+					'amapress_contrat_paiement_amount'   => $refresh ? 0 : $quant_data['amount'],
+					'amapress_contrat_paiement_numero'   => isset( $quant_data['numero'] ) ? $quant_data['numero'] : '',
+					'amapress_contrat_paiement_emetteur' => $quant_data['adherent'],
+					'amapress_contrat_paiement_banque'   => ( 'chq' != $quant_data['type'] ? '' : $quant_data['banque'] ),
 				),
 			);
 			if ( $quant_id < 0 ) {

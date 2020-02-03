@@ -91,7 +91,8 @@ class AmapressPaniers {
 					}
 				} else if ( count( $paniers ) > 1 ) {
 					array_shift( $paniers );
-					foreach ( $paniers as $panier ) {
+					foreach ( $paniers as $panier_post ) {
+						$panier                = AmapressPanier::getBy( $panier_post );
 						$res[ $contrat->ID ][] = array(
 							'lieux' => $lieux_ids,
 							'date'  => Amapress::start_of_day( $panier->getDate() )
@@ -198,7 +199,17 @@ class AmapressPaniers {
 
 				return implode( '_', $user_ids );
 			} );
-		$liste     = array();
+		$sums      = [
+			'adhs' => count( $adhesions ),
+		];
+		foreach ( AmapressContrats::get_contrat_quantites( $contrat_instance_id ) as $quant ) {
+			$sums["quants"]["quant_{$quant->ID}"] = [
+				'sum'   => 0,
+				'price' => 0,
+				'label' => $quant->getTitle(),
+			];
+		}
+		$liste = array();
 		/** @var AmapressAdhesion[] $adhs */
 		foreach ( $adhesions as $user_ids => $adhs ) {
 			$line = array();
@@ -224,6 +235,11 @@ class AmapressPaniers {
 				if ( $adh->getContrat_instanceId() == $contrat_instance_id &&
 				     ( $lieu_id == null || $adh->getLieuId() == $lieu_id )
 				) {
+					foreach ( $adh->getContrat_quantites( $date ) as $quant ) {
+						$qid                                   = $quant->getID();
+						$sums["quants"]["quant_$qid"]['sum']   += $quant->getFactor();
+						$sums["quants"]["quant_$qid"]['price'] += $quant->getPrice();
+					}
 					$line['lieu']    = $adh->getLieu()->getShortName();
 					$line['content'] = $adh->getContrat_quantites_AsString( $date );
 					if ( ! empty( $line['content'] ) ) {
@@ -233,9 +249,20 @@ class AmapressPaniers {
 			}
 		}
 
+		usort( $liste, function ( $a, $b ) {
+			return strcasecmp( wp_strip_all_tags( $a['last_name'] ), wp_strip_all_tags( $b['last_name'] ) );
+		} );
+
 		return array(
 			'columns' => $columns,
-			'data'    => $liste
+			'data'    => $liste,
+			'adhs'    => $sums['adhs'],
+			'quants'  => $sums['quants'],
+			'resume'  => implode( ', ', array_map( function ( $q ) {
+				return "{$q['sum']} x {$q['label']}";
+			}, array_filter( array_values( $sums['quants'] ), function ( $q ) {
+				return $q['sum'] > 0;
+			} ) ) )
 		);
 	}
 
@@ -311,12 +338,14 @@ class AmapressPaniers {
 			'post_type'      => 'amps_produit',
 			'posts_per_page' => - 1,
 			'meta_query'     => array(
+				'relation' => 'OR',
 				array(
 					'key'     => 'amapress_produit_producteur',
 					'value'   => $producteur,
 					'compare' => '=',
 					'type'    => 'NUMERIC',
 				),
+				amapress_prepare_like_in_array( 'amapress_produit_producteur', $producteur )
 			),
 			'order'          => 'ASC',
 			'orderby'        => 'title'
@@ -456,12 +485,14 @@ class AmapressPaniers {
 			'post_type'      => 'amps_produit',
 			'posts_per_page' => - 1,
 			'meta_query'     => array(
+				'relation' => 'OR',
 				array(
 					'key'     => 'amapress_produit_producteur',
 					'value'   => $producteur,
 					'compare' => '=',
 					'type'    => 'NUMERIC',
 				),
+				amapress_prepare_like_in_array( 'amapress_produit_producteur', $producteur )
 			),
 			'order'          => 'ASC',
 			'orderby'        => 'title'
@@ -894,7 +925,7 @@ class AmapressPaniers {
 
 	public
 	static function getPanierQuantiteTable(
-		$quant_id, $quantites, $options = array()
+		$table_id, $quantites, $options = array()
 	) {
 		$options = wp_parse_args( $options,
 			array(
@@ -938,7 +969,7 @@ class AmapressPaniers {
 		if ( empty( $quantites ) ) {
 			return '<div class="panier-vide">' . esc_html( $options['empty_desc'] ) . '</div>';
 		} else {
-			return amapress_get_datatable( 'liste-emargement-contrat-variable-' . $quant_id, $columns, $quantites,
+			return amapress_get_datatable( 'liste-emargement-contrat-variable-' . $table_id, $columns, $quantites,
 				array(
 					'paging'    => false,
 					'searching' => false,
@@ -985,25 +1016,25 @@ class AmapressPaniers {
 						$produits_in_panier = array_merge( $produits_in_panier, $contrat_quantite->getProduitsIds() );
 
 						$produits_objects[] = array(
-							'produit'  => '<img class="panier-produit-photo" alt="' . esc_attr( $contrat_quantite->getTitle() ) . '" src="' . amapress_get_avatar_url( $contrat_quantite->ID, null, 'produit-thumb', 'default_contrat.jpg' ) . '" />' . esc_html( $contrat_quantite->getTitle() ),
-							'price'    => $contrat_quantite->getPrix_unitaire(),
+							'produit'  => esc_html( $contrat_quantite->getTitle() ),
+							'price'    => $contrat_quantite->getPrix_unitaireDisplay(),
 							'quantite' => $contrat_quantite->formatValue( $quantite ),
 						);
 					}
 				}
 				echo '<h4>Les produits de cette livraison</h4>';
-				echo self::getPanierQuantiteTable( 'all', $produits_objects );
+				echo self::getPanierQuantiteTable( 'all-' . $pani->getContrat_instanceId(), $produits_objects );
 			} else {
 				$produits_objects = array();
 				foreach ( AmapressContrats::get_contrat_quantites( $pani->getContrat_instanceId() ) as $contrat_quantite ) {
 					$produits_objects[] = array(
-						'produit'  => '<img class="panier-produit-photo" alt="' . esc_attr( $contrat_quantite->getTitle() ) . '" src="' . amapress_get_avatar_url( $contrat_quantite->ID, null, 'produit-thumb', 'default_contrat.jpg' ) . '" />' . esc_html( $contrat_quantite->getTitle() ),
-						'price'    => $contrat_quantite->getPrix_unitaire(),
+						'produit'  => esc_html( $contrat_quantite->getTitle() ),
+						'price'    => $contrat_quantite->getPrix_unitaireDisplay(),
 						'quantite' => $contrat_quantite->getPriceUnitDisplay(),
 					);
 				}
 				echo '<h4>Les produits disponibles pour ce contrat</h4>';
-				echo self::getPanierQuantiteTable( 'public', $produits_objects );
+				echo self::getPanierQuantiteTable( 'public-' . $pani->getContrat_instanceId(), $produits_objects );
 			}
 		} else {
 //			$dist_is_today = Amapress::start_of_day( $pani->getDate() ) == Amapress::start_of_day( amapress_time() );
@@ -1151,11 +1182,15 @@ class AmapressPaniers {
 				amapress_is_user_logged_in() && ! empty( Amapress::getOption( 'publier-recette-page' ) ) ? amapress_get_button( 'Proposer une nouvelle recette', get_post_permalink( Amapress::getOption( 'publier-recette-page' ) ), 'fa-fa' ) : '' );
 			$recette_empty     = '<span class="recette-empty">Pas de recettes pour les produits présents dans le panier</span> ' . $recette_edit_link;
 			$no_recettes       = urlencode( $recette_empty );
-			echo do_shortcode( "[recettes produits=$produits_in_panier if_empty=$no_recettes]" );
+			echo get_amapress_recettes_gallery(
+				[
+					'produits' => $produits_in_panier,
+					'if_empty' => $no_recettes
+				]
+			);
 		}
 
-		$ret = ob_get_contents();
-		ob_end_clean();
+		$ret = ob_get_clean();
 
 		return $ret;
 	}

@@ -76,6 +76,10 @@ function amapress_import_users_get_field_name( $field_name, $colname ) {
 		return $labels[ $field_name ];
 	}
 
+	if ( ! empty( $_REQUEST['amapress_ignore_unknown_columns'] ) ) {
+		return null;
+	}
+
 	return new WP_Error( 'unknown_header', "Colonne $colname : un utilisateur ne contient pas de champs $field_name" );
 }
 
@@ -241,6 +245,10 @@ function amapress_import_posts_get_field_name( $field_name, $post_type, $colname
 		}
 	}
 
+	if ( ! empty( $_REQUEST['amapress_ignore_unknown_columns'] ) ) {
+		return null;
+	}
+
 	return new WP_Error( 'unknown_header', "Colonne $colname : un $post_type ne contient pas de champs $field_name" );
 }
 
@@ -297,10 +305,16 @@ function amapress_import_posts_meta( $postmeta, $postdata, $posttaxo, $post_type
 }
 
 function amapress_get_validator( $post_type, $field_name, $settings ) {
-	$type  = $settings['type'];
-	$label = ! empty( $settings['name'] ) ? $settings['name'] : $field_name;
+	if ( isset( $settings['csv_validator'] ) && is_callable( $settings['csv_validator'], false ) ) {
+		return $settings['csv_validator'];
+	}
+	$label    = ! empty( $settings['name'] ) ? $settings['name'] : $field_name;
+	$required = isset( $settings['required'] ) ? $settings['required'] : false;
+	$type     = $settings['type'];
 	if ( $type == 'date' ) {
-		return function ( $value ) use ( $label ) {
+		$has_time = isset( $settings['time'] ) ? $settings['time'] : false;
+
+		return function ( $value ) use ( $label, $has_time, $required ) {
 			try {
 				if ( is_wp_error( $value ) ) {
 					return $value;
@@ -308,18 +322,27 @@ function amapress_get_validator( $post_type, $field_name, $settings ) {
 				if ( is_string( $value ) ) {
 					$value = trim( $value );
 				}
+				if ( ! $required && empty( $value ) ) {
+					return null;
+				}
+				$ret_date = 0;
 				if ( is_float( $value ) || is_int( $value ) || preg_match( '/^\d+$/', strval( $value ) ) ) {
-					return PHPExcel_Shared_Date::ExcelToPHP( intval( $value ) );
+					$ret_date = PHPExcel_Shared_Date::ExcelToPHP( intval( $value ) );
 				} else if ( preg_match( '/^\d{1,2}\/\d{1,2}\/\d{4}$/', $value ) ) {
-					return DateTime::createFromFormat( TitanFrameworkOptionDate::$default_date_format, $value )->getTimestamp();
+					$ret_date = DateTime::createFromFormat( TitanFrameworkOptionDate::$default_date_format, $value )->getTimestamp();
 				} else if ( preg_match( '/^\d{1,2}\/\d{1,2}\/\d{4} \d{2}:\d{2}$/', $value ) ) {
-					return DateTime::createFromFormat( TitanFrameworkOptionDate::$default_date_format . ' ' . TitanFrameworkOptionDate::$default_time_format, $value )->getTimestamp();
+					$ret_date = DateTime::createFromFormat( TitanFrameworkOptionDate::$default_date_format . ' ' . TitanFrameworkOptionDate::$default_time_format, $value )->getTimestamp();
 				} else if ( preg_match( '/^\d{2}:\d{2}$/', $value ) ) {
-					return DateTime::createFromFormat( date( TitanFrameworkOptionDate::$default_date_format, 0 ) . ' ' . TitanFrameworkOptionDate::$default_time_format, $value )->getTimestamp();
+					$ret_date = DateTime::createFromFormat( date( TitanFrameworkOptionDate::$default_date_format, 0 ) . ' ' . TitanFrameworkOptionDate::$default_time_format, $value )->getTimestamp();
 				} else if ( preg_match( '/^\d{1,2}-\d{1,2}-\d{2}$/', $value ) ) {
-					return DateTime::createFromFormat( 'm-d-y', $value )->getTimestamp();
+					$ret_date = DateTime::createFromFormat( 'm-d-y', $value )->getTimestamp();
 				} else {
 					return new WP_Error( 'cannot_parse', "Valeur '$value' non valide pour '$label'" );
+				}
+				if ( $has_time ) {
+					return $ret_date;
+				} else {
+					return Amapress::start_of_day( $ret_date );
 				}
 			} catch ( Exception $e ) {
 				return new WP_Error( 'cannot_parse', "Valeur '$value' non valide pour '$label': {$e->getMessage()}" );
@@ -327,12 +350,18 @@ function amapress_get_validator( $post_type, $field_name, $settings ) {
 		};
 	} else if ( $type == 'checkbox' ) {
 		return function ( $value ) use ( $label ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
 			$v = strtolower( trim( $value ) );
 
 			return $v == "true" || $v == "vrai" || $v == "oui" || $v == 1;
 		};
 	} else if ( $type == 'float' || $type == 'number' || $type == 'price' ) {
 		return function ( $value ) use ( $label ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
 			try {
 				return floatval( trim( trim( $value, '€' ) ) );
 			} catch ( Exception $e ) {
@@ -341,6 +370,9 @@ function amapress_get_validator( $post_type, $field_name, $settings ) {
 		};
 	} else if ( $type == 'select' ) {
 		return function ( $value ) use ( $label, $settings ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
 			$v = strtolower( trim( $value ) );
 			if ( is_array( $settings['options'] ) && ! array_key_exists( $v, $settings['options'] ) ) {
 				$labels = array_combine(
@@ -359,8 +391,11 @@ function amapress_get_validator( $post_type, $field_name, $settings ) {
 
 			return $v;
 		};
-	} else if ( $type == 'select-posts' ) {
+	} else if ( 'select-posts' == $type || 'multicheck-posts' == $type ) {
 		return function ( $value ) use ( $label, $settings ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
 			if ( is_string( $value ) ) {
 				$value = trim( $value );
 			}
@@ -403,8 +438,11 @@ function amapress_get_validator( $post_type, $field_name, $settings ) {
 				return $res;
 			}
 		};
-	} else if ( $type == 'select-users' ) {
+	} else if ( 'select-users' == $type || 'multicheck-users' == $type ) {
 		return function ( $value ) use ( $label ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
 			if ( is_string( $value ) ) {
 				$value = trim( $value );
 			}
@@ -451,9 +489,81 @@ function amapress_get_validator( $post_type, $field_name, $settings ) {
 				return $res;
 			}
 		};
-	} else if ( strpos( $type, 'multicheck' ) || strpos( $type, 'multidate' ) ) {
-		return function ( $value ) use ( $label, $type ) {
-			return new WP_Error( 'unsupported', "Type $type is not supported ($label)" );
+	} else if ( 'multicheck' == $type ) {
+		return function ( $value ) use ( $label, $settings ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
+			$vs   = trim( strtolower( trim( $value ) ), ',' );
+			$vs   = array_map( function ( $v ) use ( $value, $label, $settings ) {
+				if ( is_array( $settings['options'] ) && ! array_key_exists( $v, $settings['options'] ) ) {
+					$labels = array_combine(
+						array_map( function ( $a ) {
+							return strtolower( $a );
+						}, array_values( $settings['options'] ) ),
+						array_keys( $settings['options'] ) );
+					if ( ! array_key_exists( $v, $labels ) ) {
+						return new WP_Error( 'cannot_parse', "Valeur '$v' dans '$value' non trouvée pour '$label'" );
+					} else {
+						return $labels[ $v ];
+					}
+				} else if ( ! is_array( $settings['options'] ) ) {
+					return new WP_Error( 'cannot_parse', "Valeur '$v' dans '$value' non trouvée pour '$label'" );
+				}
+
+				return $v;
+			}, explode( ',', $vs ) );
+			$errs = array_map( function ( WP_Error $err ) {
+				return $err->get_error_message();
+			},
+				array_filter( $vs, 'is_wp_error' )
+			);
+			if ( ! empty( $errs ) ) {
+				return new WP_Error( 'cannot_parse', implode( ' ; ', $errs ) );
+			}
+
+			return implode( ',', $vs );
+		};
+	} else if ( 'multidate' == $type ) {
+		return function ( $value ) use ( $label, $settings, $required ) {
+			if ( is_wp_error( $value ) ) {
+				return $value;
+			}
+			$vs   = trim( strtolower( trim( $value ) ), ',' );
+			if ( ! $required && empty( $vs ) ) {
+				return null;
+			}
+			$vs   = array_map( function ( $v ) use ( $value, $label, $settings ) {
+				try {
+					if ( is_float( $v ) || is_int( $v ) || preg_match( '/^\d+$/', strval( $v ) ) ) {
+						$dt = PHPExcel_Shared_Date::ExcelToPHP( intval( $v ) );
+					} else if ( preg_match( '/^\d{1,2}\/\d{1,2}\/\d{4}$/', $v ) ) {
+						$dt = DateTime::createFromFormat( TitanFrameworkOptionDate::$default_date_format, $v )->getTimestamp();
+					} else if ( preg_match( '/^\d{1,2}\/\d{1,2}\/\d{4} \d{2}:\d{2}$/', $v ) ) {
+						$dt = DateTime::createFromFormat( TitanFrameworkOptionDate::$default_date_format . ' ' . TitanFrameworkOptionDate::$default_time_format, $v )->getTimestamp();
+					} else if ( preg_match( '/^\d{2}:\d{2}$/', $v ) ) {
+						$dt = DateTime::createFromFormat( date( TitanFrameworkOptionDate::$default_date_format, 0 ) . ' ' . TitanFrameworkOptionDate::$default_time_format, $v )->getTimestamp();
+					} else if ( preg_match( '/^\d{1,2}-\d{1,2}-\d{2}$/', $v ) ) {
+						$dt = DateTime::createFromFormat( 'm-d-y', $v )->getTimestamp();
+					} else {
+						return new WP_Error( 'cannot_parse', "Valeur '$v' dans '$value' non valide pour '$label'" );
+					}
+
+					return date_i18n( 'd/m/Y', $dt );
+				} catch ( Exception $e ) {
+					return new WP_Error( 'cannot_parse', "Valeur '$v' dans '$value' non valide pour '$label': {$e->getMessage()}" );
+				}
+			}, explode( ',', $vs ) );
+			$errs = array_map( function ( WP_Error $err ) {
+				return $err->get_error_message();
+			},
+				array_filter( $vs, 'is_wp_error' )
+			);
+			if ( ! empty( $errs ) ) {
+				return new WP_Error( 'cannot_parse', implode( ' ; ', $errs ) );
+			}
+
+			return implode( ',', $vs );
 		};
 	}
 
@@ -545,7 +655,7 @@ function amapress_process_generate_model() {
 //            Amapress_Import_Posts_CSV::generateModel(AmapressAdhesion_intermittence::POST_TYPE, 'inscriptions_intermittents', array());
 //            break;
 		case 'generate_model_' . AmapressContrat_quantite::POST_TYPE:
-			Amapress_Import_Posts_CSV::generateModel( AmapressContrat_quantite::POST_TYPE, 'contrats_quantites', [
+			Amapress_Import_Posts_CSV::generateModel( AmapressContrat_quantite::POST_TYPE, 'contrats_config_paniers', [
 				'post_title',
 				'post_content'
 			] );
@@ -611,17 +721,6 @@ function amapress_csv_posts_produit_import_required_headers( $required_headers, 
 	return array_values( $required_headers );
 }
 
-add_filter( 'amapress_csv_posts_contrat_import_required_headers', 'amapress_csv_posts_contrat_import_required_headers', 10, 2 );
-function amapress_csv_posts_contrat_import_required_headers( $required_headers, $headers ) {
-	$required_headers = array_combine( array_values( $required_headers ), array_values( $required_headers ) );
-
-	if ( ! empty( $_REQUEST['amapress_import_contrat_default_producteur'] ) ) {
-		unset( $required_headers['amapress_contrat_producteur'] );
-	}
-
-	return array_values( $required_headers );
-}
-
 add_filter( 'amapress_csv_posts_contrat_quantite_import_required_headers', 'amapress_csv_posts_contrat_quantite_import_required_headers', 10, 2 );
 function amapress_csv_posts_contrat_quantite_import_required_headers( $required_headers, $headers ) {
 	$required_headers = array_combine( array_values( $required_headers ), array_values( $required_headers ) );
@@ -656,9 +755,6 @@ function amapress_csv_posts_adhesion_import_required_headers( $required_headers,
 	}
 	if ( ! empty( $_REQUEST['amapress_import_produit_default_producteur'] ) ) {
 		unset( $required_headers['amapress_produit_producteur'] );
-	}
-	if ( ! empty( $_REQUEST['amapress_import_contrat_default_producteur'] ) ) {
-		unset( $required_headers['amapress_contrat_producteur'] );
 	}
 
 	if ( $has_multi_quant_columns ) {
@@ -711,7 +807,10 @@ function amapress_import_resolve_post( $post, $post_type, $postdata, $postmeta )
 
 		return false;
 	}, ARRAY_FILTER_USE_BOTH );
-	$args     = array(
+	if ( empty( $tmp_meta ) ) {
+		return null;
+	}
+	$args  = array(
 		'post_type'      => amapress_unsimplify_post_type( $post_type ),
 		'posts_per_page' => - 1,
 		'meta_query'     => array(
@@ -734,7 +833,7 @@ function amapress_import_resolve_post( $post, $post_type, $postdata, $postmeta )
 			}, array_keys( $tmp_meta ), array_values( $tmp_meta ) )
 		),
 	);
-	$posts    = get_posts( $args );
+	$posts = get_posts( $args );
 
 //    var_dump($posts);
 

@@ -23,7 +23,19 @@ class Amapress {
 	}
 
 	public static function hasRespDistribRoles() {
-		return ! empty( Amapress::getOption( 'resp_role_1-name' ) );
+		for ( $i = 1; $i < 6; $i ++ ) {
+			if ( ! empty( Amapress::getOption( "resp_role_$i-name" ) ) ) {
+				return true;
+			}
+
+			foreach ( Amapress::get_lieu_ids() as $lieu_id ) {
+				if ( ! empty( Amapress::getOption( "resp_role_{$lieu_id}_$i-name" ) ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	public static function getOption( $name, $default = null ) {
@@ -143,6 +155,15 @@ class Amapress {
 		$second = DateTime::createFromFormat( 'U', $date2 );
 
 		return ceil( $first->diff( $second )->days / 7.0 );
+	}
+
+	public static function wrapIf( $content, $condition, $open_tag = 'strong' ) {
+		list( $close_tag ) = explode( ' ', $open_tag );
+		if ( $condition ) {
+			return "<$open_tag>$content</$close_tag>";
+		} else {
+			return $content;
+		}
 	}
 
 	public static function makeLink( $url, $title = null, $escape_title = true, $blank = false ) {
@@ -335,34 +356,7 @@ class Amapress {
 	}
 
 	public static function get_lieu_id( $lieu ) {
-		if ( is_numeric( $lieu ) ) {
-			return intval( $lieu );
-		}
-		$lieu_id = - 1;
-		if ( is_string( $lieu ) ) {
-			$lieu_object = get_page_by_path( $lieu, 'OBJECT', 'amps_lieu' );
-			if ( $lieu_object ) {
-				$lieu_id = $lieu_object->ID;
-			}
-		}
-
-		return $lieu_id;
-	}
-
-	public static function get_lieu_display( $lieu ) {
-		if ( is_string( $lieu ) ) {
-			$lieu_object = get_page_by_path( $lieu, 'OBJECT', 'amps_lieu' );
-			if ( $lieu_object ) {
-				return $lieu_object->post_title;
-			}
-		} else if ( is_numeric( $lieu ) ) {
-			$lieu_object = get_post( intval( $lieu ), 'amps_lieu' );
-			if ( $lieu_object ) {
-				return $lieu_object->post_title;
-			}
-		}
-
-		return $lieu;
+		return Amapress::resolve_post_id( $lieu, AmapressLieu_distribution::INTERNAL_POST_TYPE );
 	}
 
 //	public static function init_post_capabilities( $singular, $plural ) {
@@ -772,15 +766,52 @@ class Amapress {
 			'delete'  => false,
 			'publish' => true,
 		) );
-		self::add_post_role( 'producteur', 'mailing_group', 'mailing_groups', array(
+		self::add_post_role( 'producteur', 'producteur', 'producteurs', array(
 			'read'    => true,
+			'edit'    => true,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'producteur', 'contrat', 'contrats', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'producteur', 'panier', 'paniers', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'producteur', 'distribution', 'distributions', array(
+			'read'    => false,
 			'edit'    => false,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'producteur', 'mailing_group', 'mailing_groups', array(
+			'read'    => false,
+			'edit'    => false,
+			'delete'  => false,
+			'publish' => false,
+		) );
+		self::add_post_role( 'producteur', 'recette', 'recettes', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => false,
+			'publish' => true,
+		) );
+		self::add_post_role( 'producteur', 'post', 'posts', array(
+			'read'    => true,
+			'edit'    => true,
 			'delete'  => false,
 			'publish' => false,
 		) );
 
 		$r = get_role( 'producteur' );
 		$r->add_cap( 'upload_files' );
+		$r->add_cap( 'manage_contenu' );
 		if ( class_exists( 'bbPress' ) ) {
 //            $caps = bbp_get_caps_for_role(bbp_get_keymaster_role());
 //            $caps = bbp_get_caps_for_role(bbp_get_moderator_role());
@@ -1041,6 +1072,12 @@ class Amapress {
 			'delete'  => true,
 			'publish' => true,
 		) );
+		self::add_post_role( 'coordinateur_amap', 'page', 'pages', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => false,
+			'publish' => true,
+		) );
 
 		self::add_post_role( 'coordinateur_amap', 'adhesion_request', 'adhesion_requests', array(
 			'read'    => true,
@@ -1097,6 +1134,35 @@ class Amapress {
 		}
 	}
 
+	public static function init_redacteur_role() {
+		add_role( 'redacteur_amap', 'Amap Rédacteur',
+			array(
+				'read'         => true,
+				'list_users'   => false,
+				'edit_users'   => false,
+				'add_users'    => false,
+				'create_users' => false,
+				'delete_users' => false
+			) );
+
+		self::add_post_role( 'redacteur_amap', 'recette', 'recettes', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => false,
+			'publish' => true,
+		) );
+		self::add_post_role( 'redacteur_amap', 'post', 'posts', array(
+			'read'    => true,
+			'edit'    => true,
+			'delete'  => true,
+			'publish' => true,
+		) );
+
+		$r = get_role( 'redacteur_amap' );
+		$r->add_cap( 'manage_contenu' );
+		$r->add_cap( 'upload_files' );
+	}
+
 	public static function init_responsable_role() {
 		add_role( 'responsable_amap', 'Amap Responsable',
 			array(
@@ -1115,7 +1181,7 @@ class Amapress {
 			'read'    => true,
 			'edit'    => true,
 			'delete'  => false,
-			'publish' => false,
+			'publish' => true,
 		) );
 		self::add_post_role( 'responsable_amap', 'contrat', 'contrats', array(
 			'read'    => true,
@@ -1451,7 +1517,7 @@ class Amapress {
 			'read'    => true,
 			'edit'    => true,
 			'delete'  => false,
-			'publish' => false,
+			'publish' => true,
 		) );
 
 		self::add_post_role( 'referent', 'adhesion_request', 'adhesion_requests', array(
@@ -1616,10 +1682,10 @@ class Amapress {
 				'slug' => 'categorie-produits',
 			),
 			'capabilities'      => array(
-				'manage_terms' => 'manage_categories',
-				'edit_terms'   => 'manage_categories',
-				'delete_terms' => 'manage_categories',
-				'assign_terms' => 'edit_posts',
+				'manage_terms' => 'publish_produit',
+				'edit_terms'   => 'publish_produit',
+				'delete_terms' => 'publish_produit',
+				'assign_terms' => 'edit_produits',
 			),
 		) );
 	}
@@ -1633,10 +1699,10 @@ class Amapress {
 				'slug' => 'categorie-recettes',
 			),
 			'capabilities'      => array(
-				'manage_terms' => 'manage_categories',
-				'edit_terms'   => 'manage_categories',
-				'delete_terms' => 'manage_categories',
-				'assign_terms' => 'edit_posts',
+				'manage_terms' => 'publish_recette',
+				'edit_terms'   => 'publish_recette',
+				'delete_terms' => 'publish_recette',
+				'assign_terms' => 'edit_recettes',
 			),
 		) );
 	}
@@ -1655,6 +1721,7 @@ class Amapress {
 		self::init_producteur_role();
 		self::init_responsable_role();
 		self::init_coordinateur_role();
+		self::init_redacteur_role();
 		self::init_tresorier_role();
 		self::init_referent_role();
 		self::init_amapien_role();
@@ -2175,9 +2242,9 @@ class Amapress {
 		$ret = preg_replace( '/amapress_producteur_referent_(\d+)&#039;/', 'amapress_producteur_referent_\'. $this->posts[\'$1\']', $ret );
 		$ret = preg_replace( '/amapress_contrat_referent_(\d+)&#039;/', 'amapress_contrat_referent_\'. $this->posts[\'$1\']', $ret );
 
-//		foreach ( $media as $k => $v ) {
-//			$ret = "\$this->medias['$k'] = '$v';\n" . $ret;
-//		}
+		foreach ( $media as $k => $v ) {
+			$ret = "\$this->medias['$k'] = '$v';\n" . $ret;
+		}
 
 		return $ret;
 	}
@@ -2225,14 +2292,19 @@ class Amapress {
 			if ( in_array( "u$id", $generated_ids ) ) {
 				return '';
 			}
-			$generated_ids[]           = "u$id";
-			$user                      = get_user_by( 'ID', $id );
+			$generated_ids[] = "u$id";
+			$user            = get_user_by( 'ID', $id );
+			if ( ! $user ) {
+				return '';
+			}
 			$user_meta                 = array_map( function ( $v ) {
 				if ( is_array( $v ) ) {
 					if ( count( $v ) > 1 ) {
 						return $v;
-					} else {
+					} else if ( isset( $v[0] ) ) {
 						return $v[0];
+					} else {
+						return array_shift( $v );
 					}
 				} else {
 					return $v;
@@ -2313,7 +2385,10 @@ class Amapress {
 
 			$generated_ids[] = "p$id";
 			$post            = get_post( $id, ARRAY_A );
-			$post_meta       = get_post_custom( $id );
+			if ( ! is_array( $post ) ) {
+				return '';
+			}
+			$post_meta = get_post_custom( $id );
 			if ( empty( $post_meta ) ) {
 				$post_meta = array();
 			}
@@ -2335,8 +2410,8 @@ class Amapress {
 				if ( ( ! in_array( $k, $field_names ) && strpos( $k, 'amapress_' ) !== 0 ) || empty( $v ) ) {
 					continue;
 				}
-				if ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type']
-				     || 'multicheck-users' == $fields[ $k ]['type'] || 'multicheck-posts' == $fields[ $k ]['type'] ) {
+				if ( isset( $fields[ $k ] ) && ( 'select-users' == $fields[ $k ]['type'] || 'select-posts' == $fields[ $k ]['type']
+				                                 || 'multicheck-users' == $fields[ $k ]['type'] || 'multicheck-posts' == $fields[ $k ]['type'] ) ) {
 					$vs = [];
 					foreach ( Amapress::get_array( $v ) as $sub_id ) {
 						$ret = self::generate_test( intval( $sub_id ),
@@ -2354,7 +2429,7 @@ class Amapress {
 					} else {
 						$v = $vs;
 					}
-				} else if ( '_thumbnail_id' == $k || 'upload' == $fields[ $k ]['type'] ) {
+				} else if ( '_thumbnail_id' == $k || isset( $fields[ $k ] ) && ( 'upload' == $fields[ $k ]['type'] ) ) {
 					if ( is_array( $v ) ) {
 						$v = array_shift( $v );
 					}
@@ -2378,13 +2453,15 @@ class Amapress {
 					} else {
 						$v = 0;
 					}
-				} else if ( 'multidate' == $fields[ $k ]['type'] ) {
+				} else if ( isset( $fields[ $k ] ) && 'multidate' == $fields[ $k ]['type'] ) {
 					$v = 'implode(", ", [' . implode( ', ', array_map( function ( $d ) use ( $relative_time ) {
 							return 'date_i18n("d/m/Y", $now+' . ( intval( $d ) - Amapress::start_of_day( $relative_time ) ) . ')';
 						}, array_map(
 							'TitanEntity::to_date',
 							TitanEntity::get_array( $v ) ) ) ) . '])¤';
-				} else if ( 'date' == $fields[ $k ]['type'] ) {
+				} else if ( isset( $fields[ $k ] )
+				            && ( 'date' == $fields[ $k ]['type']
+				                 || 'amapress_panier_date_subst' == $k ) ) {
 					$v = 'now+' . ( intval( $v ) - Amapress::start_of_day( $relative_time ) );
 				}
 				$filtered_post_meta[ $k ] = $v;
@@ -2506,6 +2583,23 @@ class Amapress {
 
 		$m = self::getTitanInstance()->createMetaBox(
 			array(
+				'name'        => 'Amapress Aide',
+				'context'     => 'side',
+				'priority'    => 'high',
+				'post_type'   => $post_types,
+				'show_column' => false,
+			)
+		);
+		$m->createOption(
+			array(
+				'id'   => 'amps_sc_edit_help',
+				'type' => 'note',
+				'desc' => 'Accéder à <a href="' . admin_url( 'admin.php?page=amapress_help_page&tab=shortcodes' ) . '" target="_blank">l\'aide des shortcodes</a>',
+			)
+		);
+
+		$m = self::getTitanInstance()->createMetaBox(
+			array(
 				'name'             => 'Amapress Protection',
 				'context'          => 'side',
 				'priority'         => 'high',
@@ -2528,10 +2622,12 @@ class Amapress {
 				'bare_id'     => true,
 				'name'        => amapress__( 'Rediriger non connectés vers' ),
 				'type'        => 'select-pages',
-				'desc'        => 'Rediriger les amapiens non connectés vers',
+				'desc'        => 'Laisser vide pour rediriger vers la page de connexion ou rediriger vers une page spécifique',
 				'show_column' => false,
 			)
 		);
+
+
 //        var_dump(count($m->options));
 	}
 
@@ -2636,14 +2732,14 @@ class Amapress {
 	/**
 	 * Disable the quick edit row action
 	 *
+	 * @param array $actions list of available row actions
+	 *
+	 * @return array           the new list
+	 * @since 2.0.0
+	 *
 	 * @package WP Idea Stream
 	 * @subpackage admin/admin
 	 *
-	 * @since 2.0.0
-	 *
-	 * @param  array $actions list of available row actions
-	 *
-	 * @return array           the new list
 	 */
 	public static function amapress_row_actions( $actions = array(), $post = null ) {
 		$types = AmapressEntities::getPostTypes();
@@ -2667,7 +2763,7 @@ class Amapress {
 		 * want to test, just return true to this filter
 		 * eg: add_filter( 'wp_idea_stream_admin_ideas_inline_edit', '__return_true' );
 		 *
-		 * @param  bool true to allow inline edit, false otherwise (default is false)
+		 * @param bool true to allow inline edit, false otherwise (default is false)
 		 */
 		$keep_inline_edit = apply_filters( "amapress_admin_{$pt}_inline_edit",
 			isset( $type['quick_edit'] ) && $type['quick_edit'] === true );
@@ -2723,6 +2819,7 @@ class Amapress {
 		global $pagenow;
 		if ( 'customize.php' != $pagenow ) {
 			wp_enqueue_script( 'datatable', plugin_dir_url( __FILE__ ) . 'js/datatables.min.js', array( 'jquery' ), true );
+			wp_enqueue_script( 'datatable-row-print-btn', plugin_dir_url( __FILE__ ) . 'js/dt.rowgroup.print.js', array( 'datatable' ), true );
 			wp_enqueue_style( 'datatable', plugin_dir_url( __FILE__ ) . 'css/datatables.min.css' );
 		}
 
@@ -2758,7 +2855,7 @@ class Amapress {
 
 		wp_enqueue_script( 'clipboard', plugin_dir_url( __FILE__ ) . 'js/clipboard.min.js', array( 'jquery' ) );
 		//
-		wp_enqueue_script( 'isotope', 'https://unpkg.com/isotope-layout@3/dist/isotope.pkgd.min.js', array( 'jquery' ) );
+		wp_enqueue_script( 'isotope', plugin_dir_url( __FILE__ ) . 'js/isotope.pkgd.min.js', array( 'jquery' ) );
 		wp_enqueue_script( 'slick', plugin_dir_url( __FILE__ ) . 'js/slick/slick.min.js', array( 'jquery' ) );
 		wp_enqueue_style( 'slick', plugin_dir_url( __FILE__ ) . 'css/slick/slick.css' );
 		wp_enqueue_style( 'slick-theme', plugin_dir_url( __FILE__ ) . 'css/slick/slick-theme.css', array( 'slick' ) );
@@ -2777,10 +2874,11 @@ class Amapress {
 			'fullcalendar'
 		) );
 
-		wp_enqueue_script( 'leaflet', 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.js' );
-		wp_enqueue_style( 'leaflet', 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.css' );
+		wp_enqueue_script( 'leaflet', plugin_dir_url( __FILE__ ) . 'js/leaflet.js' );
+		wp_enqueue_style( 'leaflet', plugin_dir_url( __FILE__ ) . 'css/leaflet.css' );
 
 		wp_enqueue_script( 'datatable', plugin_dir_url( __FILE__ ) . 'js/datatables.min.js', array( 'jquery' ), true );
+		wp_enqueue_script( 'datatable-row-print-btn', plugin_dir_url( __FILE__ ) . 'js/dt.rowgroup.print.js', array( 'datatable' ), true );
 		wp_enqueue_style( 'datatable', plugin_dir_url( __FILE__ ) . 'css/datatables.min.css' );
 		wp_enqueue_script( 'amapress-front', plugins_url( '/js/front.js?v=' . $plugin_version, __FILE__ ), array( 'jquery' ), true );
 		wp_localize_script( 'amapress-front', 'amapress', array( 'ajax_url' => admin_url( 'admin-ajax.php' ) ) );
@@ -3226,12 +3324,36 @@ class Amapress {
 			$item = new stdClass();
 
 			$item->object_id        = $i ++;
+			$item->ID               = 0;
 			$item->db_id            = 0;
+			$item->post_parent      = 0;
 			$item->object           = 'archive_' . $post_type;
 			$item->menu_item_parent = 0;
 			$item->type             = 'amapress-custom';
+			$item->type_label       = __( 'Archives', 'amapress' );
 			$item->title            = $post_conf['plural'];
-			$item->url              = get_post_type_archive_link( $post_type );
+			$item->url              = get_post_type_archive_link( amapress_unsimplify_post_type( $post_type ) );
+			$item->target           = '';
+			$item->attr_title       = '';
+			if ( empty( $item->classes ) ) {
+				$item->classes = array();
+			}
+			$item->xfn = '';
+
+			$items[] = $item;
+
+			$item = new stdClass();
+
+			$item->object_id        = $i ++;
+			$item->ID               = 0;
+			$item->db_id            = 0;
+			$item->object           = 'latest_' . $post_type;
+			$item->post_parent      = 0;
+			$item->menu_item_parent = 0;
+			$item->type             = 'amapress-custom-latest';
+			$item->title            = 'Derniers ' . $post_conf['plural'];
+			$item->type_label       = __( 'Récents', 'amapress' );
+			$item->url              = get_post_type_archive_link( amapress_unsimplify_post_type( $post_type ) );
 			$item->target           = '';
 			$item->attr_title       = '';
 			if ( empty( $item->classes ) ) {
@@ -3242,13 +3364,36 @@ class Amapress {
 			$items[] = $item;
 		}
 
+		$item = new stdClass();
+
+		$item->object_id        = $i ++;
+		$item->ID               = 0;
+		$item->db_id            = 0;
+		$item->object           = 'latest_post';
+		$item->menu_item_parent = 0;
+		$item->post_parent      = 0;
+		$item->type             = 'amapress-custom-latest';
+		$item->title            = __( 'Derniers articles', 'amapress' );
+		$item->type_label       = __( 'Derniers articles', 'amapress' );
+		$item->url              = get_post_type_archive_link( 'post' );
+		$item->target           = '';
+		$item->attr_title       = '';
+		if ( empty( $item->classes ) ) {
+			$item->classes = array();
+		}
+		$item->xfn = '';
+
+		$items[] = $item;
+
 		foreach ( AmapressEntities::$special_pages as $post_type => $post_conf ) {
 			$item = new stdClass();
 
 			$item->object_id        = $i ++;
+			$item->ID               = 0;
 			$item->db_id            = 0;
 			$item->object           = 'amapress_link_' . trim( $post_type, '/' );
 			$item->menu_item_parent = 0;
+			$item->post_parent      = 0;
 			$item->type             = 'amapress-custom-link';
 			$item->title            = $post_conf['name'];
 			$item->url              = $post_type;
@@ -3301,6 +3446,9 @@ class Amapress {
 
 	/* take care of the urls */
 	public static function amapress_menu_filter( $items, $menu, $args ) {
+		$menu_order = count( $items ); /* Offset menu order */
+		$i          = 20000;
+
 		/* alter the URL for cpt-archive objects */
 		foreach ( $items as &$item ) {
 			//var_dump($item->type);
@@ -3308,7 +3456,15 @@ class Amapress {
 
 				foreach ( AmapressEntities::getPostTypes() as $post_type => $post_conf ) {
 					if ( $item->object == 'archive_' . $post_type ) {
-						$item->url = get_post_type_archive_link( $post_type );
+						$item->url = get_post_type_archive_link( amapress_unsimplify_post_type( $post_type ) );
+						break;
+					}
+				}
+			} else if ( $item->type == 'amapress-custom-latest' && ! is_admin() ) {
+				$types = array_merge( [ 'post' ], array_keys( AmapressEntities::getPostTypes() ) );
+				foreach ( $types as $post_type ) {
+					if ( $item->object == 'latest_' . $post_type ) {
+						$item->url = get_post_type_archive_link( amapress_unsimplify_post_type( $post_type ) );
 						break;
 					}
 				}
@@ -3327,6 +3483,69 @@ class Amapress {
 				$item->current    = true;
 			}
 		}
+
+		$child_items = array();
+		foreach ( $items as &$item ) {
+			if ( $item->type == 'amapress-custom-latest' && ! is_admin() ) {
+				$types = array_merge( [ 'post' ], array_keys( AmapressEntities::getPostTypes() ) );
+				foreach ( $types as $post_type ) {
+					if ( $item->object == 'latest_' . $post_type ) {
+						if ( ! is_customize_preview() ) {
+							$pt    = AmapressEntities::getPostType( $post_type );
+							$query = [
+								'post_type'      => amapress_unsimplify_post_type( $post_type ),
+								'posts_per_page' => 10,
+								'amapress_date'  => 'active'
+							];
+							if ( isset( $pt ) ) {
+								if ( isset( $pt['default_orderby'] ) ) {
+									$default_orderby = $pt['default_orderby'];
+									if ( false !== strpos( $default_orderby, 'amapress_' ) ) {
+										$query['orderby']  = 'meta_value_num';
+										$query['meta_key'] = $default_orderby;
+									} else {
+										$query['orderby'] = 'meta_value_num';
+									}
+								}
+								if ( isset( $pt['default_order'] ) ) {
+									$query['order'] = $pt['default_order'];
+								}
+							}
+							foreach (
+								get_posts( $query ) as $post
+							) {
+								$subitem                   = new stdClass();
+								$subitem->object_id        = $i ++;
+								$subitem->ID               = 0;
+								$subitem->db_id            = 0;
+								$subitem->post_parent      = 0;
+								$subitem->menu_item_parent = $item->ID;
+								$subitem->post_type        = 'nav_menu_item';
+								$subitem->object           = 'custom';
+								$subitem->type             = 'custom';
+								$subitem->menu_order       = ++ $menu_order;
+								$subitem->title            = $post->post_title;
+								$subitem->url              = get_permalink( $post->ID );
+								$subitem->target           = '';
+								$subitem->attr_title       = '';
+								if ( empty( $post->classes ) ) {
+									$subitem->classes = array();
+								}
+								$subitem->xfn = '';
+								/* add children */
+								$child_items [] = $subitem;
+							}
+						}
+						break;
+					}
+				}
+			}
+
+			if ( empty( $item->url ) ) {
+				$item->url = '#';
+			}
+		}
+		$items = array_merge( $items, $child_items );
 
 		return $items;
 	}
@@ -3586,7 +3805,7 @@ class Amapress {
 		$id_counter ++;
 
 		$final = [];
-		foreach ( amapress_replace_mail_placeholders_help( $prop_type_desc, $for_mail, $for_mail ) as $prop_name => $prop_desc ) {
+		foreach ( amapress_replace_mail_placeholders_help( $prop_type_desc, true === $for_mail, true === $for_mail ) as $prop_name => $prop_desc ) {
 			$final[ $prop_name ] = $prop_desc;
 		}
 		foreach ( $helps as $prop_name => $prop_desc ) {
@@ -3601,15 +3820,15 @@ class Amapress {
 		if ( $show_toggler ) {
 			$ret .= '<p>Consulter les <a href="#" id="show_' . $id . '">marqueurs de substitution</a> disponibles (%%xxx%%)</p>';
 		}
-		$ret .= '<table id="' . $id . '" class="placeholders-help"><thead><tr><th>Placeholder</th><th>Description</th></tr></thead><tbody>' .
+		$ret .= '<div id="' . $id . '-container"><table id="' . $id . '" class="placeholders-help display"><thead><tr><th>Placeholder</th><th>Description</th></tr></thead><tbody>' .
 		        implode( '', array_map( function ( $pn, $p ) use ( $marker_start, $marker_end ) {
 			        return '<tr><td>' . $marker_start . esc_html( $pn ) . $marker_end . '</td><td>' . esc_html( $p ) . '</td></tr>';
 		        }, array_keys( $final ), array_values( $final ) ) )
-		        . '</tbody></table>';
+		        . '</tbody></table></div>';
 
 		if ( $show_toggler ) {
-			$ret .= '<style>#' . $id . ' { display: none; }#' . $id . '.opened { display: block; }</style>';
-			$ret .= '<script type="text/javascript">jQuery(function() {jQuery("#' . $id . '").addClass("closed");jQuery("#show_' . $id . '").click(function() { jQuery("#' . $id . '").toggleClass("opened"); return false; }); });</script>';
+			$ret .= '<style>#' . $id . '-container { display: none; }#' . $id . '-container.opened { display: block; }</style>';
+			$ret .= '<script type="text/javascript">jQuery(function($) {$("#' . $id . '-container").addClass("closed");$("#show_' . $id . '").click(function() { $("#' . $id . '-container").toggleClass("opened"); return false; }); });</script>';
 		}
 
 		return $ret;
@@ -3655,8 +3874,35 @@ class Amapress {
 		return $filename;
 	}
 
-	public static function getContratGenericUrl() {
-		return trailingslashit( AMAPRESS__PLUGIN_URL ) . 'templates/contrat_generique.docx';
+	public static function getContratGenericUrl( $type = 'default' ) {
+		switch ( $type ) {
+			case 'modulables':
+				return trailingslashit( AMAPRESS__PLUGIN_URL ) . 'templates/contrat_generique_modulables.docx';
+			case 'simple':
+				return trailingslashit( AMAPRESS__PLUGIN_URL ) . 'templates/contrat_generique_simple.docx';
+			default:
+				return trailingslashit( AMAPRESS__PLUGIN_URL ) . 'templates/contrat_generique.docx';
+		}
+	}
+
+	public static function getBulletinGenericUrl() {
+		return trailingslashit( AMAPRESS__PLUGIN_URL ) . 'templates/bulletin_adhesion_generique.docx';
+	}
+
+	public static function cleanFilesOlderThanDays( $dir, $days ) {
+		$files = glob( trailingslashit( $dir ) . "*" );
+		$now   = time();
+
+		foreach ( $files as $file ) {
+			if ( is_file( $file ) ) {
+				$filename = basename( $file );
+				if ( 'index.php' != $filename && '.htaccess' != $filename ) {
+					if ( $now - filemtime( $file ) >= 60 * 60 * 24 * $days ) { // 2 days
+						@unlink( $file );
+					}
+				}
+			}
+		}
 	}
 
 	public static function getArchivesDir() {
@@ -3801,12 +4047,16 @@ class Amapress {
 		return self::get_page_with_shortcode_href( 'inscription-distrib', 'amp_inscr_distrib_href' );
 	}
 
+	public static function get_mes_contrats_page_href() {
+		return self::get_page_with_shortcode_href( 'mes-contrats', 'amp_mes_contrats_href' );
+	}
+
 	public static function get_pre_inscription_page_href() {
 		return self::get_page_with_shortcode_href( 'inscription-en-ligne', 'amp_preinscr_href' );
 	}
 
-	public static function formatPrice( $number ) {
-		return number_format( floatval( $number ), 2, ',', ' ' );
+	public static function formatPrice( $number, $with_unit = false ) {
+		return number_format( floatval( $number ), 2, ',', ' ' ) . ( $with_unit ? '€' : '' );
 	}
 
 	public static function rename_roles() {
@@ -3821,6 +4071,7 @@ class Amapress {
 			'producteur'        => 'Amap Producteur',
 			'tresorier'         => 'Amap Trésorier',
 			'coordinateur_amap' => 'Amap Coordinateur',
+			'redacteur_amap'    => 'Amap Rédacteur',
 			'responsable_amap'  => 'Amap Responsable',
 			'referent'          => 'Amap Référent producteur',
 		];
@@ -3916,5 +4167,51 @@ class Amapress {
 
 			return $filename;
 		}
+	}
+
+	public static function updateLocalisation( $postID, $is_user, $root_meta_name, $address_content ) {
+		$save_fn   = $is_user ? 'update_user_meta' : 'update_post_meta';
+		$delete_fn = $is_user ? 'delete_user_meta' : 'delete_post_meta';
+		if ( $is_user ) {
+			$root_meta_name = 'amapress_user';
+		}
+
+		$address = TitanFrameworkOptionAddress::lookup_address( $address_content );
+		if ( $address && ! is_wp_error( $address ) ) {
+			call_user_func( $save_fn, $postID, "{$root_meta_name}_long", $address['longitude'] );
+			call_user_func( $save_fn, $postID, "{$root_meta_name}_lat", $address['latitude'] );
+			call_user_func( $save_fn, $postID, "{$root_meta_name}_location_type", $address['location_type'] );
+			call_user_func( $delete_fn, $postID, "{$root_meta_name}_loc_err" );
+
+			return true;
+		} else {
+			call_user_func( $delete_fn, $postID, "{$root_meta_name}_long" );
+			call_user_func( $delete_fn, $postID, "{$root_meta_name}_lat" );
+			call_user_func( $delete_fn, $postID, "{$root_meta_name}_location_type" );
+			if ( is_wp_error( $address ) ) {
+				/** @var WP_Error $address */
+				call_user_func( $save_fn, $postID, "{$root_meta_name}_loc_err", $address->get_error_message() );
+			} else {
+				call_user_func( $delete_fn, $postID, "{$root_meta_name}_loc_err" );
+			}
+
+			return false;
+		}
+	}
+
+	public static function isHtmlEmpty( $html ) {
+		return empty( trim( wp_strip_all_tags( $html, true ) ) );
+	}
+
+	public static function getSiteDomainName( $tld = false ) {
+		$domain = parse_url( home_url() )['host'];
+
+		if ( $tld ) {
+			//get the TLD and domain
+			$domainparts = explode( ".", $domain );
+			$domain      = $domainparts[ count( $domainparts ) - 2 ] . "." . $domainparts[ count( $domainparts ) - 1 ];
+		}
+
+		return $domain;
 	}
 }

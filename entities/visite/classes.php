@@ -151,7 +151,7 @@ class AmapressVisite extends Amapress_EventBase {
 					'ev_id'    => "visite-{$this->ID}-resp",
 					'date'     => $date,
 					'date_end' => $date_end,
-					'class'    => "agenda-visite",
+					'class'    => "agenda-visite agenda-inscrit-visite visit_prod_" . $producteur->ID,
 					'type'     => 'visite',
 					'category' => 'Visites',
 					'priority' => 90,
@@ -166,14 +166,14 @@ class AmapressVisite extends Amapress_EventBase {
 					'ev_id'    => "visite-{$this->ID}",
 					'date'     => $date,
 					'date_end' => $date_end,
-					'class'    => "agenda-inscription-visite",
+					'class'    => "agenda-visite agenda-inscription-visite visit_prod_" . $producteur->ID,
 					'type'     => 'visite',
 					'category' => 'Visites',
 					'priority' => 95,
 					'lieu'     => $producteur,
 					'label'    => 'Visite ' . $producteur->getTitle(),
 					'icon'     => 'flaticon-sprout',
-					'alt'      => 'Une vsite est prévue à la ferme le ' . date_i18n( 'd/m/Y', $date ),
+					'alt'      => 'Une visite est prévue à la ferme le ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => $this->getPermalink()
 				) );
 			}
@@ -182,9 +182,10 @@ class AmapressVisite extends Amapress_EventBase {
 		return $ret;
 	}
 
-	public static function getPlaceholdersHelp( $additional_helps = [] ) {
+	public static function getPlaceholdersHelp( $additional_helps = [], $for_recall = true ) {
 		return Amapress::getPlaceholdersHelpTable( 'visite-placeholders',
-			Amapress::getPlaceholdersHelpForProperties( self::getProperties() ), 'de la distribution', $additional_helps );
+			Amapress::getPlaceholdersHelpForProperties( self::getProperties() ), 'de la distribution',
+			$additional_helps, $for_recall ? 'recall' : true );
 	}
 
 	public static function getRespVisitesEmails( $lieu_id ) {

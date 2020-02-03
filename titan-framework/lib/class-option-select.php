@@ -116,7 +116,11 @@ class TitanFrameworkOptionSelect extends TitanFrameworkOption {
 			$titles[] = $this->getArchived( $v );
 		}
 
-		echo implode( ',', $titles );
+		if ( empty( $titles ) && isset( $this->settings['empty_column_text'] ) ) {
+			echo $this->settings['empty_column_text'];
+		} else {
+			echo implode( ', ', $titles );
+		}
 	}
 
 	public
@@ -208,7 +212,7 @@ class TitanFrameworkOptionSelect extends TitanFrameworkOption {
 		$options = null, $post_id = null
 	) {
 		$multiple = isset( $this->settings['multiple'] ) && true == $this->settings['multiple'] ? 'multiple' : '';
-		$name     = $this->getID();
+		$name     = $this->getInputName();
 		$val      = $this->getValue( $post_id );
 		if ( ! is_array( $val ) ) {
 			$val = array( $val );
@@ -348,7 +352,7 @@ class TitanFrameworkOptionSelect extends TitanFrameworkOption {
     });';
 				echo '<script type="text/javascript">
 //<![CDATA[
-jQuery(function() {
+jQuery(function($) {
     ' . $init_select . '
 });
 //]]>
@@ -357,15 +361,15 @@ jQuery(function() {
 
 			echo '<script type="text/javascript">
 //<![CDATA[
-jQuery(function() {
-    jQuery("#' . $this->getID() . '-refresh").click(
+jQuery(function($) {
+    $("#' . $this->getID() . '-refresh").click(
         function() {
         	var data = {
 		    	\'action\': \'tf_select_refresh_' . $this->getID() . '\',
 		    	\'post_id\': \'' . $this->getPostID() . '\'
 	    	};
-        	jQuery.post(ajaxurl, data, function(response) {
-                jQuery("#' . $this->getID() . '-wrapper").html(response);
+        	$.post(ajaxurl, data, function(response) {
+                $("#' . $this->getID() . '-wrapper").html(response);
             	' . $init_select . '
         	});
         	return false;

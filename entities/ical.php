@@ -74,16 +74,39 @@ class Amapress_Agenda_ICAL_Export {
 		add_feed( 'agenda-ical', array( __CLASS__, 'export_events' ) );
 	}
 
-	public static function get_link_href( $public_ics = false ) {
+	public static function get_link_href( $public_ics = false, $since_days = 30 ) {
 		$lnk = get_feed_link( 'agenda-ical' );
 		if ( ! $public_ics && amapress_is_user_logged_in() ) {
 			$user = AmapressUser::getBy( amapress_current_user_id() );
 
-			return $user->addUserLoginKey( $lnk );
+			return add_query_arg( 'since_days', $since_days, $user->addUserLoginKey( $lnk ) );
 		} else {
-			return add_query_arg( 'public', '', $lnk );
+			return add_query_arg( [ 'public' => '', 'since_days' => $since_days ], $lnk );
 		}
 	}
+
+	private static function timezone_offset_seconds( $timestamp = 0 ) {
+		if ( ! $timezone_string = get_option( 'timezone_string' ) ) {
+			return get_option( 'gmt_offset' ) * HOUR_IN_SECONDS;
+		}
+
+		$timezone_object = timezone_open( $timezone_string );
+		if ( ! $timezone_object ) {
+			return get_option( 'gmt_offset' ) * HOUR_IN_SECONDS;
+		}
+
+		$datetime_object = new DateTime();
+		if ( $timestamp ) {
+			$datetime_object->setTimestamp( $timestamp );
+		}
+
+		return round( timezone_offset_get( $timezone_object, $datetime_object ), 2 );
+	}
+
+	private static function toUTCString( $timestamp ) {
+		return gmdate( 'Ymd\THis\Z', $timestamp - self::timezone_offset_seconds( $timestamp ) );
+	}
+
 
 	/**
 	 * Creates an ICAL file of events in the database
@@ -108,7 +131,13 @@ class Amapress_Agenda_ICAL_Export {
 			$all_events = Amapress_Calendar::get_events( $events_id );
 		} else {
 			$filename   = urlencode( 'agenda-ical-' . date( 'Y-m-d-H-i' ) . '.ics' );
-			$all_events = Amapress_Calendar::get_next_events();
+			$date       = amapress_time();
+			$since_days = 30;
+			if ( ! empty( $_GET['since_days'] ) ) {
+				$since_days = intval( $_GET['since_days'] );
+			}
+			$date       = Amapress::add_days( $date, - $since_days );
+			$all_events = Amapress_Calendar::get_next_events( $date );
 		}
 
 		foreach ( $all_events as $ev ) {
@@ -135,17 +164,20 @@ class Amapress_Agenda_ICAL_Export {
 		echo "X-WR-CALNAME:" . self::ical_split( 'X-WR-CALNAME:', get_bloginfo( 'name' ) ) . " - Agenda\n";
 		echo "X-WR-TIMEZONE:" . self::ical_split( 'X-WR-TIMEZONE:', self::getTimezoneString() ) . "\n";
 
-		$offset = get_option( 'gmt_offset' ) * 3600;
+		date_default_timezone_set( "UTC" );
 		foreach ( $events as $event ) {
+			/** @var Amapress_EventEntry $event */
 			$uid               = md5( $event->getEventId() );                                           //Universal unique ID
 			$title             = $event->getLabel();
 			$url               = $event->getLink();
 			$desc              = $event->getAlt();
 			$categories        = $event->getCategory();
-			$dtstamp           = gmdate( 'Ymd\THis\Z', current_time( 'timestamp' ) - $offset );                  //date stamp for now.
-			$created_date      = gmdate( 'Ymd\THis\Z', $event->getStartDate() - $offset );    //time event created
-			$start_date        = gmdate( 'Ymd\THis\Z', $event->getStartDate() - $offset );      //event start date
-			$end_date          = gmdate( 'Ymd\THis\Z', $event->getEndDate() - $offset );    //event end date
+			$css               = $event->getClass();
+			$icon              = $event->getIcon();
+			$dtstamp           = self::toUTCString( current_time( 'timestamp' ) );                  //date stamp for now.
+			$created_date      = self::toUTCString( $event->getStartDate() );    //time event created
+			$start_date        = self::toUTCString( $event->getStartDate() );      //event start date
+			$end_date          = self::toUTCString( $event->getEndDate() );    //event end date
 			$reoccurrence_rule = false;                                       //event reoccurrence rule.
 			$location          = $event->getLieu()->getLieuTitle();                          //event location
 			$organiser         = get_bloginfo( 'name' );                                //event organiser
@@ -158,6 +190,10 @@ class Amapress_Agenda_ICAL_Export {
 			echo "CREATED:" . $created_date . "\n";
 			echo "DTSTART:" . $start_date . "\n";
 			echo "DTEND:" . $end_date . "\n";
+			echo "X-AMPS-CSS:" . self::ical_split( 'X-AMPS-CSS:', $css ) . "\n";
+			if ( ! empty( $icon ) && strpos( $icon, '/' ) !== false && strpos( $icon, '<' ) !== 0 ) {
+				echo "X-AMPS-ICON:" . self::ical_split( 'X-AMPS-ICON:', $icon ) . "\n";
+			}
 			if ( $reoccurrence_rule ) {
 				echo "RRULE:" . $reoccurrence_rule . "\n";
 			}

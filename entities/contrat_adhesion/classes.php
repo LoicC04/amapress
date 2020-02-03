@@ -235,25 +235,25 @@ class AmapressAdhesion extends TitanEntity {
 			$ret['date_debut_lettre']                = [
 				'desc' => 'Date début du contrat (par ex, 22 septembre 2018)',
 				'func' => function ( AmapressAdhesion $adh ) {
-					return date_i18n( 'j M Y', $adh->getDate_debut() );
+					return date_i18n( 'j F Y', $adh->getDate_debut() );
 				}
 			];
 			$ret['date_fin_lettre']                  = [
 				'desc' => 'Date fin du contrat (par ex, 22 septembre 2018)',
 				'func' => function ( AmapressAdhesion $adh ) {
-					return date_i18n( 'j M Y', $adh->getDate_fin() );
+					return date_i18n( 'j F Y', $adh->getDate_fin() );
 				}
 			];
 			$ret['date_debut_complete']              = [
 				'desc' => 'Date début du contrat (par ex, jeudi 22 septembre 2018)',
 				'func' => function ( AmapressAdhesion $adh ) {
-					return date_i18n( 'l j M Y', $adh->getDate_debut() );
+					return date_i18n( 'l j F Y', $adh->getDate_debut() );
 				}
 			];
 			$ret['date_fin_complete']                = [
 				'desc' => 'Date fin du contrat (par ex, jeudi 22 septembre 2018)',
 				'func' => function ( AmapressAdhesion $adh ) {
-					return date_i18n( 'l j M Y', $adh->getDate_fin() );
+					return date_i18n( 'l j F Y', $adh->getDate_fin() );
 				}
 			];
 			$ret['mention_speciale'] = [
@@ -289,6 +289,22 @@ class AmapressAdhesion extends TitanEntity {
 							}
 
 							return $ref->getDisplayName() . '(' . $ref->getEmail() . ')';
+						},
+						$adh->getContrat_instance()->getModel()->getReferentsIds()
+					) ) );
+				}
+			];
+			$ret['tous_referents_contacts'] = [
+				'desc' => 'Nom des référents du contrat avec contacts',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return implode( ', ', array_unique( array_map(
+						function ( $ref_id ) {
+							$ref = AmapressUser::getBy( $ref_id );
+							if ( empty( $ref ) ) {
+								return '';
+							}
+
+							return $ref->getDisplayName() . '(' . $ref->getEmail() . '/' . $ref->getTelTo( 'both', false, false, '/' ) . ')';
 						},
 						$adh->getContrat_instance()->getModel()->getReferentsIds()
 					) ) );
@@ -332,6 +348,22 @@ class AmapressAdhesion extends TitanEntity {
 					) ) );
 				}
 			];
+			$ret['referents_contacts'] = [
+				'desc' => 'Nom des référents du contrat avec contacts',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return implode( ', ', array_unique( array_map(
+						function ( $ref_id ) {
+							$ref = AmapressUser::getBy( $ref_id );
+							if ( empty( $ref ) ) {
+								return '';
+							}
+
+							return $ref->getDisplayName() . '(' . $ref->getEmail() . '/' . $ref->getTelTo( 'both', false, false, '/' ) . ')';
+						},
+						$adh->getContrat_instance()->getModel()->getReferentsIds( $adh->getLieuId() )
+					) ) );
+				}
+			];
 			$ret['adherent']                         = [
 				'desc' => 'Prénom Nom adhérent',
 				'func' => function ( AmapressAdhesion $adh ) {
@@ -360,6 +392,24 @@ class AmapressAdhesion extends TitanEntity {
 				'desc' => 'Adresse adhérent',
 				'func' => function ( AmapressAdhesion $adh ) {
 					return $adh->getAdherent()->getFormattedAdresse();
+				}
+			];
+			$ret['adherent.code_postal'] = [
+				'desc' => 'Code postal adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getAdherent()->getCode_postal();
+				}
+			];
+			$ret['adherent.ville'] = [
+				'desc' => 'Ville adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getAdherent()->getVille();
+				}
+			];
+			$ret['adherent.rue'] = [
+				'desc' => 'Rue (adresse) adhérent',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getAdherent()->getAdresse();
 				}
 			];
 			$ret['adherent.tel']                     = [
@@ -474,12 +524,26 @@ class AmapressAdhesion extends TitanEntity {
 			$ret['producteur.nom']                   = [
 				'desc' => 'Nom producteur',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( empty( $adh->getContrat_instance() )
+					     || empty( $adh->getContrat_instance()->getModel() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur()->getUser() ) ) {
+						return '';
+					}
+
 					return $adh->getContrat_instance()->getModel()->getProducteur()->getUser()->getUser()->last_name;
 				}
 			];
 			$ret['producteur.prenom']                = [
 				'desc' => 'Prénom producteur',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( empty( $adh->getContrat_instance() )
+					     || empty( $adh->getContrat_instance()->getModel() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur()->getUser() ) ) {
+						return '';
+					}
+
 					return $adh->getContrat_instance()->getModel()->getProducteur()->getUser()->getUser()->first_name;
 				}
 			];
@@ -498,18 +562,39 @@ class AmapressAdhesion extends TitanEntity {
 			$ret['producteur.adresse']               = [
 				'desc' => 'Adresse producteur',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( empty( $adh->getContrat_instance() )
+					     || empty( $adh->getContrat_instance()->getModel() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur()->getUser() ) ) {
+						return '';
+					}
+
 					return $adh->getContrat_instance()->getModel()->getProducteur()->getUser()->getFormattedAdresse();
 				}
 			];
 			$ret['producteur.tel']                   = [
 				'desc' => 'Téléphone producteur',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( empty( $adh->getContrat_instance() )
+					     || empty( $adh->getContrat_instance()->getModel() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur()->getUser() ) ) {
+						return '';
+					}
+
 					return $adh->getContrat_instance()->getModel()->getProducteur()->getUser()->getTelephone();
 				}
 			];
 			$ret['producteur.email']                 = [
 				'desc' => 'Email producteur',
 				'func' => function ( AmapressAdhesion $adh ) {
+					if ( empty( $adh->getContrat_instance() )
+					     || empty( $adh->getContrat_instance()->getModel() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur() )
+					     || empty( $adh->getContrat_instance()->getModel()->getProducteur()->getUser() ) ) {
+						return '';
+					}
+
 					return $adh->getContrat_instance()->getModel()->getProducteur()->getUser()->getEmail();
 				}
 			];
@@ -646,9 +731,27 @@ class AmapressAdhesion extends TitanEntity {
 					if ( 'esp' == $adh->getMainPaiementType() ) {
 						return 'En espèces';
 					}
+					if ( 'vir' == $adh->getMainPaiementType() ) {
+						return 'Par virement';
+					}
+					if ( 'dlv' == $adh->getMainPaiementType() || abs( $adh->getTotalAmount() ) < 0.001 ) {
+						return 'A la livraison';
+					}
 					$o = $adh->getContrat_instance()->getChequeOptionsForTotal( $adh->getPaiements(), $adh->getTotalAmount() );
 
 					return $o['desc'];
+				}
+			];
+			$ret['paiements_ordre'] = [
+				'desc' => 'Ordre à indiquer sur les chèques',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return wp_unslash( $adh->getContrat_instance()->getPaiementsOrdre() );
+				}
+			];
+			$ret['paiements_mention'] = [
+				'desc' => 'Mention pour les paiements',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return wp_strip_all_tags( wp_unslash( $adh->getContrat_instance()->getPaiementsMention() ) );
 				}
 			];
 			$ret['quantites']                        = [
@@ -674,7 +777,17 @@ class AmapressAdhesion extends TitanEntity {
 			$ret['total']                            = [
 				'desc' => 'Total du contrat',
 				'func' => function ( AmapressAdhesion $adh ) {
-					return Amapress::formatPrice( $adh->getTotalAmount() );
+					if ( $adh->getTotalAmount() > 0 ) {
+						return Amapress::formatPrice( $adh->getTotalAmount() );
+					} else {
+						return '-paiement à la livraison-';
+					}
+				}
+			];
+			$ret['produits_paiements_livraison'] = [
+				'desc' => 'Produits payables à la livraison',
+				'func' => function ( AmapressAdhesion $adh ) {
+					return $adh->getQuantite_pay_at_delivery();
 				}
 			];
 			self::$properties                        = $ret;
@@ -715,6 +828,23 @@ class AmapressAdhesion extends TitanEntity {
 		$ret["quantite_unite"]                   = '(Tableau quantité) Unité de la quantité';
 		$ret["quantite_date"]                    = '(Tableau quantité) pour les paniers modulables : date de livraison';
 
+		$ret['paiement_type']     = '(Tableau paiement) Type de paiement (Chèque, espèces, virement...)';
+		$ret['paiement_numero']   = '(Tableau paiement) Numéro du chèque';
+		$ret['paiement_emetteur'] = '(Tableau paiement) Nom de l\'adhérent émetteur';
+		$ret['paiement_banque']   = '(Tableau paiement) Banque du chèque';
+		$ret['paiement_montant']  = '(Tableau paiement) Montant du paiement';
+		$ret['paiement_date']     = '(Tableau paiement) Date d\'encaissement du paiement';
+		$ret['paiement_status']   = '(Tableau paiement) Etat du paiement';
+
+		$ret['paiement_x_type']     = '(où x varie de 1 à 12 suivant le nombre de paiements) Type de paiement (Chèque, espèces, virement...)';
+		$ret['paiement_x_numero']   = '(où x varie de 1 à 12 suivant le nombre de paiements) Numéro du chèque';
+		$ret['paiement_x_emetteur'] = '(où x varie de 1 à 12 suivant le nombre de paiements) Nom de l\'adhérent émetteur';
+		$ret['paiement_x_banque']   = '(où x varie de 1 à 12 suivant le nombre de paiements) Banque du chèque';
+		$ret['paiement_x_montant']  = '(où x varie de 1 à 12 suivant le nombre de paiements) Montant du paiement';
+		$ret['paiement_x_date']     = '(où x varie de 1 à 12 suivant le nombre de paiements) Date d\'encaissement du paiement';
+		$ret['paiement_x_status']   = '(où x varie de 1 à 12 suivant le nombre de paiements) Etat du paiement';
+
+
 		return Amapress::getPlaceholdersHelpTable( 'contrat-placeholders', $ret,
 			'de l\'inscription', $additional_helps, ! $for_contrat,
 			$for_contrat ? '${' : '%%', $for_contrat ? '}' : '%%',
@@ -729,6 +859,10 @@ class AmapressAdhesion extends TitanEntity {
 		}
 
 		$placeholders = [];
+		foreach ( amapress_replace_mail_placeholders_help( '', false, false ) as $k => $v ) {
+			$prop_name                  = $k;
+			$placeholders[ $prop_name ] = amapress_replace_mail_placeholders( "%%$prop_name%%", null );
+		}
 		foreach ( self::getProperties() as $prop_name => $prop_config ) {
 			$placeholders[ $prop_name ] = call_user_func( $prop_config['func'], $this );
 		}
@@ -743,8 +877,12 @@ class AmapressAdhesion extends TitanEntity {
 					$quant      = $date_quant['contrat_quantite'];
 					$date_price += ( $date_quant['quantite'] * $quant->getPrix_unitaire() );
 				}
-				$placeholders["quantite_date#$i"]                    = date_i18n( 'd/m/Y', $date );
-				$placeholders["quantite_total#$i"]                   = Amapress::formatPrice( $date_price );
+				$placeholders["quantite_date#$i"] = date_i18n( 'd/m/Y', $date );
+				if ( abs( $date_price ) < 0.001 ) {
+					$placeholders["quantite_total#$i"] = 'A la livraison';
+				} else {
+					$placeholders["quantite_total#$i"] = Amapress::formatPrice( $date_price );
+				}
 				$placeholders["quantite_description#$i"]             = $this->getContrat_quantites_AsString( $date, true );
 				$placeholders["quantite_description_no_price#$i"]    = $this->getContrat_quantites_AsString( $date );
 				$placeholders["quantite_description_br#$i"]          = $this->getContrat_quantites_AsString( $date, true, '<br />' );
@@ -777,10 +915,15 @@ class AmapressAdhesion extends TitanEntity {
 				$placeholders["quantite_dates#$i"]         = implode( ', ', array_map( function ( $d ) {
 					return date_i18n( 'd/m/Y', $d );
 				}, $remaining_dates ) );
-				$placeholders["quantite_sous_total#$i"]    = Amapress::formatPrice( $quant->getPrice() );
-				$placeholders["quantite_total#$i"]         = Amapress::formatPrice( $quant->getPrice() * $remaining_distrib_sum );
+				if ( abs( $quant->getPrice() ) < 0.001 ) {
+					$placeholders["quantite_sous_total#$i"] = 'A la livraison';
+					$placeholders["quantite_total#$i"]      = 'A la livraison';
+				} else {
+					$placeholders["quantite_sous_total#$i"] = Amapress::formatPrice( $quant->getPrice() );
+					$placeholders["quantite_total#$i"]      = Amapress::formatPrice( $quant->getPrice() * $remaining_distrib_sum );
+				}
 				$placeholders["quantite_nombre#$i"]        = $quant->getFactor();
-				$placeholders["quantite_prix_unitaire#$i"] = Amapress::formatPrice( $quant->getContratQuantite()->getPrix_unitaire() );
+				$placeholders["quantite_prix_unitaire#$i"] = $quant->getContratQuantite()->getPrix_unitaireDisplay();
 				$placeholders["quantite_description#$i"]   = $quant->getContratQuantite()->getDescription();
 				$placeholders["quantite_unite#$i"]         = $quant->getContratQuantite()->getPriceUnitDisplay();
 				$i                                         += 1;
@@ -788,9 +931,52 @@ class AmapressAdhesion extends TitanEntity {
 			}
 		}
 
-//		amapress_dump($placeholders);
-//		die();
-//		amapress_dump($model_filename);
+		if ( 'dlv' == $this->getMainPaiementType() || abs( $this->getTotalAmount() ) < 0.001 ) {
+			$paiements = $this->getContrat_instance()->isPanierVariable() ? array_keys( $this->getPaniersVariables() ) : $this->getRemainingDates();
+			$i         = 1;
+			foreach ( $paiements as $paiement_date ) {
+				$placeholders["paiement_type#$i"]     = '';
+				$placeholders["paiement_numero#$i"]   = '';
+				$placeholders["paiement_emetteur#$i"] = '';
+				$placeholders["paiement_banque#$i"]   = '';
+				$placeholders["paiement_montant#$i"]  = '';
+				$placeholders["paiement_date#$i"]     = date_i18n( 'd/m/Y', $paiement_date );
+				$placeholders["paiement_status#$i"]   = '';
+
+				$placeholders["paiement_{$i}_type"]     = $placeholders["paiement_type#$i"];
+				$placeholders["paiement_{$i}_numero"]   = $placeholders["paiement_numero#$i"];
+				$placeholders["paiement_{$i}_emetteur"] = $placeholders["paiement_emetteur#$i"];
+				$placeholders["paiement_{$i}_banque"]   = $placeholders["paiement_banque#$i"];
+				$placeholders["paiement_{$i}_montant"]  = $placeholders["paiement_montant#$i"];
+				$placeholders["paiement_{$i}_date"]     = $placeholders["paiement_date#$i"];
+				$placeholders["paiement_{$i}_status"]   = $placeholders["paiement_status#$i"];
+
+				$i += 1;
+			}
+		} else {
+			$paiements = $this->getAllPaiements();
+			$i         = 1;
+			foreach ( $paiements as $paiement ) {
+				$placeholders["paiement_type#$i"]     = $paiement->getTypeFormatted();
+				$placeholders["paiement_numero#$i"]   = $paiement->getNumero();
+				$placeholders["paiement_emetteur#$i"] = $paiement->getEmetteur();
+				$placeholders["paiement_banque#$i"]   = $paiement->getBanque();
+				$placeholders["paiement_montant#$i"]  = Amapress::formatPrice( $paiement->getAmount() );
+				$placeholders["paiement_date#$i"]     = date_i18n( 'd/m/Y', $paiement->getDate() );
+				$placeholders["paiement_status#$i"]   = $paiement->getStatusDisplay();
+
+				$placeholders["paiement_{$i}_type"]     = $placeholders["paiement_type#$i"];
+				$placeholders["paiement_{$i}_numero"]   = $placeholders["paiement_numero#$i"];
+				$placeholders["paiement_{$i}_emetteur"] = $placeholders["paiement_emetteur#$i"];
+				$placeholders["paiement_{$i}_banque"]   = $placeholders["paiement_banque#$i"];
+				$placeholders["paiement_{$i}_montant"]  = $placeholders["paiement_montant#$i"];
+				$placeholders["paiement_{$i}_date"]     = $placeholders["paiement_date#$i"];
+				$placeholders["paiement_{$i}_status"]   = $placeholders["paiement_status#$i"];
+
+				$i += 1;
+			}
+		}
+
 		\PhpOffice\PhpWord\Settings::setTempDir( Amapress::getTempDir() );
 
 //		$templateProcessor = new \PhpOffice\PhpWord\TemplateProcessor( $model_filename );
@@ -806,6 +992,24 @@ class AmapressAdhesion extends TitanEntity {
 				} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
 					try {
 						$templateProcessor->cloneRow( 'quantite_description', $lines_count );
+					} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
+					}
+				}
+			}
+		}
+
+		$lines_count = count( $paiements );
+		try {
+			$templateProcessor->cloneRow( 'paiement_montant', $lines_count );
+		} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
+			try {
+				$templateProcessor->cloneRow( 'paiement_numero', $lines_count );
+			} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
+				try {
+					$templateProcessor->cloneRow( 'paiement_emetteur', $lines_count );
+				} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
+					try {
+						$templateProcessor->cloneRow( 'paiement_banque', $lines_count );
 					} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
 					}
 				}
@@ -976,7 +1180,13 @@ class AmapressAdhesion extends TitanEntity {
 	 */
 	public function getContrat_quantites( $dist_date ) {
 		if ( $this->getContrat_instance() && $this->getContrat_instance()->isPanierVariable() ) {
-			return [];
+			$quants = $this->getVariables_Contrat_quantites( $dist_date );
+			$ret    = [];
+			foreach ( $quants as $quant ) {
+				$ret[ $quant['contrat_quantite']->ID ] = new AmapressAdhesionQuantite( $quant['contrat_quantite'], $quant['quantite'] );
+			}
+
+			return $ret;
 		}
 
 		$factors = $this->getCustomAsFloatArray( 'amapress_adhesion_contrat_quantite_factors' );
@@ -1004,6 +1214,50 @@ class AmapressAdhesion extends TitanEntity {
 		return $ret;
 	}
 
+	/**
+	 * @return float
+	 */
+	public function getContrat_quantite_factor( $quantite_id, $dist_date = null ) {
+		if ( ! $this->getContrat_instance() ) {
+			return 0;
+		}
+		if ( $this->getContrat_instance()->isPanierVariable() ) {
+			$paniers = $this->getPaniersVariables();
+			if ( isset( $paniers[ $dist_date ] ) && isset( $paniers[ $dist_date ][ $quantite_id ] ) ) {
+				return $paniers[ $dist_date ][ $quantite_id ];
+			}
+
+			return 0;
+		}
+
+		$factors = $this->getCustomAsFloatArray( 'amapress_adhesion_contrat_quantite_factors' );
+		/** @var AmapressContrat_quantite[] $quants */
+		$quants = $this->getCustomAsEntityArray( 'amapress_adhesion_contrat_quantite', 'AmapressContrat_quantite' );
+
+		$ret = [];
+		foreach ( $quants as $quant ) {
+			if ( $quant->ID != $quantite_id ) {
+				continue;
+			}
+
+			$date_factor = 1;
+			if ( $dist_date ) {
+				$date_factor = $this->getContrat_instance()->getDateFactor( $dist_date, $quant->ID );
+			}
+			$factor = 1;
+			if ( isset( $factors[ $quant->ID ] ) && $factors[ $quant->ID ] > 0 ) {
+				$factor = $factors[ $quant->ID ];
+			}
+			if ( abs( $factor * $date_factor ) < 0.001 ) {
+				continue;
+			}
+
+			return $factor;
+		}
+
+		return 0;
+	}
+
 	/** @return array */
 	public function getPaniersVariables() {
 		return $this->getCustomAsArray( 'amapress_adhesion_panier_variables' );
@@ -1022,6 +1276,9 @@ class AmapressAdhesion extends TitanEntity {
 		$paniers     = $this->getPaniersVariables();
 		if ( isset( $paniers[ $date ] ) ) {
 			$panier = $paniers[ $date ];
+			if ( empty( $panier ) ) {
+				$panier = [];
+			}
 			foreach ( $panier as $quant_id => $quant ) {
 				if ( $quant > 0 ) {
 					/** @var AmapressContrat_quantite $contrat_quant */
@@ -1062,7 +1319,7 @@ class AmapressAdhesion extends TitanEntity {
 				/** @var AmapressContrat_quantite $contrat_quantite */
 				$contrat_quantite = $q['contrat_quantite'];
 				$quantite         = $q['quantite'];
-				$quant_labels[]   = esc_html( $contrat_quantite->formatValue( $quantite ) . ' x ' . $contrat_quantite->getTitle() . ( $show_price_unit ? ' à ' . $contrat_quantite->getPrix_unitaire() . '€' : '' ) );
+				$quant_labels[]   = esc_html( $contrat_quantite->formatValue( $quantite ) . ' x ' . $contrat_quantite->getTitle() . ( $show_price_unit ? ' à ' . $contrat_quantite->getPrix_unitaireDisplay() : '' ) );
 			}
 
 			return implode( $separator, $quant_labels );
@@ -1073,6 +1330,38 @@ class AmapressAdhesion extends TitanEntity {
 					return $vv->getTitle() . ( $show_price_unit ? ' à ' . Amapress::formatPrice( $vv->getPrice() ) . '€' : '' );
 				}
 				, $this->getContrat_quantites( $date ) );
+
+			return implode( $separator, $quant_labels );
+		}
+	}
+
+	public function getQuantite_pay_at_delivery( $date = null, $separator = ', ' ) {
+		if ( empty( $this->getContrat_instance() ) ) {
+			return '';
+		}
+		if ( $this->getContrat_instance()->isPanierVariable() ) {
+			$quant_labels = array();
+			foreach ( $this->getVariables_Contrat_quantites( $date ) as $q ) {
+				/** @var AmapressContrat_quantite $contrat_quantite */
+				$contrat_quantite = $q['contrat_quantite'];
+				if ( $contrat_quantite->getPrix_unitaire() > 0 ) {
+					continue;
+				}
+				$quantite       = $q['quantite'];
+				$quant_labels[] = esc_html( $contrat_quantite->formatValue( $quantite ) . ' x ' . $contrat_quantite->getTitle() );
+			}
+
+			return implode( $separator, $quant_labels );
+		} else {
+			$quant_labels = array_map(
+				function ( $vv ) {
+					/** @var AmapressAdhesionQuantite $vv */
+					return $vv->getTitle();
+				}
+				, array_filter( $this->getContrat_quantites( $date ), function ( $vv ) {
+				/** @var AmapressAdhesionQuantite $vv */
+				return abs( $vv->getPrice() ) < 0.001;
+			} ) );
 
 			return implode( $separator, $quant_labels );
 		}
@@ -1156,7 +1445,12 @@ class AmapressAdhesion extends TitanEntity {
 
 		$dates = [];
 		if ( $this->getContrat_instance()->isPanierVariable() ) {
-			$dates = $this->getContrat_instance()->getRemainingDates( $start_date, null );
+			$paniers_vars = $this->getPaniersVariables();
+			$dates        = array_filter( $this->getContrat_instance()->getRemainingDates( $start_date, null ),
+				function ( $d ) use ( $paniers_vars ) {
+					return isset( $paniers_vars[ $d ] );
+				}
+			);
 		} else {
 			$quantite_ids = $quantite_id ? [ $quantite_id ] : $this->getContrat_quantites_IDs();
 			foreach ( $quantite_ids as $qid ) {
@@ -1183,7 +1477,7 @@ class AmapressAdhesion extends TitanEntity {
 				$ret = $this->getContrat_instance()->getRemainingDatesWithFactors( $start_date, $quantite_id, true );
 				if ( $this->hasDate_fin() && $this->hasPaiementDateFin() ) {
 					foreach (
-						$this->getContrat_instance()->getRemainingDatesWithFactors( Amapress::add_days( $this->getDate_fin(), 1 ), $quantite_id )
+						$this->getContrat_instance()->getRemainingDatesWithFactors( Amapress::add_days( $this->getDate_fin(), 1 ), $quantite_id, true )
 						as $k => $v
 					) {
 						unset( $ret[ $k ] );
@@ -1523,10 +1817,10 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 	/**
 	 * @return AmapressAmapien_paiement[]
 	 */
-	public function getAllPaiements() {
+	public function getAllPaiements( $no_cache = false ) {
 		$key = "amapress_get_contrat_paiements_{$this->ID}";
 		$res = wp_cache_get( $key );
-		if ( false === $res ) {
+		if ( $no_cache || false === $res ) {
 			$query = array(
 				'posts_per_page' => - 1,
 				'post_type'      => AmapressAmapien_paiement::INTERNAL_POST_TYPE,
@@ -1604,6 +1898,13 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		return $new_contrat_id
 		       && $new_contrat_id != $this->getContrat_instanceId()
 		       && ! $this->isNotRenewable();
+	}
+
+	public function canSelfEdit( $days_before = 3 ) {
+		return $this->getContrat_instance()->canSelfEdit()
+		       && self::TO_CONFIRM == $this->getStatus()
+		       && Amapress::end_of_day( $this->getContrat_instance()->getDate_cloture() ) > Amapress::start_of_day( amapress_time() )
+		       && Amapress::add_days( $this->getDate_debut(), - abs( $days_before ) ) > Amapress::start_of_day( amapress_time() );
 	}
 
 	public function cloneAdhesion( $as_draft = true ) {
@@ -1735,12 +2036,21 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		);
 	}
 
-	public function preparePaiements() {
+	public function preparePaiements( $pre_filled_paiements = [] ) {
 		$contrat_instance        = $this->getContrat_instance();
 		$contrat_paiements_dates = $contrat_instance->getPaiements_Liste_dates();
 		$nb_paiements            = $this->getPaiements();
 		$contrat_paiements       = $this->getAllPaiements();
 		$all_paiements           = AmapressContrats::get_all_paiements( $contrat_instance->ID );
+
+		$deleted = false;
+		for ( $i = $this->getMainPaiementType() != 'chq' ? 0 : $nb_paiements; $i < count( $contrat_paiements ); $i ++ ) {
+			wp_delete_post( $contrat_paiements[ $i ]->ID, true );
+			$deleted = true;
+		}
+		if ( $deleted ) {
+			$contrat_paiements = $this->getAllPaiements( true );
+		}
 
 		$all_paiements_by_dates = array_group_by( $all_paiements,
 			function ( AmapressAmapien_paiement $p ) {
@@ -1810,8 +2120,9 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 				$amounts[] = $paiements_options['main_amount'];
 			}
 		}
-		$def_date = 0;
-		$def_id   = - 1;
+		$pre_filled_paiement_index = 1;
+		$def_date                  = 0;
+		$def_id                    = - 1;
 		foreach ( $contrat_paiements as $paiement ) {
 			$id     = $paiement ? $paiement->ID : $def_id --;
 			$numero = $paiement ? $paiement->getNumero() : '';
@@ -1824,6 +2135,13 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			$amount      = array_shift( $amounts );
 			$status      = $paiement ? $paiement->getStatus() : 'not_received';
 			$paiement_dt = $paiement ? Amapress::start_of_day( $paiement->getDate() ) : ( isset( $new_paiement_date[ $def_date ] ) ? $new_paiement_date[ $def_date ++ ] : 0 );
+
+			if ( isset( $pre_filled_paiements[ $pre_filled_paiement_index ] ) ) {
+				$numero      = $pre_filled_paiements[ $pre_filled_paiement_index ]['num'];
+				$banque      = $pre_filled_paiements[ $pre_filled_paiement_index ]['banque'];
+				$adherent    = $pre_filled_paiements[ $pre_filled_paiement_index ]['emetteur'];
+				$paiement_dt = Amapress::start_of_day( intval( $pre_filled_paiements[ $pre_filled_paiement_index ]['date'] ) );
+			}
 
 			$meta = array(
 				'amapress_contrat_paiement_adhesion'         => $this->ID,
@@ -1838,6 +2156,9 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			if ( null == $paiement && 'esp' == $this->getMainPaiementType() ) {
 				$meta['amapress_contrat_paiement_type'] = 'esp';
 			}
+			if ( null == $paiement && 'vir' == $this->getMainPaiementType() ) {
+				$meta['amapress_contrat_paiement_type'] = 'vir';
+			}
 			$my_post = array(
 				'post_type'    => AmapressAmapien_paiement::INTERNAL_POST_TYPE,
 				'post_content' => '',
@@ -1849,7 +2170,11 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			} else {
 				$my_post['ID'] = $id;
 				wp_update_post( $my_post, true );
+				if ( 'chq' == $this->getMainPaiementType() ) {
+					delete_post_meta( $id, 'amapress_contrat_paiement_type' );
+				}
 			}
+			$pre_filled_paiement_index += 1;
 		}
 	}
 

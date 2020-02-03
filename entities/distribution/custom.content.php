@@ -146,7 +146,7 @@ function amapress_get_custom_content_distribution( $content ) {
 				$add_text = '<span class="resp-distribution">Vous êtes responsable de distribution</span> - ';
 			}
 
-			$instructions .= amapress_get_panel_start( $add_text . 'Instruction du lieu ',
+			$instructions .= amapress_get_panel_start_no_esc( $add_text . 'Instruction du lieu ',
 				'fa-fa', 'amap-panel-dist amap-panel-dist-' . $lieu_id . ' ',
 				'instructions-lieu' );
 			if ( ! $is_resp_amap ) {
@@ -297,8 +297,7 @@ function amapress_get_custom_content_distribution( $content ) {
 		?>
     </div>
 	<?php
-	$content = ob_get_contents();
-	ob_clean();
+	$content = ob_get_clean();
 
 	return $content;
 }

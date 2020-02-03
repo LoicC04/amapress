@@ -41,9 +41,9 @@ function amapress_producteur_map_shortcode( $atts ) {
 	$markers[] = array(
 		'longitude' => $producteur->getAdresseExploitationLongitude(),
 		'latitude'  => $producteur->getAdresseExploitationLatitude(),
-		'url'       => ( $atts['show_email'] == true ? 'mailto:' . $producteur->getUser()->getEmail() : null ),
+		'url'       => ( $atts['show_email'] == true && $producteur->getUser() ? 'mailto:' . $producteur->getUser()->getEmail() : null ),
 		'title'     => $producteur->getNomExploitation(),
-		'content'   => $producteur->getUser()->getDisplay( $atts ),
+		'content'   => $producteur->getUser() ? $producteur->getUser()->getDisplay( $atts ) : '',
 	);
 
 	return amapress_generate_map( $markers, $atts['mode'] );
@@ -384,6 +384,9 @@ function amapress_amapiens_role_list_shortcode( $atts ) {
 			}
 
 			if ( $lieu_id ) {
+				if ( empty( $lieux_by_ids[ $lieu_id ] ) ) {
+					continue;
+				}
 				$data[] = array(
 					'user'           => $amapien->getDisplay( $atts ),
 					'user_name'      => $amapien->getDisplayName(),
@@ -400,6 +403,9 @@ function amapress_amapiens_role_list_shortcode( $atts ) {
 					$user_lieu_ids = $all_lieu_ids;
 				}
 				foreach ( $user_lieu_ids as $lieu_id ) {
+					if ( empty( $lieux_by_ids[ $lieu_id ] ) ) {
+						continue;
+					}
 					$data[] = array(
 						'user'           => $amapien->getDisplay( $atts ),
 						'user_name'      => $amapien->getDisplayName(),

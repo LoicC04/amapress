@@ -66,9 +66,10 @@ class Amapress_EventBase extends TitanEntity {
 		return '';
 	}
 
-	public static function getPlaceholdersHelp( $additional_helps = [] ) {
+	public static function getPlaceholdersHelp( $additional_helps = [], $for_recall = true ) {
 		return Amapress::getPlaceholdersHelpTable( 'event-placeholders',
-			Amapress::getPlaceholdersHelpForProperties( self::getProperties() ), 'de l\'évènement', $additional_helps );
+			Amapress::getPlaceholdersHelpForProperties( self::getProperties() ), 'de l\'évènement',
+			$additional_helps, $for_recall ? 'recall' : true );
 	}
 
 	public static function getProperties() {
@@ -100,7 +101,7 @@ class Amapress_EventBase extends TitanEntity {
 			'horaires-evenement'  => [
 				'desc' => 'Date et horaires évènement',
 				'func' => function ( Amapress_EventBase $ev ) {
-					return date_i18n( 'D j M Y', $ev->getStartDateAndHour() ) .
+					return date_i18n( 'D j F Y', $ev->getStartDateAndHour() ) .
 					       ' de ' . date_i18n( 'H:i', $ev->getStartDateAndHour() ) .
 					       ' à ' . date_i18n( 'H:i', $ev->getEndDateAndHour() );
 				}

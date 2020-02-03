@@ -1,19 +1,23 @@
 <?php
 /**
  * @package Amapress
+ * @author Comptoir des Applis
+ * @license GPL-2.0+
+ * @link https://github.com/comptoirdesappli/amapress
  */
 /*
-Plugin Name: Amapress (forked by LoicC04)
-Plugin URI: https://github.com/LoicC04/amapress/
-Description:
-Version: 0.86.30
-Requires PHP: 5.6
-Requires WP: 4.4
-Author: ShareVB forked By LoicC04
-Author URI: https://github.com/LoicC04/
-License: GPLv2 or later
-Text Domain: amapress
-GitHub Plugin URI: LoicC04/amapress
+ * Plugin Name:         Amapress (forked by LoicC04)
+ * Plugin URI:          https://github.com/LoicC04/amapress/
+ * Description:         Plugin de Gestion & Communication pour les AMAP
+ * Version:             0.92.5
+ * Requires             PHP: 5.6
+ * Requires at least:   4.4
+ * Author:              Comptoir des Applis (forked by LoicC04)
+ * Author URI:          https://github.com/LoicC04/
+ * License:             GNU General Public License v2
+ * License URI:         http://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:         amapress
+ * GitHub Plugin URI:   https://github.com/comptoirdesappli/amapress
 */
 
 /*
@@ -47,8 +51,8 @@ define( 'AMAPRESS__PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_FILE', __FILE__ );
 define( 'AMAPRESS_DELETE_LIMIT', 100000 );
-define( 'AMAPRESS_DB_VERSION', 84 );
-define( 'AMAPRESS_VERSION', '0.86.30' );
+define( 'AMAPRESS_DB_VERSION', 104 );
+define( 'AMAPRESS_VERSION', '0.92.5' );
 //remove_role('responable_amap');
 
 function amapress_ensure_no_cache() {
@@ -64,7 +68,13 @@ function amapress_get_github_updater_url() {
 }
 
 function amapress_wp_mail( $to, $subject, $message, $headers = '', $attachments = array(), $cc = null, $bcc = null ) {
-//    add_filter( 'wp_mail_content_type', 'amapress_wpmail_content_type', 50);
+	$subject = wp_specialchars_decode( $subject );
+	if ( empty( $to ) ) {
+		$to = get_option( 'admin_email' );
+	}
+	if ( empty( $subject ) || empty( $message ) ) {
+		throw new Exception( 'Empty mail ???' );
+	}
 	if ( is_array( $to ) ) {
 		$to = implode( ', ', $to );
 	}
@@ -104,7 +114,15 @@ function amapress_wp_mail( $to, $subject, $message, $headers = '', $attachments 
 	if ( null == $attachments ) {
 		$attachments = [];
 	}
-	if ( isset( $_GET['test_mail'] ) || Amapress::getOption( 'test_mail_mode' ) || defined( 'AMAPRESS_TEST_MAIL_MODE' ) ) {
+	global $amapress_send_mail_to;
+	if ( ! empty( $amapress_send_mail_to ) ) {
+		$h       = esc_html( var_export( $headers, true ) );
+		$message = "Mail redirigé vers $amapress_send_mail_to pour test\nOriginal To : $to\nOriginal Headers: $h\n\n" . $message;
+		$to      = $amapress_send_mail_to;
+		$headers = array_filter( $headers, function ( $h ) {
+			return strpos( $h, 'Cc:' ) === false && strpos( $h, 'Bcc:' ) === false;
+		} );
+	} elseif ( isset( $_GET['test_mail'] ) || Amapress::getOption( 'test_mail_mode' ) || defined( 'AMAPRESS_TEST_MAIL_MODE' ) ) {
 		$h            = esc_html( var_export( $headers, true ) );
 		$test_mode_to = Amapress::getOption( 'test_mail_target' );
 		$message      = "Site en mode de test mail : tous les emails sortants sont redirigés vers $test_mode_to\nOriginal To : $to\nOriginal Headers: $h\n\n" . $message;
@@ -114,7 +132,7 @@ function amapress_wp_mail( $to, $subject, $message, $headers = '', $attachments 
 		} );
 	}
 
-	return wp_mail( $to, wp_unslash( $subject ), wptexturize( wpautop( wp_unslash( $message ) ) ), $headers, $attachments );
+	return wp_mail( $to, wp_kses_decode_entities( wp_unslash( $subject ) ), wptexturize( wpautop( wp_unslash( $message ) ) ), $headers, $attachments );
 //    remove_filter( 'wp_mail_content_type', 'amapress_wpmail_content_type', 50);
 }
 
@@ -183,7 +201,7 @@ function amapress_debug_backtrace_summary( $ignore_class = null, $skip_frames = 
 				$caller[] = $call['function'] . "('" . str_replace( array(
 						WP_CONTENT_DIR,
 						ABSPATH
-					), '', $call['args'][0] ) . "')";
+					), '', ! empty( $call['args'][0] ) ? $call['args'][0] : '#unk#' ) . "')";
 			} else {
 				$file     = str_replace( array( WP_CONTENT_DIR, ABSPATH ), '', $call['file'] );
 				$caller[] = "{$call['function']}[{$file}:{$call['line']}]";
@@ -225,22 +243,6 @@ function amapress_wpmail_content_type() {
 }
 
 //add_filter( 'wp_mail_content_type', 'amapress_wpmail_content_type' );
-
-function amapress_mail_from( $old ) {
-	$new = Amapress::getOption( 'email_from_mail' );
-
-	return empty( $new ) ? $old : $new;
-}
-
-function amapress_mail_from_name( $old ) {
-	$new = Amapress::getOption( 'email_from_name' );
-
-	return empty( $new ) ? $old : $new;
-}
-
-add_filter( 'wp_mail_from', 'amapress_mail_from' );
-add_filter( 'wp_mail_from_name', 'amapress_mail_from_name' );
-
 
 function amapress_get_default_wordpress_from_email() {
 	$sitename = strtolower( $_SERVER['SERVER_NAME'] );
@@ -291,7 +293,9 @@ function amapress__( $s ) {
 	return __( $s, 'amapress' );
 }
 
-require_once( AMAPRESS__PLUGIN_DIR . 'utils/install-github-updater.php' );
+if ( ! defined( 'FREE_PAGES_PERSO' ) ) {
+	require_once( AMAPRESS__PLUGIN_DIR . 'utils/install-github-updater.php' );
+}
 
 require_once( AMAPRESS__PLUGIN_DIR . 'titan-framework/titan-framework.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'utils.php' );
@@ -333,6 +337,20 @@ require_once( AMAPRESS__PLUGIN_DIR . 'utils/class.amapress-taxonomy.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'entities/row.actions.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'entities/bulk.actions.php' );
 
+function amapress_mail_from( $old ) {
+	$new = Amapress::getOption( 'email_from_mail' );
+
+	return empty( $new ) ? $old : $new;
+}
+
+function amapress_mail_from_name( $old ) {
+	$new = Amapress::getOption( 'email_from_name' );
+
+	return empty( $new ) ? $old : $new;
+}
+
+add_filter( 'wp_mail_from', 'amapress_mail_from' );
+add_filter( 'wp_mail_from_name', 'amapress_mail_from_name' );
 
 new AmapressUserTaxonomy();
 
@@ -543,14 +561,37 @@ function amapress_global_init() {
 	if ( ! empty( $key ) ) {
 		TitanFrameworkOptionAddress::$google_map_api_key = $key;
 	}
+	TitanFrameworkOptionAddress::$here_map_app_id   = Amapress::getOption( 'here_map_app_id' );
+	TitanFrameworkOptionAddress::$here_map_app_code = Amapress::getOption( 'here_map_app_code' );
 
 	global $amapress_smtpMailingQueue;
 	require_once( AMAPRESS__PLUGIN_DIR . 'modules/mailqueue/AmapressSMTPMailingQueue.php' );
 	$amapress_smtpMailingQueue = new AmapressSMTPMailingQueue();
-//    global $typenow;
-//    var_dump(get_post_types( array( 'show_ui' => true ) ));
-//    var_dump($typenow);
-//    var_dump(amp_user_can_access_admin_page());
+
+	if ( ! wp_next_scheduled( 'amps_cleanings' ) ) {
+		wp_schedule_event( time(), 'daily', 'amps_cleanings' );
+	}
+	add_action( 'amps_cleanings', function () {
+		Amapress::cleanFilesOlderThanDays( Amapress::getAttachmentDir(), 3 * 30 );
+		Amapress::cleanFilesOlderThanDays( Amapress::getContratDir(), 6 * 30 );
+	} );
+
+	if ( ! defined( 'AMAPRESS_NOTIFY_UPDATES' ) || AMAPRESS_NOTIFY_UPDATES ) {
+		if ( ! wp_next_scheduled( 'amps_updnotif' ) ) {
+			wp_schedule_event( time(), 'weekly', 'amps_updnotif' );
+		}
+
+		add_action( 'amps_updnotif', function () {
+			require_once AMAPRESS__PLUGIN_DIR . 'modules/updnotifier/AmapressUpdateNotifier.php';
+			$message = AmapressUpdateNotifier::getUpdateMessage( 2 );
+			if ( ! empty( $message ) ) {
+				amapress_wp_mail( get_option( 'admin_email' ),
+					'Mises à jour requises',
+					wpautop( $message ) );
+			}
+		} );
+	}
+
 	do_action( 'amapress_init' );
 
 //    $users = get_users(
@@ -659,6 +700,9 @@ add_filter( 'post_thumbnail_html', function ( $html, $post_id, $post_thumbnail_i
 	$post_type = get_post_type( $post_id );
 
 	if ( AmapressContrat::INTERNAL_POST_TYPE == $post_type || AmapressContrat_instance::INTERNAL_POST_TYPE == $post_type ) {
+		if ( is_string( $size ) && in_array( $size, [ 'medium_large', 'large', 'full' ] ) ) {
+			return '';
+		}
 		if ( get_image_height( $size ) !== get_image_width( $size ) ) {
 			return '';
 		}
@@ -842,6 +886,11 @@ function amapress_check_info_visibility( $value, $name, AmapressUser $user ) {
 	if ( $value == 'default' || Amapress::toBool( $value ) ) {
 		if ( $name == 'roles' ) {
 			return true;
+		}
+		if ( in_array( $name, [ 'email', 'tel', 'tel_fixe', 'tel_mobile', 'adresse' ] ) ) {
+			if ( ! amapress_is_user_logged_in() ) {
+				return false;
+			}
 		}
 		$user_right = $user->getDisplayRight( $name );
 		if ( ! empty( $user_right ) && $user_right != 'default' ) {
@@ -1170,6 +1219,11 @@ function amapress_user_has_cap( $allcaps, $caps, $args ) {
 		}
 	}
 
+	if ( 'wpcf7_read_contact_forms' == $cap && ! amapress_current_user_can( 'manage_options' ) ) {
+		$allcaps[ $caps[0] ] = false;
+	}
+
+
 //	if ('delete_post' == $cap)
 //	    die('aa');
 //	$allcaps[$cap] = false;
@@ -1180,12 +1234,26 @@ function amapress_user_has_cap( $allcaps, $caps, $args ) {
 	return $allcaps;
 }
 
+add_filter( 'pre_trash_post', function ( $trash, $post ) {
+	/** @var WP_Post $post */
+	$post_type = amapress_simplify_post_type( $post->post_type );
+
+	return apply_filters( "amapress_can_delete_$post_type", true, $post->ID ) ? $trash : false;
+}, 10, 2 );
+
 add_filter( 'user_has_cap', 'amapress_user_has_cap', 10, 3 );
 
 if ( ! function_exists( 'wp_mail' ) ) {
 	function wp_mail( $to, $subject, $message, $headers = '', $attachments = array() ) {
 		/** @var AmapressSMTPMailingQueue $amapress_smtpMailingQueue */
 		global $amapress_smtpMailingQueue;
+
+		if ( empty( $to ) ) {
+			throw new Exception( "Trying send email with empty To" );
+		}
+		if ( empty( $message ) ) {
+			throw new Exception( "Trying send email with empty Content" );
+		}
 
 		if ( $amapress_smtpMailingQueue ) {
 			return $amapress_smtpMailingQueue->wp_mail( $to, $subject, $message, $headers, $attachments );
@@ -1301,7 +1369,7 @@ function amapress_feedback_footer() {
 		'messageError'   => "Une erreur s'est produite pendant l'envoi",
 	];
 	echo '<script type="text/javascript">
-            jQuery(document).ready(function() {
+            jQuery(document).ready(function($) {
                 Feedback(' . wp_json_encode( $options ) . ');
             });      
     </script>';
@@ -1427,7 +1495,7 @@ add_action( 'admin_init', function () {
 				'error', false );
 		}
 
-		if ( Amapress::getOption( 'test_mail_mode' ) ) {
+		if ( Amapress::getOption( 'test_mail_mode' ) || defined( 'AMAPRESS_TEST_MAIL_MODE' ) ) {
 			amapress_add_admin_notice( 'Le site est en <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_options_page&tab=amp_tests_config' ) . '">mode de test mail</a>. Tous les emails envoyés par le site seront redirigés vers ' . Amapress::getOption( 'test_mail_target' ),
 				'info', false, false );
 		}
@@ -1440,9 +1508,9 @@ add_action( 'admin_init', function () {
 			require_once ABSPATH . '/wp-admin/includes/update.php';
 		}
 		foreach ( get_plugin_updates() as $plugin_file => $plugin_data ) {
-			if ( false != strpos( $plugin_file, 'amapress' ) ) {
-				amapress_add_admin_notice( 'Une nouvelle version d\'Amapress est disponible : ' . $plugin_data['Version'],
-					'warning', false );
+			if ( false !== strpos( $plugin_file, 'amapress' ) ) {
+				amapress_add_admin_notice( 'Une nouvelle version d\'Amapress est disponible : ' . Amapress::makeLink( admin_url( 'update-core.php' ), $plugin_data->update->new_version ),
+					'warning', false, false );
 			}
 		}
 
@@ -1450,7 +1518,267 @@ add_action( 'admin_init', function () {
 		if ( $errored_mails_count > 0 ) {
 			$errored_mails_url = admin_url( 'admin.php?page=amapress_mailqueue_options_page&tab=amapress_mailqueue_errored_mails' );
 			amapress_add_admin_notice( "$errored_mails_count email(s) sortant(s) sont en <a href='$errored_mails_url' target='_blank'>erreur d'envoi</a>",
-				'error', false );
+				'error', false, false );
 		}
 	}
 } );
+
+/**
+ * Get the URL of an admin menu item
+ *
+ * @param string $menu_item_file admin menu item file
+ *          - can be obtained via array key #2 for any item in the global $menu or $submenu array
+ * @param boolean $submenu_as_parent
+ *
+ * @return  string URL of admin menu item, NULL if the menu item file can't be found in $menu or $submenu
+ */
+function get_admin_menu_item_title( $menu_item_file, $submenu_as_parent = true ) {
+	global $menu, $submenu, $self, $parent_file, $submenu_file, $plugin_page, $typenow;
+
+	if ( ! is_array( $menu ) ) {
+		return '';
+	}
+
+	$admin_is_parent = false;
+	$item            = '';
+	$submenu_item    = '';
+	$title           = '';
+
+	// 1. Check if top-level menu item
+	foreach ( $menu as $key => $menu_item ) {
+		if ( array_keys( $menu_item, $menu_item_file, true ) ) {
+			$item = $menu[ $key ];
+		}
+
+		if ( $submenu_as_parent && ! empty( $submenu_item ) ) {
+			$menu_hook = get_plugin_page_hook( $submenu_item[2], $item[2] );
+			$menu_file = $submenu_item[2];
+
+			if ( false !== ( $pos = strpos( $menu_file, '?' ) ) ) {
+				$menu_file = substr( $menu_file, 0, $pos );
+			}
+			if ( ! empty( $menu_hook ) || ( ( 'index.php' != $submenu_item[2] ) && file_exists( WP_PLUGIN_DIR . "/$menu_file" ) && ! file_exists( ABSPATH . "/wp-admin/$menu_file" ) ) ) {
+				$admin_is_parent = true;
+				$title           = $submenu_item[0];
+			} else {
+				$title = $submenu_item[0];
+			}
+		} elseif ( ! empty( $item[2] ) && current_user_can( $item[1] ) ) {
+			$menu_hook = get_plugin_page_hook( $item[2], 'admin.php' );
+			$menu_file = $item[2];
+
+			if ( false !== ( $pos = strpos( $menu_file, '?' ) ) ) {
+				$menu_file = substr( $menu_file, 0, $pos );
+			}
+			if ( ! empty( $menu_hook ) || ( ( 'index.php' != $item[2] ) && file_exists( WP_PLUGIN_DIR . "/$menu_file" ) && ! file_exists( ABSPATH . "/wp-admin/$menu_file" ) ) ) {
+				$admin_is_parent = true;
+				$title           = $item[0];
+			} else {
+				$title = $item[0];
+			}
+		}
+	}
+
+	// 2. Check if sub-level menu item
+	if ( ! $item ) {
+		$sub_item = '';
+		foreach ( $submenu as $top_file => $submenu_items ) {
+
+			// Reindex $submenu_items
+			$submenu_items = array_values( $submenu_items );
+
+			foreach ( $submenu_items as $key => $submenu_item ) {
+				if ( array_keys( $submenu_item, $menu_item_file ) ) {
+					$sub_item = $submenu_items[ $key ];
+					break;
+				}
+			}
+
+			if ( ! empty( $sub_item ) ) {
+				break;
+			}
+		}
+
+		// If the $menu_item_file parameter doesn't match any menu item, return false
+		if ( ! $sub_item ) {
+			return false;
+		}
+
+		$title = $sub_item[0];
+	}
+
+	return strip_tags( $title );
+}
+
+add_filter( 'admin_footer_text', function ( $content ) {
+	$content .= ' | Amapress ' . AMAPRESS_VERSION;
+
+	global $parent_file, $submenu_file, $pagenow;
+	$title     = get_admin_menu_item_title( $parent_file );
+	$subtitle  = $submenu_file != $parent_file && ! empty( $submenu_file ) ? get_admin_menu_item_title( $submenu_file ) : '';
+	$tab_title = '';
+	if ( 'admin.php' == $pagenow && ! empty( $_GET['page'] ) ) {
+		$current_page_id = $_GET['page'];
+		$current_tab_id  = ! empty( $_GET['tab'] ) ? stripslashes( $_GET['tab'] ) : '';
+		foreach ( AmapressEntities::getMenu() as $item ) {
+			if ( isset( $item['id'] ) && $current_page_id == $item['id'] ) {
+				if ( ! empty( $item['tabs'] ) && is_array( $item['tabs'] ) ) {
+					if ( ! empty( $item['settings']['name'] ) ) {
+						$subtitle = $item['settings']['name'];
+					}
+					if ( ! empty( $item['settings']['menu_title'] ) ) {
+						$menu_subtitle = $item['settings']['menu_title'];
+						$subtitle      = ! empty( $subtitle ) && $menu_subtitle != $subtitle ? "$menu_subtitle ($subtitle)" : $menu_subtitle;
+					}
+					foreach ( $item['tabs'] as $tab_name => $tab ) {
+						if ( isset( $tab['id'] ) ) {
+							$tab_id = $tab['id'];
+						} else {
+							$tab_id = $tab_name;
+						}
+
+						if ( $current_tab_id == $tab_id ) {
+							$tab_title = $tab_name;
+						}
+						if ( ! $current_tab_id ) {
+							$tab_title = $tab_name;
+							break;
+						}
+					}
+				}
+			}
+			if ( ! empty( $item['subpages'] ) ) {
+				foreach ( $item['subpages'] as $subitem ) {
+					if ( ! is_array( $subitem ) ) {
+						continue;
+					}
+					if ( isset( $subitem['id'] ) && $current_page_id == $subitem['id'] ) {
+						if ( ! empty( $subitem['settings']['name'] ) ) {
+							$subtitle = $subitem['settings']['name'];
+						}
+						if ( ! empty( $subitem['settings']['menu_title'] ) ) {
+							$menu_subtitle = $subitem['settings']['menu_title'];
+							$subtitle      = ! empty( $subtitle ) && $subtitle != $menu_subtitle ? "$menu_subtitle ($subtitle)" : $menu_subtitle;
+						}
+						if ( ! empty( $subitem['tabs'] ) && is_array( $subitem['tabs'] ) ) {
+							foreach ( $subitem['tabs'] as $tab_name => $tab ) {
+								if ( isset( $tab['id'] ) ) {
+									$tab_id = $tab['id'];
+								} else {
+									$tab_id = $tab_name;
+								}
+
+								if ( $current_tab_id == $tab_id ) {
+									$tab_title = $tab_name;
+								}
+								if ( ! $current_tab_id ) {
+									$tab_title = $tab_name;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	$content .= ' | <strong>' .
+	            Amapress::makeLink( '#', 'Tableau de bord>' . $title
+	                                     . ( ! empty( $subtitle ) ? '>' . $subtitle : '' )
+	                                     . ( ! empty( $tab_title ) ? ', onglet ' . $tab_title : '' ) )
+	            . '</strong>';
+
+	$mem_limit = (int) ini_get( 'memory_limit' );
+	$mem_usage = function_exists( 'memory_get_usage' ) ? round( memory_get_usage() / 1024 / 1024, 2 ) : 0;
+
+	$content .= ' | Mem. : ' . $mem_usage . ' of ' . $mem_limit . 'MB';
+
+	return $content;
+} );
+
+function amapress_force_no_private( $post ) {
+	if ( 'private' == $post['post_status']
+	     && ( AmapressAdhesion::INTERNAL_POST_TYPE == $post['post_type']
+	          || AmapressContrat_instance::INTERNAL_POST_TYPE == $post['post_type']
+	          || AmapressContrat::INTERNAL_POST_TYPE == $post['post_type']
+	          || AmapressProducteur::INTERNAL_POST_TYPE == $post['post_type'] ) ) {
+		$post['post_status'] = 'publish';
+	}
+
+	return $post;
+}
+
+add_filter( 'wp_insert_post_data', 'amapress_force_no_private' );
+
+add_action( 'wp_head', function () {
+	$site_verification_google_id = Amapress::getOption( 'site_verif_google_id' );
+	$site_verification_bing_id   = Amapress::getOption( 'site_verif_bing_id' );
+	$other_header_html           = Amapress::getOption( 'other_site_html_header' );
+
+	if ( ! empty( $site_verification_google_id ) ) {
+		echo "
+    <meta name='google-site-verification' content='$site_verification_google_id' />
+    ";
+	}
+	if ( ! empty( $site_verification_bing_id ) ) {
+		echo "<meta name='msvalidate.01' content='$site_verification_bing_id'>
+    ";
+	}
+
+	if ( ! empty( $other_header_html ) ) {
+		echo $other_header_html;
+	}
+} );
+
+add_action( 'admin_post_tf_event_scheduler_resend', function () {
+	$hook_name = $_REQUEST['hook_name'];
+	$args      = json_decode( wp_unslash( $_REQUEST['args'] ), true );
+	$args      = $args[0];
+	echo '<p>Rappel lancé pour ' . $args['title'] . '</p>';
+	do_action( $hook_name, $args );
+	echo '<p>Rappel terminé</p>';
+	//echo '<p>Mail de rappel renvoyé avec succès !</p>';
+	die();
+} );
+
+add_action( 'admin_post_tf_event_scheduler_test', function () {
+	global $amapress_send_mail_to;
+	$user                  = AmapressUser::getBy( amapress_current_user_id() );
+	$amapress_send_mail_to = $user->getEmail();
+	$hook_name             = $_REQUEST['hook_name'];
+	$args                  = json_decode( wp_unslash( $_REQUEST['args'] ), true );
+	$args                  = $args[0];
+	echo '<p>Rappel lancé pour ' . $args['title'] . '</p>';
+	do_action( $hook_name, $args );
+	echo '<p>Rappel terminé</p>';
+	die();
+} );
+
+add_action( 'pre_get_posts', function ( $query ) {
+	/* @var WP_Query $query */
+	if ( ( is_category() || is_archive() ) && $query->is_main_query() ) {
+		$post_type = $query->get( 'post_type' );
+		if ( ! is_array( $post_type ) ) {
+			$pt = AmapressEntities::getPostType( amapress_unsimplify_post_type( $post_type ) );
+			if ( $pt ) {
+				if ( isset( $pt['default_orderby'] ) ) {
+					$default_orderby = $pt['default_orderby'];
+					if ( false !== strpos( $default_orderby, 'amapress_' ) ) {
+						$query->query_vars['orderby']  = 'meta_value_num';
+						$query->query_vars['meta_key'] = $default_orderby;
+					} else {
+						$query->query_vars['orderby'] = 'meta_value_num';
+					}
+				}
+				if ( isset( $pt['default_order'] ) ) {
+					$query->query_vars['order'] = $pt['default_order'];
+				}
+			}
+		}
+	}
+
+} );
+
+add_filter( 'admin_title', function ( $admin_title, $title ) {
+	return strip_tags( do_shortcode( $admin_title ) );
+}, 10, 2 );

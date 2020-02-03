@@ -8,6 +8,8 @@ class AmapressAmapien_paiement extends Amapress_EventBase {
 	private static $entities_cache = array();
 	const INTERNAL_POST_TYPE = 'amps_cont_pmt';
 	const POST_TYPE = 'contrat_paiement';
+	const NOT_RECEIVED = 'not_received';
+	const RECEIVED = 'received';
 
 	/**
 	 * @param $post_or_id
@@ -58,6 +60,9 @@ class AmapressAmapien_paiement extends Amapress_EventBase {
 		return $this->getCustomAsInt( 'amapress_contrat_paiement_adhesion' );
 	}
 
+	public function setStatus( $status ) {
+		$this->setCustom( 'amapress_contrat_paiement_status', $status );
+	}
 
 	public function getStatusDisplay() {
 		$this->ensure_init();
@@ -101,6 +106,10 @@ class AmapressAmapien_paiement extends Amapress_EventBase {
 				return 'Chèque';
 			case 'esp':
 				return 'Espèces';
+			case 'vir':
+				return 'Virement';
+			case 'dlv':
+				return 'A la livraison';
 		}
 	}
 
@@ -232,14 +241,14 @@ GROUP BY $wpdb->posts.ID" );
 					'ev_id'    => "upmt-{$this->ID}",
 					'date'     => $date,
 					'date_end' => $date,
-					'type'     => 'user-paiement',
+					'type'     => 'user-paiement contrat-paiement',
 					'category' => 'Encaissements',
 					'label'    => "Encaissement {$price}€",
 					'class'    => "agenda-user-paiement",
 					'priority' => 0,
 					'lieu'     => $adh->getLieu(),
 					'icon'     => 'flaticon-business',
-					'alt'      => 'Vous allez être encaissé ' . ( 'chq' == $this->getType() ? ' du chèque numéro ' . $num : ' des espèces remises ' ) . ' d\'un montante de ' . $price . '€ à la date du ' . date_i18n( 'd/m/Y', $date ),
+					'alt'      => 'Vous allez être encaissé ' . ( 'chq' == $this->getType() ? ' du chèque numéro ' . $num : ( 'esp' == $this->getType() ? ' des espèces remises ' : ( 'vir' == $this->getType() ? ' du virement ' : ( 'dlv' == $this->getType() ? ' à la livraison' : '' ) ) ) ) . ' d\'un montante de ' . $price . '€ à la date du ' . date_i18n( 'd/m/Y', $date ),
 					'href'     => '/mes-adhesions'
 				) );
 			}

@@ -67,7 +67,8 @@ function amapress_register_entities_adhesion_period( $entities ) {
 				'selector-title'  => 'Sélectionnez/téléversez un modèle de bulletin DOCX',
 				'selector-button' => 'Utiliser ce modèle',
 				'group'           => 'Pré-inscription en ligne',
-				'desc'            => 'Configurer un modèle de bulletin à imprimer  pour chaque adhérent (Pour les utilisateurs avancés : à configurer avec des marquages substitutifs de type "${xxx}" <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_help_page&tab=adhesion_placeholders' ) . '">Plus d\'info</a>)',
+				'desc'            => '<p>Configurer un modèle de bulletin à imprimer  pour chaque adhérent (Pour les utilisateurs avancés : à configurer avec des marquages substitutifs de type "${xxx}" <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_help_page&tab=adhesion_placeholders' ) . '">Plus d\'info</a>)</p>
+<p>Vous pouvez télécharger <a target="_blank" href="' . esc_attr( Amapress::getBulletinGenericUrl() ) . '">ici</a> un modèle DOCX générique utilisable comme bulletin d\'adhésion. Vous aurez à personnaliser le logo de votre AMAP et les élements de l\'adhésion (don, panier solidaire, règlement, explications...).</p>',
 			),
 			'mnt_reseau'  => array(
 				'name'     => amapress__( 'Montant adhésion au réseau' ),
@@ -94,7 +95,7 @@ function amapress_row_action_adhesion_period_renew( $post_id ) {
 	$period     = new AmapressAdhesionPeriod( $post_id );
 	$new_period = $period->clonePeriod();
 	if ( ! $new_period ) {
-		wp_die( 'Une erreur s\'est produit lors du renouvèlement de la période d\'adhésion. Veuillez réessayer' );
+		wp_die( 'Une erreur s\'est produit lors du renouvellement de la période d\'adhésion. Veuillez réessayer' );
 	}
 
 	wp_redirect_and_exit( admin_url( "post.php?post={$new_period->ID}&action=edit" ) );

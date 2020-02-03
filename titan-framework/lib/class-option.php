@@ -61,6 +61,7 @@ class TitanFrameworkOption {
 		 * @var string
 		 */
 		'id'          => '',
+		'input_name'  => '',
 		/**
 		 * (Optional) The default value for this option.
 		 *
@@ -352,8 +353,8 @@ class TitanFrameworkOption {
 		}
 		if ( $this->type == self::TYPE_ADMIN ) {
 			$value = $this->getFramework()->getInternalAdminPageOption( $this->settings['id'], $default_value );
-			if ( ! empty( $_GET[ $this->getID() ] ) ) {
-				return $this->cleanValueForSaving( $_GET[ $this->getID() ] );
+			if ( ! empty( $_GET[ $this->getInputName() ] ) ) {
+				return $this->cleanValueForSaving( $_GET[ $this->getInputName() ] );
 			}
 		} else if ( $this->type == self::TYPE_META ) {
 			if ( empty( $postID ) ) {
@@ -364,8 +365,8 @@ class TitanFrameworkOption {
 				$postID = get_the_ID();
 			}
 
-			if ( self::isOnNewScreen() && ! empty( $_GET[ $this->getID() ] ) ) {
-				return $this->cleanValueForSaving( $_GET[ $this->getID() ] );
+			if ( self::isOnNewScreen() && ! empty( $_GET[ $this->getInputName() ] ) ) {
+				return $this->cleanValueForSaving( $_GET[ $this->getInputName() ] );
 			}
 
 			// for meta options, use the default value for new posts/pages
@@ -373,8 +374,8 @@ class TitanFrameworkOption {
 				$value = get_user_meta( $postID, $this->getID(), true );
 			} else if ( metadata_exists( 'post', $postID, $this->getID() ) ) {
 				$value = get_post_meta( $postID, $this->getID(), true );
-			} else if ( self::isOnNewScreen() && ! empty( $_GET[ $this->getID() ] ) ) {
-				$value = $_GET[ $this->getID() ];
+			} else if ( self::isOnNewScreen() && ! empty( $_GET[ $this->getInputName() ] ) ) {
+				$value = $_GET[ $this->getInputName() ];
 			} else {
 				$value = $default_value;
 			}
@@ -484,6 +485,14 @@ class TitanFrameworkOption {
 		}
 	}
 
+	public function getInputName() {
+		if ( ! empty( $this->settings['input_name'] ) ) {
+			return $this->settings['input_name'];
+		} else {
+			return $this->getID();
+		}
+	}
+
 	private $set_post_id = null;
 
 	public function setPostID( $postID ) {
@@ -550,12 +559,12 @@ class TitanFrameworkOption {
 			if ( ! empty( $val ) ) {
 				$defVal = $val;
 			}
-			echo "<script type='text/javascript'>jQuery(function() {
-	jQuery('.tf_conditional').hide();
-	jQuery('.tf_conditional.tf_{$defVal}').show();
-jQuery('#$id').change(function(){
-	jQuery('.tf_conditional').hide();
-	jQuery('.tf_conditional.tf_'+jQuery(this).val()).show();
+			echo "<script type='text/javascript'>jQuery(function($) {
+	$('.tf_conditional').hide();
+	$('.tf_conditional.tf_{$defVal}').show();
+$('#$id').change(function(){
+	$('.tf_conditional').hide();
+	$('.tf_conditional.tf_'+$(this).val()).show();
 });
 });</script>";
 		}

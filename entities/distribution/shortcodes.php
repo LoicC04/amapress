@@ -127,10 +127,18 @@ function amapress_inscription_distrib_shortcode( $atts, $content = null, $tag = 
 		'user'                     => null,
 		'lieu'                     => null,
 		'date'                     => null,
+		'show_contrats_desc'       => 'true',
+		'show_contrats_count'      => 'false',
 		'inscr_all_distrib'        => 'false',
+		'allow_resp_dist_manage'   => 'false',
 		'manage_all_subscriptions' => 'false',
+		'column_date_width'        => '5em',
 		'key'                      => '',
 	), $atts );
+
+	$column_date_width   = $atts['column_date_width'];
+	$show_contrats_desc  = Amapress::toBool( $atts['show_contrats_desc'] );
+	$show_contrats_count = Amapress::toBool( $atts['show_contrats_count'] );
 
 	$allow_anonymous_access = false;
 	$ret                    = '';
@@ -145,6 +153,7 @@ function amapress_inscription_distrib_shortcode( $atts, $content = null, $tag = 
 				} else {
 					$ret .= '<div class="alert alert-info">Pour donner accès à cette page d\'inscription aux distributions, veuillez leur envoyer le lien suivant : 
 <pre>' . $url . '</pre>
+Pour y accéder cliquez <a href="' . $url . '">ici</a>.<br />
 Vous pouvez également utiliser un service de réduction d\'URL tel que <a href="https://bit.ly">bit.ly</a> pour obtenir une URL plus courte à partir du lien ci-dessus.<br/>
 ' . ( ! empty( $atts['shorturl'] ) ? 'Lien court sauvegardé : <code>' . $atts['shorturl'] . '</code><br />' : '' ) . '
 Vous pouvez également utiliser l\'un des QRCode suivants : 
@@ -157,10 +166,18 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 			}
 		}
 		if ( empty( $key ) || empty( $_REQUEST['key'] ) || $_REQUEST['key'] != $key ) {
-			$ret .= '<div class="alert alert-danger">Vous êtes dans un espace sécurisé. Accès interdit</div>';
-			$ret .= $content;
+			if ( empty( $key ) && amapress_can_access_admin() ) {
+				$ret .= '<div style="color:red">L\'argument key (par ex, key="' . uniqid() . uniqid() . '") doit être défini sur le shortcode [' . $tag . '] de cette page : par exemple "[' . $tag . ' key='
+				        . uniqid() . uniqid() . ']". L\'accès à cette page ne peut se faire que de manière non connectée avec cette clé par la amapiens pour s\'inscrire.</div>';
+				$ret .= $content;
 
-			return $ret;
+				return $ret;
+			} elseif ( ! amapress_is_user_logged_in() ) {
+				$ret .= '<div class="alert alert-danger">Vous êtes dans un espace sécurisé. Accès interdit</div>';
+				$ret .= $content;
+
+				return $ret;
+			}
 		}
 
 		if ( amapress_is_user_logged_in() ) {
@@ -207,7 +224,7 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 		}
 	}
 
-
+	$allow_resp_dist_manage   = Amapress::toBool( $atts['allow_resp_dist_manage'] );
 	$inscr_all_distrib        = Amapress::toBool( $atts['inscr_all_distrib'] );
 	$manage_all_subscriptions = Amapress::toBool( $atts['manage_all_subscriptions'] ) && amapress_can_access_admin();
 
@@ -300,11 +317,11 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 		$user_lieux_ids = AmapressUsers::get_user_lieu_ids( $user_id, $from_date );
 		/** @var AmapressDistribution $dist */
 		foreach ( $all_dists as $dist ) {
-			if ( ! in_array( $dist->getLieuId(), $user_lieux_ids ) ) {
+			if ( ! $inscr_all_distrib && ! in_array( $dist->getLieuId(), $user_lieux_ids ) ) {
 				continue;
 			}
 			$dist_contrat_ids = $dist->getContratIds();
-			if ( count( array_intersect( $adhesions_contrat_ids, $dist_contrat_ids ) ) > 0 ) {
+			if ( $inscr_all_distrib || count( array_intersect( $adhesions_contrat_ids, $dist_contrat_ids ) ) > 0 ) {
 				$max_dates --;
 				if ( $max_dates < 0 ) {
 					continue;
@@ -351,13 +368,13 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 		if ( $for_pdf ) {
 			$ret .= '<th class="dist-col-date">Date</th>';
 		} else {
-			$ret .= '<th class="dist-col-date" style="width: 5em">Date</th>';
+			$ret .= '<th class="dist-col-date" style="width: ' . $column_date_width . '">Date</th>';
 		}
 		if ( $for_emargement ) {
 			if ( $for_pdf ) {
 				$ret .= '<th>Produits</th>';
 			} else {
-				$ret .= '<th style="width: 5em">Produits</th>';
+				$ret .= '<th style="width: ' . $column_date_width . '">Produits</th>';
 			}
 		}
 
@@ -366,14 +383,20 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 		/** @var AmapressLieu_distribution $user_lieu */
 //        foreach ($user_lieux as $lieu_id) {
 		for ( $i = 1; $i <= $lieux_needed_resps[ $lieu_id ]; $i ++ ) {
-			$width     = ! $for_pdf ? 'width: calc(100 / ' . $lieux_needed_resps[ $lieu_id ] . ' - 5em)' : '';
-			$role_name = stripslashes( Amapress::getOption( "resp_role_$i-name" ) );
+			$width     = ! $for_pdf ? 'width: calc(100 / ' . $lieux_needed_resps[ $lieu_id ] . ' - ' . $column_date_width . ')' : '';
+			$role_name = stripslashes( Amapress::getOption( "resp_role_{$lieu_id}_$i-name" ) );
+			if ( empty( $role_name ) ) {
+				$role_name = stripslashes( Amapress::getOption( "resp_role_$i-name" ) );
+			}
 			if ( empty( $role_name ) ) {
 				$role_name = "Responsable $i";
 			} else {
 				$has_role_names = true;
 			}
-			$role_desc = stripslashes( Amapress::getOption( "resp_role_$i-desc" ) );
+			$role_desc = stripslashes( Amapress::getOption( "resp_role_{$lieu_id}_$i-desc" ) );
+			if ( empty( $role_name ) ) {
+				$role_desc = stripslashes( Amapress::getOption( "resp_role_$i-desc" ) );
+			}
 			if ( $has_role_names ) {
 				$role_desc = '<br/><span class="role-distrib-desc">' . $role_desc . '</span>';
 			}
@@ -440,11 +463,18 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 					date_i18n( 'H:i', $dist->getEndDateAndHour() ) );
 			}
 			$lieu_users       = array();
+			$contrat_count    = count( $contrat_names ) . ' contrat(s)';
 			$contrat_names    = implode( ', ', $contrat_names );
-			$contrats_content = '<p class="inscr-list-contrats">' . esc_html( $contrat_names ) . '</p>';
-			$date_content     = '<p class="inscr-list-date">' . esc_html( date_i18n( 'D j M Y', $date ) ) . $hours . '</p>';
-			$ret              .= '<th scope="row" class="inscr-list-info dist-col-date">';
-			$ret              .= $date_content;
+			$contrats_content = '';
+			if ( $show_contrats_desc ) {
+				$contrats_content .= '<p class="inscr-list-contrats">' . esc_html( $contrat_names ) . '</p>';
+			}
+			if ( $show_contrats_count ) {
+				$contrats_content .= '<p class="inscr-list-contrats">' . esc_html( $contrat_count ) . '</p>';
+			}
+			$date_content = '<p class="inscr-list-date">' . esc_html( date_i18n( 'D j M Y', $date ) ) . $hours . '</p>';
+			$ret          .= '<th scope="row" class="inscr-list-info dist-col-date">';
+			$ret          .= $date_content;
 			if ( ! $for_emargement ) {
 				$ret .= $contrats_content;
 			}
@@ -577,7 +607,7 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 					$resp_idx = ! $has_role_names ? 0 : $i;
 					if ( null == $resp ) {
 						$inscr_another = '';
-						if ( ( $is_resp_distrib || $is_current_user_resp_amap ) && $can_subscribe ) {
+						if ( ( ( $is_resp_distrib && $allow_resp_dist_manage ) || $is_current_user_resp_amap ) && $can_subscribe ) {
 							$inscr_another = '';
 							if ( ! is_admin() ) {
 								$inscr_another .= '<form class="inscription-distrib-other-user" action="#">';
@@ -592,7 +622,7 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 							$inscr_another .= '<p><a href="' . admin_url( 'admin.php?page=amapress_gestion_amapiens_page&tab=add_other_user' ) . '" title="Si la personne est introuvable dans la liste ci-dessus, vous pouvez l\'inscrire avec son nom et/ou email et/ou téléphone">Ajouter une personne</a></a></p>';
 						}
 
-						$inscr_self = '<button type="button" class="' . $btn_class . ' dist-inscrire-button"  data-confirm="Etes-vous sûr de vouloir vous inscrire ?" data-role="' . $resp_idx . '" data-dist="' . $dist->ID . '" data-user="' . $user_id . '" data-post-id="' . $current_post->ID . '" data-key="' . $key . '">M\'inscrire</button>';
+						$inscr_self = '<button type="button" class="' . $btn_class . ' dist-inscrire-button"  data-confirm="Etes-vous sûr de vouloir vous inscrire ?" data-not_member="' . $inscr_all_distrib . '" data-role="' . $resp_idx . '" data-dist="' . $dist->ID . '" data-user="' . $user_id . '" data-post-id="' . ( $current_post ? $current_post->ID : 0 ) . '" data-key="' . $key . '">M\'inscrire</button>';
 						$missing    = '';
 						if ( ! $for_pdf ) {
 							if ( ( $has_role_names || 1 == $i ) && ! $is_resp && $can_subscribe ) {
@@ -610,13 +640,16 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 						$ret      .= '<td style="text-align: center">';
 						$td_resps = is_array( $resp ) ? $resp : [ $resp ];
 						foreach ( $td_resps as $r ) {
+							if ( ! $r ) {
+								continue;
+							}
 							$ret .= $r->getDisplay( $atts );
 							if ( $is_user_part_of || $is_current_user_resp_amap ) {
 								$is_resp = $is_resp || $r->ID == $user_id;
 								if ( $can_unsubscribe ) {
 									if ( $r->ID == $user_id ) {
 										$ret .= '<button type="button" class="' . $btn_class . ' dist-desinscrire-button" data-confirm="Etes-vous sûr de vouloir vous désinscrire ?" data-dist="' . $dist->ID . '" data-user="' . $user_id . '" data-post-id="' . $current_post->ID . '" data-key="' . $key . '">Me désinscrire</button>';
-									} else if ( $is_resp_distrib || $is_current_user_resp_amap ) {
+									} else if ( ( $is_resp_distrib && $allow_resp_dist_manage ) || $is_current_user_resp_amap ) {
 										$ret .= '<button type="button" class="' . $btn_class . ' dist-desinscrire-button" data-confirm="Etes-vous sûr de vouloir désinscrire cet amapien ?" data-dist="' . $dist->ID . '" data-user="' . $r->ID . '">Désinscrire</button>';
 									}
 								}
@@ -654,6 +687,10 @@ Vous pouvez également utiliser l\'un des QRCode suivants :
 		//$ret .= '<script type="text/javascript">jQuery(function($) {$("#inscr-distrib-table").DataTable().fixedHeader.enable(true);});</script>';
 	}
 
+	$ret .= '<style type="text/css">.inscr-list-info * {
+    max-width: ' . $column_date_width . ';
+    white-space: normal !important;
+}</style>';
 	if ( is_admin() ) {
 		$ret .= '<style type="text/css">.dist-col-date {display: none}</style>';
 		$ret .= '<script type="text/javascript">
@@ -665,10 +702,10 @@ jQuery(function($) {
 			return markup;
 		  },
 		  templateResult: function(data) {
-			return jQuery("<span>"+data.text+"</span>");
+			return $("<span>"+data.text+"</span>");
 		  },
 		  templateSelection: function(data) {
-			return jQuery("<span>"+data.text+"</span>");
+			return $("<span>"+data.text+"</span>");
 		  },
 		  width: \'auto\'
     }) });
@@ -733,7 +770,10 @@ add_action( 'wp_ajax_inscrire_distrib_action', function () {
 	}
 
 	$dist = AmapressDistribution::getBy( $dist_id );
-	switch ( $dist->inscrireResponsable( $user_id, isset( $_REQUEST['role'] ) ? intval( $_REQUEST['role'] ) : 0 ) ) {
+	switch ( $dist->inscrireResponsable( $user_id,
+		isset( $_REQUEST['role'] ) ? intval( $_REQUEST['role'] ) : 0,
+		false,
+		isset( $_REQUEST['not_member'] ) ? Amapress::toBool( $_REQUEST['not_member'] ) : false ) ) {
 		case 'already_in_list':
 			if ( $is_current ) {
 				echo '<p class="error">Vous êtes déjà inscrit</p>';
@@ -810,7 +850,10 @@ add_action( 'wp_ajax_nopriv_inscrire_distrib_action', function () {
 	}
 
 	$dist = AmapressDistribution::getBy( $dist_id );
-	switch ( $dist->inscrireResponsable( $user_id, isset( $_REQUEST['role'] ) ? intval( $_REQUEST['role'] ) : 0, true ) ) {
+	switch ( $dist->inscrireResponsable( $user_id,
+		isset( $_REQUEST['role'] ) ? intval( $_REQUEST['role'] ) : 0,
+		true,
+		isset( $_REQUEST['not_member'] ) ? Amapress::toBool( $_REQUEST['not_member'] ) : false ) ) {
 		case 'already_in_list':
 			echo '<p class="error">Vous êtes déjà inscrit</p>';
 			break;

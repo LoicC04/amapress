@@ -19,7 +19,7 @@ function amapress_get_next_distributions_cron() {
 
 	$ret = [];
 	foreach ( $next_distribs as $dist ) {
-		$ret[] = [ 'id' => $dist->getID(), 'time' => $dist->getStartDateAndHour() ];
+		$ret[] = [ 'id' => $dist->getID(), 'time' => $dist->getStartDateAndHour(), 'title' => $dist->getTitle() ];
 	}
 
 	return $ret;
@@ -28,25 +28,33 @@ function amapress_get_next_distributions_cron() {
 add_action( 'amapress_recall_resp_distrib', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
 	$responsable_ids = $dist->getResponsablesIds();
 	if ( empty( $responsable_ids ) ) {
+		echo '<p>Pas de responsables</p>';
+
 		return;
 	}
 
-	$attachments   = [];
-	$attachments[] = Amapress::createPdfFromHtmlAsMailAttachment(
-		'<div style="font-size: ' . Amapress::getOption( 'liste-emargement-print-font-size', 8 ) . 'pt">' .
-		getListeEmargement( $dist->ID, false, true ) .
-		'</div>',
-		strtolower( sanitize_file_name( 'liste-emargement-' . $dist->getTitle() . '.pdf' ) ) );
-	$attachments[] = Amapress::createPdfFromHtmlAsMailAttachment(
-		'<div style="font-size: ' . Amapress::getOption( 'liste-emargement-print-font-size', 8 ) . 'pt">' .
-		getListeEmargement( $dist->ID, true, true ) .
-		'</div>',
-		strtolower( sanitize_file_name( 'liste-emargement-tous-contrats-' . $dist->getTitle() . '.pdf' ) ) );
+	$attachments = [];
+	if ( Amapress::getOption( 'distribution-resp-recall-send-liste' ) ) {
+		$attachments[] = Amapress::createPdfFromHtmlAsMailAttachment(
+			'<div style="font-size: ' . Amapress::getOption( 'liste-emargement-print-font-size', 8 ) . 'pt">' .
+			getListeEmargement( $dist->ID, false, true ) .
+			'</div>',
+			strtolower( sanitize_file_name( 'liste-emargement-' . $dist->getTitle() . '.pdf' ) ) );
+	}
+	if ( Amapress::getOption( 'distribution-resp-recall-send-liste-tous' ) ) {
+		$attachments[] = Amapress::createPdfFromHtmlAsMailAttachment(
+			'<div style="font-size: ' . Amapress::getOption( 'liste-emargement-print-font-size', 8 ) . 'pt">' .
+			getListeEmargement( $dist->ID, true, true ) .
+			'</div>',
+			strtolower( sanitize_file_name( 'liste-emargement-tous-contrats-' . $dist->getTitle() . '.pdf' ) ) );
+	}
 
 	$responsable_users = amapress_prepare_message_target_to( "user:include=" . implode( ',', $responsable_ids ), "Responsable de " . $dist->getTitle(), "distribution" );
 	amapress_send_message(
@@ -55,11 +63,15 @@ add_action( 'amapress_recall_resp_distrib', function ( $args ) {
 		'', $responsable_users, $dist, $attachments,
 		amapress_get_recall_cc_from_option( 'distribution-resp-recall-cc' ),
 		null, $dist->getResponsablesResponsablesDistributionsReplyto() );
+	echo '<p>Email aux responsables de distribution envoyé</p>';
+
 } );
 add_action( 'amapress_recall_distrib_emargement', function ( $args ) {
 	//distribution-emargement-recall-mail-
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
@@ -73,6 +85,8 @@ add_action( 'amapress_recall_distrib_emargement', function ( $args ) {
 		}
 	}
 	if ( empty( $responsable_ids ) ) {
+		echo '<p>Pas de responsables</p>';
+
 		return;
 	}
 
@@ -95,6 +109,9 @@ add_action( 'amapress_recall_distrib_emargement', function ( $args ) {
 		'', $responsable_users, $dist, $attachments,
 		amapress_get_recall_cc_from_option( 'distribution-resp-recall-cc' ),
 		null, $dist->getResponsablesResponsablesDistributionsReplyto() );
+
+	echo '<p>Email d\'envoi de la liste d\'émargement envoyé</p>';
+
 } );
 add_action( 'amapress_recall_distrib_changes', function ( $args ) {
 	//distribution-changes-recall-cc
@@ -105,6 +122,8 @@ add_action( 'amapress_recall_distrib_changes', function ( $args ) {
 
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
@@ -120,6 +139,9 @@ add_action( 'amapress_recall_distrib_changes', function ( $args ) {
 			'', $amapien_users, $dist, array(),
 			amapress_get_recall_cc_from_option( 'distribution-changes-recall-cc' ),
 			null, $dist->getResponsablesResponsablesDistributionsReplyto() );
+		echo '<p>Email de changement de lieu envoyé</p>';
+	} else {
+		echo '<p>Pas de changement de lieu</p>';
 	}
 
 	if ( ! empty( $dist->getSpecialHeure_debut() ) || ! empty( $dist->getSpecialHeure_fin() ) ) {
@@ -130,6 +152,9 @@ add_action( 'amapress_recall_distrib_changes', function ( $args ) {
 			'', $amapien_users, $dist, array(),
 			amapress_get_recall_cc_from_option( 'distribution-changes-recall-cc' ),
 			null, $dist->getResponsablesResponsablesDistributionsReplyto() );
+		echo '<p>Email de changement d\'heure envoyé</p>';
+	} else {
+		echo '<p>Pas de changement d\'heure</p>';
 	}
 
 	$paniers_modifies = array_merge(
@@ -144,6 +169,9 @@ add_action( 'amapress_recall_distrib_changes', function ( $args ) {
 			'', $amapien_users, $dist, array(),
 			amapress_get_recall_cc_from_option( 'distribution-changes-recall-cc' ),
 			null, $dist->getResponsablesResponsablesDistributionsReplyto() );
+		echo '<p>Email de changement de distribution de paniers envoyé</p>';
+	} else {
+		echo '<p>Pas de changement de distribution de paniers</p>';
 	}
 } );
 
@@ -191,6 +219,7 @@ add_action( 'amapress_recall_distrib_thisday', function ( $args ) {
 			null, array(),
 			amapress_get_recall_cc_from_option( 'distribution-changes-recall-cc' ),
 			null, AmapressDistribution::getResponsablesRespDistribReplyto( $lieu ) );
+		echo '<p>Email de notification aux amapiens d\'absence de distribution envoyé</p>';
 	} else if ( ! $has_dist_at_date ) {
 		$subject = Amapress::getOption( 'distribution-moved-recall-mail-subject' );
 		$content = Amapress::getOption( 'distribution-moved-recall-mail-content' );
@@ -208,12 +237,17 @@ add_action( 'amapress_recall_distrib_thisday', function ( $args ) {
 			$other_dist, array(),
 			amapress_get_recall_cc_from_option( 'distribution-changes-recall-cc' ),
 			null, AmapressDistribution::getResponsablesRespDistribReplyto( $lieu ) );
+		echo '<p>Email de notification aux amapiens de distribution déplacée envoyé</p>';
+	} else {
+		echo '<p>Pas de changement de distribution</p>';
 	}
 } );
 
 add_action( 'amapress_recall_verify_distrib', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
@@ -231,6 +265,8 @@ add_action( 'amapress_recall_verify_distrib', function ( $args ) {
 	$responsable_ids = array_unique( $responsable_ids );
 
 	if ( empty( $responsable_ids ) ) {
+		echo '<p>Pas de responsables de distribution</p>';
+
 		return;
 	}
 
@@ -253,11 +289,65 @@ add_action( 'amapress_recall_verify_distrib', function ( $args ) {
 		'', $responsable_users, $dist, $attachments,
 		amapress_get_recall_cc_from_option( 'distribution-verify-recall-cc' ),
 		null, $dist->getResponsablesResponsablesDistributionsReplyto() );
+	echo '<p>Email de vérification des listes d\'émargement envoyé</p>';
+} );
+
+add_action( 'amapress_recall_missing_resp_distrib', function ( $args ) {
+	$dist = AmapressDistribution::getBy( $args['id'] );
+	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
+		return;
+	}
+
+
+	$dist_id     = $dist->ID;
+	$contrat_ids = implode( ',', $dist->getContratIds() );
+	$query       = "post_type=amps_adhesion&amapress_contrat_inst=$contrat_ids|amapress_adhesion_adherent,amapress_adhesion_adherent2,amapress_adhesion_adherent3,amapress_adhesion_adherent4|amapress_post=$dist_id|amapress_distribution_date";
+
+	$required_resps_count = AmapressDistributions::get_required_responsables( $dist_id );
+	$resps_count          = count( $dist->getResponsablesIds() );
+	$missing_resps_count  = $required_resps_count - $resps_count;
+
+	if ( $missing_resps_count <= 0 ) {
+		echo '<p>Pas de responsable de distribution manquant</p>';
+
+		return;
+	}
+
+	$subject = Amapress::getOption( 'distribution-miss-resps-recall-mail-subject' );
+	$content = Amapress::getOption( 'distribution-miss-resps-recall-mail-content' );
+	$url     = Amapress::get_inscription_distrib_page_href();
+	if ( ! empty( $url ) ) {
+		$inscription_link = Amapress::makeLink( $url, 'S\'inscrire comme responsable de distribution' );
+	} else {
+		$inscription_link = '#page non configurée#';
+	}
+
+	$subject = str_replace( '%%nb_resp_manquants%%', $missing_resps_count, $subject );
+	$subject = str_replace( '%%nb_resp_requis%%', $required_resps_count, $subject );
+	$subject = str_replace( '%%nb_resp_inscrits%%', $resps_count, $subject );
+	$content = str_replace( '%%nb_resp_manquants%%', $missing_resps_count, $content );
+	$content = str_replace( '%%nb_resp_requis%%', $required_resps_count, $content );
+	$content = str_replace( '%%nb_resp_inscrits%%', $resps_count, $content );
+	$content = str_replace( '%%lien_inscription%%', $inscription_link, $content );
+
+	$amapien_users = amapress_prepare_message_target_bcc( $query, "Amapiens de " . $dist->getTitle(), "distribution", true );
+	amapress_send_message(
+		$subject,
+		$content,
+		'', $amapien_users, $dist, array(),
+		amapress_get_recall_cc_from_option( 'distribution-miss-resps-recall-cc' ),
+		null, $dist->getResponsablesResponsablesDistributionsReplyto()
+	);
+	echo '<p>Email de responsables de distribution manquants envoyé</p>';
 } );
 
 add_action( 'amapress_recall_amapiens_distrib', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
@@ -273,6 +363,7 @@ add_action( 'amapress_recall_amapiens_distrib', function ( $args ) {
 		amapress_get_recall_cc_from_option( 'distribution-amapiens-recall-cc' ),
 		null, $dist->getResponsablesResponsablesDistributionsReplyto()
 	);
+	echo '<p>Email de rappel de distribution envoyé</p>';
 } );
 
 function amapress_distribution_all_amapiens_recall_options() {
@@ -346,6 +437,86 @@ function amapress_distribution_all_amapiens_recall_options() {
 		),
 	);
 }
+
+function amapress_distribution_missing_responsables_recall_options() {
+	return array(
+		array(
+			'id'                  => 'distribution-miss-resps-recall-1',
+			'name'                => 'Rappel 1',
+			'desc'                => 'Responsable(s) de distribution manquant(s) à tous les amapiens',
+			'type'                => 'event-scheduler',
+			'hook_name'           => 'amapress_recall_missing_resp_distrib',
+			'hook_args_generator' => function ( $option ) {
+				return amapress_get_next_distributions_cron();
+			},
+		),
+		array(
+			'id'                  => 'distribution-miss-resps-recall-2',
+			'name'                => 'Rappel 2',
+			'desc'                => 'Responsable(s) de distribution manquant(s) à tous les amapiens',
+			'type'                => 'event-scheduler',
+			'hook_name'           => 'amapress_recall_missing_resp_distrib',
+			'hook_args_generator' => function ( $option ) {
+				return amapress_get_next_distributions_cron();
+			},
+		),
+		array(
+			'id'                  => 'distribution-miss-resps-recall-3',
+			'name'                => 'Rappel 3',
+			'desc'                => 'Responsable(s) de distribution manquant(s) à tous les amapiens',
+			'type'                => 'event-scheduler',
+			'hook_name'           => 'amapress_recall_missing_resp_distrib',
+			'hook_args_generator' => function ( $option ) {
+				return amapress_get_next_distributions_cron();
+			},
+		),
+		array(
+			'id'       => 'distribution-miss-resps-recall-mail-subject',
+			'name'     => 'Sujet de l\'email',
+			'sanitize' => false,
+			'type'     => 'text',
+			'default'  => '[Rappel] Responsable(s) manquant(s) à %%post:title%%',
+		),
+		array(
+			'id'      => 'distribution-miss-resps-recall-mail-content',
+			'name'    => 'Contenu de l\'email',
+			'type'    => 'editor',
+			'default' => wpautop( "Bonjour,\nA la %%lien_distrib_titre%% qui a lieu de %%post:heure_debut%% à %%post:heure_fin%%, il manque %%nb_resp_manquants%% responsable(s) de distribution sur les %%nb_resp_requis%% requis.\n%%lien_inscription%%\nPensez à vous inscrire ! Merci\n\n%%nom_site%%" ),
+			'desc'    =>
+				AmapressDistribution::getPlaceholdersHelp(
+					[
+						'nb_resp_manquants' => 'Nombre de responsables de distribution manquants à la distribution',
+						'nb_resp_inscrits'  => 'Nombre de responsables inscrits à la distribution',
+						'nb_resp_requis'    => 'Nombre de responsables requis à la distribution',
+						'lien_inscription'  => 'Lien "S\'inscrire comme responsable de distribution" vers la page d\'inscription aux distributions',
+					]
+				),
+		),
+		array(
+			'id'           => 'distribution-miss-resps-recall-cc',
+			'name'         => amapress__( 'Cc' ),
+			'type'         => 'select-users',
+			'autocomplete' => true,
+			'multiple'     => true,
+			'tags'         => true,
+			'desc'         => 'Emails en copie',
+		),
+		array(
+			'id'           => 'distribution-miss-resps-recall-cc-groups',
+			'name'         => amapress__( 'Groupes Cc' ),
+			'type'         => 'select',
+			'options'      => 'amapress_get_collectif_target_queries',
+			'autocomplete' => true,
+			'multiple'     => true,
+			'tags'         => true,
+			'desc'         => 'Groupe(s) en copie',
+		),
+		array(
+			'type' => 'save',
+		),
+	);
+}
+
 
 function amapress_distribution_verify_recall_options() {
 	return array(
@@ -465,6 +636,20 @@ function amapress_distribution_responsable_recall_options() {
 			'default'  => '[Rappel] Vous êtes inscrit responsable à %%post:title%%',
 		),
 		array(
+			'id'      => 'distribution-resp-recall-send-liste',
+			'name'    => 'Liste émargement',
+			'type'    => 'checkbox',
+			'desc'    => 'Attacher la liste d\'émargement contenant uniquement les contrats qui seront distribués',
+			'default' => 1,
+		),
+		array(
+			'id'      => 'distribution-resp-recall-send-liste-tous',
+			'name'    => 'Liste émargement complète',
+			'type'    => 'checkbox',
+			'desc'    => 'Attacher la liste d\'émargement contenant tous les contrats y compris ceux qui ne seront pas distribués',
+			'default' => 1,
+		),
+		array(
 			'id'      => 'distribution-resp-recall-mail-content',
 			'name'    => 'Contenu de l\'email',
 			'type'    => 'editor',
@@ -581,7 +766,12 @@ function amapress_generate_weeks_cron( $option ) {
 		foreach ( $weeks as $w ) {
 			$w     = strtotime( 'next ' . $dist_weekday, $w );
 			$w     = Amapress::make_date_and_hour( $w, $lieu->getHeure_debut() );
-			$ret[] = [ 'date' => $w, 'lieu' => $lieu->ID, 'time' => $w ];
+			$ret[] = [
+				'date'  => $w,
+				'lieu'  => $lieu->ID,
+				'time'  => $w,
+				'title' => 'Semaine du ' . date_i18n( 'd/m/Y', $w ) . ' à ' . $lieu->getTitle()
+			];
 		}
 	}
 

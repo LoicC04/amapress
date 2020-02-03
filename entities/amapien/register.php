@@ -35,12 +35,12 @@ function amapress_register_entities_amapien( $entities ) {
 //                'type' => 'text',
 //                'desc' => 'Rôle dans l\'AMAP',
 //            ),
-			'head_amapress4'  => array(
+			'head_amapress4'    => array(
 				'id'   => 'fonctions_sect',
 				'name' => amapress__( 'Fonctions' ),
 				'type' => 'heading',
 			),
-			'all_roles'       => array(
+			'all_roles'         => array(
 				'name'        => amapress__( 'Fonctions actuelles' ),
 				'show_column' => false,
 				'type'        => 'custom',
@@ -51,7 +51,7 @@ function amapress_register_entities_amapien( $entities ) {
 					if ( ! $amapien ) {
 						return '';
 					}
-					$roles = esc_html( $amapien->getAmapRolesString() );
+					$roles = $amapien->getAmapRolesStringLinks();
 
 					return $roles;
 				},
@@ -65,7 +65,7 @@ function amapress_register_entities_amapien( $entities ) {
 					return $roles;
 				}
 			),
-			'role_desc'       => array(
+			'role_desc'         => array(
 				'type'        => 'custom',
 				'name'        => amapress__( 'Rôle sur le site' ),
 				'show_column' => false,
@@ -77,6 +77,7 @@ function amapress_register_entities_amapien( $entities ) {
 <br/><span style="text-decoration: underline">Important :</span> Sélectionner et compléter la fiche producteur avec l’utilisateur correspondant</p>
 <p><strong>Amap Coordinateur</strong> : <em>Peut éditer le collectif, créer un compte utilisateur, accède aux listes d’émargement, ...</em>
 <br /><span style="text-decoration: underline">Important :</span> Membre du collectif, cocher l’étiquette Fonction correspondante ci-dessous</p>
+<p><strong>Amap Rédacteur</strong> : <em>Accède à la publication d’articles et de recettes</em></p>
 <p><strong>Amapien</strong> : <em>Accède aux information personnalisées disponible sur le site vitrine</em>
 <br />Rôle par défaut</p>
 <p><strong>Amap Trésorier</strong> : <em>Accède au menu “Gestion adhésion”</em></p>
@@ -87,19 +88,63 @@ function amapress_register_entities_amapien( $entities ) {
 <br />Ouvre tous les droits sur le site</p>';
 				}
 			),
-			'amap_roles'      => array(
+			'amap_roles'        => array(
 				'name'        => amapress__( 'Membre du collectif - Rôle dans l’Amap' ),
 				'type'        => 'multicheck-categories',
 				'taxonomy'    => AmapressUser::AMAP_ROLE,
 				'desc'        => '
-<p>Pour identifier ou contacter un membre du collectif via la fonctionnalité trombinoscope du site, sélectionner l’étiquette correspondante ci-dessous ou la <a href="' . admin_url( 'edit-tags.php?taxonomy=amps_amap_role_category' ) . '">créer</a> :</p>
+<p id="amapress_user_amap_roles">Pour identifier ou contacter un membre du collectif via la fonctionnalité trombinoscope du site, sélectionner l’étiquette correspondante ci-dessous ou la <a href="' . admin_url( 'edit-tags.php?taxonomy=amps_amap_role_category' ) . '">créer</a> :</p>
 <p><em>Exemple : Accueil nouveaux,  Boite Contact,  Convivialité-apéro,  Coordination associative,  Distributions, Feuille de chou,  Responsable Intermittents,  Ouverture vers l\'extérieur,  Panier solidaire,  Référent miel,  Relais Réseau AMAP IdF,  Responsable légal,  Site internet,  Sortie à la ferme…</em></p>
 <p>Pour modifier le collectif : <a href="' . admin_url( 'admin.php?page=amapress_collectif' ) . '">Editer le collectif</a></p>',
 				'show_column' => false,
 				'csv'         => false,
 //                'searchable' => true,
 			),
-			'intermittent'    => array(
+			'adh_type'          => array(
+				'name'          => amapress__( 'Type' ),
+				'type'          => 'custom',
+				'show_column'   => true,
+				'csv_import'    => false,
+				'desc'          => 'Type d\'adhérent (Principal, Co-adhérent...)',
+				'custom'        => function ( $user_id ) {
+					$amapien = AmapressUser::getBy( $user_id );
+
+					return $amapien ? $amapien->getAdherentTypeDisplay() : '';
+				},
+				'custom_column' => function ( $option, $user_id ) {
+					$amapien = AmapressUser::getBy( $user_id );
+					echo $amapien ? $amapien->getAdherentTypeDisplay() : '';
+				}
+			),
+			'diffusion'         => array(
+				'name'        => amapress__( 'Diffusion' ),
+				'type'        => 'custom',
+				'show_column' => false,
+				'csv_import'  => false,
+				'custom'      => function ( $user_id ) {
+					$amapien = AmapressUser::getBy( $user_id );
+
+					$mlgrps = [];
+					foreach ( AmapressMailingGroup::getAll() as $mlgrp ) {
+						if ( in_array( $amapien->ID, $mlgrp->getMembersIds() ) ) {
+							$mlgrps[] = Amapress::makeLink( $mlgrp->getAdminMembersLink(), $mlgrp->getName(), true, true );
+						}
+					}
+					$mllsts = [];
+					foreach ( Amapress_MailingListConfiguration::getAll() as $mllst ) {
+						if ( in_array( $amapien->ID, $mllst->getMembersIds() ) ) {
+							$mllsts[] = Amapress::makeLink( $mllst->getAdminMembersLink(), $mllst->getName(), true, true );
+						}
+					}
+					$ret = '<div id="amapress_user_diffusion">';
+					$ret .= '<p>Membres des mailing-listes: ' . ( empty( $mllsts ) ? '<em>aucune</em>' : implode( ', ', $mllsts ) ) . '</p>';
+					$ret .= '<p>Membres des Emails groupés: ' . ( empty( $mlgrps ) ? '<em>aucun</em>' : implode( ', ', $mlgrps ) ) . '</p>';
+					$ret .= '</div>';
+
+					return $ret;
+				},
+			),
+			'intermittent'      => array(
 				'name'              => amapress__( 'Intermittent' ),
 				'type'              => 'custom',
 				'custom_csv_sample' => function ( $option, $arg ) {
@@ -119,10 +164,10 @@ function amapress_register_entities_amapien( $entities ) {
 					$amapien = AmapressUser::getBy( $user_id, true );
 					if ( $amapien ) {
 						if ( $amapien->isIntermittent() ) {
-							$ret .= '<p>L\'utilisateur est intermittent et reçoit des alertes lorsque des paniers sont occasionnellement disponibles</p>';
+							$ret .= '<p id="amapress_user_intermittent">L\'utilisateur est intermittent et reçoit des alertes lorsque des paniers sont occasionnellement disponibles</p>';
 							$ret .= '<input class="button button-secondary" type="submit" name="desinscr_intermittent" value="Désinscrire de la liste des intermittents" />';
 						} else {
-							$ret .= '<p>L\'utilisateur n\'est pas intermittent</p>';
+							$ret .= '<p id="amapress_user_intermittent">L\'utilisateur n\'est pas intermittent</p>';
 							$ret .= '<input class="button button-secondary" type="submit" name="inscr_intermittent" value="Inscrire sur la liste des intermittents" />';
 						}
 					}
@@ -143,7 +188,7 @@ function amapress_register_entities_amapien( $entities ) {
 				},
 				'show_column'       => false,
 			),
-			'no_renew'        => array(
+			'no_renew'          => array(
 				'name'       => amapress__( 'Non renouvellement' ),
 				'type'       => 'checkbox',
 				'desc'       => 'L\'amapien n\'a pas renouvelé',
@@ -151,7 +196,7 @@ function amapress_register_entities_amapien( $entities ) {
 				'csv_import' => false,
 				'default'    => 0,
 			),
-			'no_renew_reason' => array(
+			'no_renew_reason'   => array(
 				'name'       => amapress__( 'Motif' ),
 				'type'       => 'text',
 				'default'    => '',
@@ -159,13 +204,28 @@ function amapress_register_entities_amapien( $entities ) {
 				'csv_import' => false,
 				'desc'       => 'Motif de non renouvellement',
 			),
+			'last_login'        => array(
+				'name'                 => amapress__( 'Dernière connexion' ),
+				'type'                 => 'custom',
+				'show_column'          => true,
+				'csv'                  => false,
+				'sort_column'          => 'last_login',
+				'use_custom_as_column' => true,
+				'custom'               => function ( $user_id ) {
+					$last_login = get_user_meta( $user_id, 'last_login', true );
+					if ( empty( $last_login ) ) {
+						return '';
+					}
 
-			'head_amapress0'     => array(
+					return date_i18n( 'd/m/Y H:i:s', intval( $last_login ) );
+				}
+			),
+			'head_amapress0'    => array(
 				'id'   => 'amapress_sect',
 				'name' => amapress__( 'Amapress' ),
 				'type' => 'heading',
 			),
-			'avatar'             => array(
+			'avatar'            => array(
 				'name'            => amapress__( 'Avatar' ),
 				'selector-title'  => 'Sélectionnez/téléversez votre photo',
 				'selector-button' => 'Utiliser cette photo',
@@ -174,33 +234,33 @@ function amapress_register_entities_amapien( $entities ) {
 				'desc'            => 'Avatar',
 				'show_column'     => false,
 			),
-			'head_amapress'      => array(
+			'head_amapress'     => array(
 				'id'   => 'address_sect',
 				'name' => amapress__( 'Adresses' ),
 				'type' => 'heading',
 			),
-			'adresse'            => array(
+			'adresse'           => array(
 				'name'       => amapress__( 'Adresse' ),
 				'type'       => 'textarea',
 				'desc'       => 'Adresse',
 				'searchable' => true,
 //                'required' => true,
 			),
-			'code_postal'        => array(
+			'code_postal'       => array(
 				'name'       => amapress__( 'Code postal' ),
 				'type'       => 'text',
 				'desc'       => 'Code postal',
 				'searchable' => true,
 //                'required' => true,
 			),
-			'ville'              => array(
+			'ville'             => array(
 				'name'       => amapress__( 'Ville' ),
 				'type'       => 'text',
 				'desc'       => 'Ville',
 				'searchable' => true,
 //                'required' => true,
 			),
-			'adresse_localized'  => array(
+			'adresse_localized' => array(
 				'name'                   => amapress__( 'Localisé' ),
 				'type'                   => 'address',
 				'use_as_field'           => false,
@@ -212,24 +272,24 @@ function amapress_register_entities_amapien( $entities ) {
 				'town_field_name'        => 'amapress_user_ville',
 				'show_on'                => 'edit-only',
 			),
-			'head_amapress2'     => array(
+			'head_amapress2'    => array(
 				'id'   => 'phones_sect',
 				'name' => amapress__( 'Téléphones' ),
 				'type' => 'heading',
 			),
-			'telephone'          => array(
+			'telephone'         => array(
 				'name'       => amapress__( 'Téléphone' ),
 				'type'       => 'text',
 				'desc'       => 'Téléphone',
 				'searchable' => true,
 			),
-			'telephone2'         => array(
+			'telephone2'        => array(
 				'name'       => amapress__( 'Téléphone 2' ),
 				'type'       => 'text',
 				'desc'       => 'Téléphone 2',
 				'searchable' => true,
 			),
-			'telephone3'         => array(
+			'telephone3'        => array(
 				'name'        => amapress__( 'Téléphone 3' ),
 				'type'        => 'text',
 				'desc'        => 'Téléphone 3',
@@ -237,7 +297,7 @@ function amapress_register_entities_amapien( $entities ) {
 				'show_on'     => 'edit-only',
 				'show_column' => false,
 			),
-			'telephone4'         => array(
+			'telephone4'     => array(
 				'name'        => amapress__( 'Téléphone 4' ),
 				'type'        => 'text',
 				'desc'        => 'Téléphone 4',
@@ -245,7 +305,7 @@ function amapress_register_entities_amapien( $entities ) {
 				'show_on'     => 'edit-only',
 				'show_column' => false,
 			),
-			'moyen'              => array(
+			'moyen'          => array(
 				'name'        => amapress__( 'Moyen préféré' ),
 				'type'        => 'select',
 				'show_column' => false,
@@ -255,13 +315,13 @@ function amapress_register_entities_amapien( $entities ) {
 				),
 				'desc'        => 'Moyen de communication préféré',
 			),
-			'head_amapress6'     => array(
+			'head_amapress6' => array(
 				'id'      => 'contrats_sect',
 				'name'    => amapress__( 'Contrats' ),
 				'type'    => 'heading',
 				'show_on' => 'edit-only',
 			),
-			'contrats'           => array(
+			'contrats'       => array(
 				'name'                     => amapress__( 'Contrats' ),
 				'show_column'              => true,
 				'related_posts_count_func' => function ( $user_id ) {
@@ -451,12 +511,12 @@ function amapress_register_entities_amapien( $entities ) {
 			'exp_csv'   => true,
 		),
 		'row_actions'         => array(
-			'add_inscription' => [
+			'add_inscription'  => [
 				'label'  => 'Ajout Inscription Contrat',
 				'href'   => admin_url( 'admin.php?page=amapress_gestion_amapiens_page&tab=add_inscription&user_id=%id%' ),
 				'target' => '_blank',
 			],
-			'relocate'        => array(
+			'relocate'         => array(
 				'label'     => 'Géolocaliser',
 				'condition' => function ( $user_id ) {
 					$user = AmapressUser::getBy( $user_id );
@@ -465,9 +525,24 @@ function amapress_register_entities_amapien( $entities ) {
 				},
 				'confirm'   => true,
 			),
-			'resend_welcome'  => array(
+			'resend_welcome'   => array(
 				'label'   => 'Renvoyer l\'email de bienvenue',
 				'confirm' => true,
+			),
+			'remove_collectif' => array(
+				'label'      => 'Supprimer du collectif',
+				'confirm'    => true,
+				'capability' => 'manage_contrats',
+				'condition'  => function ( $user_id ) {
+					$user = AmapressUser::getBy( $user_id );
+
+					$user_ids = get_users(
+						[ 'amapress_role' => 'collectif', 'fields' => 'ids' ]
+					);
+
+					return $user && in_array( $user->ID, $user_ids );
+				},
+				'show_on'    => 'editor',
 			)
 		),
 	);
@@ -878,15 +953,43 @@ function amapress_register_admin_bar_menu_items( $items ) {
 		)
 	);
 
-	$pre_inscr_href = Amapress::get_pre_inscription_page_href();
-	if ( ! empty( $pre_inscr_href ) ) {
-		$main_items[] = array(
-			'id'         => 'amapress_goto_preinscr_page',
-			'title'      => 'Pré-inscription en ligne',
-			'icon'       => 'dashicons-pressthis',
-			'capability' => 'read',
-			'href'       => $pre_inscr_href,
-		);
+	if ( amapress_current_user_can( 'manage_contrats' ) ) {
+		$pre_inscr_href = Amapress::get_pre_inscription_page_href();
+		if ( ! empty( $pre_inscr_href ) ) {
+			$main_items[] = array(
+				'id'         => 'amapress_goto_preinscr_page',
+				'title'      => 'Pré-inscription en ligne',
+				'icon'       => 'dashicons-pressthis',
+				'capability' => 'read',
+				'href'       => $pre_inscr_href,
+			);
+		}
+	}
+
+	if ( amapress_can_access_admin() ) {
+		$inter_inscr_href = Amapress::get_page_with_shortcode_href( 'intermittents-inscription', 'amps_inscr_int_page' );
+		if ( ! empty( $inter_inscr_href ) ) {
+			$main_items[] = array(
+				'id'         => 'amapress_goto_interinscr_page',
+				'title'      => 'Inscription Intermittent',
+				'icon'       => 'dashicons-none flaticon-business-2',
+				'capability' => 'read',
+				'href'       => $inter_inscr_href,
+			);
+		}
+	}
+
+	if ( amapress_can_access_admin() ) {
+		$distrib_inscr_href = Amapress::get_inscription_distrib_page_href();
+		if ( ! empty( $distrib_inscr_href ) ) {
+			$main_items[] = array(
+				'id'         => 'amapress_goto_distinscr_page',
+				'title'      => 'Inscription Distrib',
+				'icon'       => 'dashicons-store',
+				'capability' => 'read',
+				'href'       => $distrib_inscr_href,
+			);
+		}
 	}
 
 	$main_items = array_merge(
@@ -895,7 +998,7 @@ function amapress_register_admin_bar_menu_items( $items ) {
 			array(
 				'id'         => 'amapress_state',
 				'title'      => $dash_state . 'Etat Amapress',
-				'capability' => 'manage_options',
+				'capability' => 'manage_amapress',
 				'href'       => admin_url( 'admin.php?page=amapress_state' ),
 			),
 			array(
@@ -913,7 +1016,7 @@ function amapress_register_admin_bar_menu_items( $items ) {
 						'id'         => 'amapress_renew_config',
 						'title'      => 'Renouvellement',
 						'capability' => 'manage_options',
-						'href'       => admin_url( 'admin.php?page=amapress_gestion_amapiens_page&tab=renew_config' ),
+						'href'       => admin_url( 'admin.php?page=amapress_gestion_amapiens_page&tab=contrat_config' ),
 					),
 					array(
 						'id'         => 'amapress_welcome_mail',
@@ -974,7 +1077,7 @@ add_action( 'personal_options', 'amapress_add_infos_to_user_editor', 20 );
 function amapress_add_infos_to_user_editor( WP_User $user ) {
 	$amapien = AmapressUser::getBy( $user );
 	echo "<tr class='row-action-wrap'><th scope='row'><label>Liens</label></th><td>
-<a href='#contrats_sect'>Contrats</a>, <a href='#fonctions_sect'>Fonctions</a>, <a href='#address_sect'>Coordonnées</a>, <a href='#phones_sect'>Téléphones</a>, <a href='#coadh_sect'>Co-adhérents</a>, 
+<a href='#contrats_sect'>Contrats</a>, <a href='#fonctions_sect'>Fonctions</a>, <a href='#amapress_user_diffusion'>Diffusion</a>, <a href='#address_sect'>Coordonnées</a>, <a href='#phones_sect'>Téléphones</a>, <a href='#coadh_sect'>Co-adhérents</a>, 
 	</td></tr>";
 	$last_login = get_user_meta( $user->ID, 'last_login', true );
 	$user_infos = 'Utilisateur créé le ' . date_i18n( 'd/m/Y H:i:s', strtotime( $user->user_registered ) );
@@ -992,7 +1095,7 @@ function amapress_add_infos_to_user_editor( WP_User $user ) {
 			$res = [];
 			foreach ( $r['contrat_ids'] as $contrat_id ) {
 				$contrat = AmapressContrat::getBy( $contrat_id );
-				if ( empty( $prod ) ) {
+				if ( empty( $prod ) || empty( $contrat ) ) {
 					continue;
 				}
 				$res[] = sprintf( 'référent de %1$s / %2$s',
@@ -1008,12 +1111,12 @@ function amapress_add_infos_to_user_editor( WP_User $user ) {
 		$check_role_js_code = 'return ("referent" === value) || ("responsable_amap" === value) || ("producteur" === value);';
 	}
 	echo '<script type="text/javascript">
-jQuery(function() {
-  jQuery(".user-role-wrap").insertAfter(jQuery("#fonctions_role_desc").closest("tr"));
-  jQuery("#role").addClass("check_amap_role");
+jQuery(function($) {
+  $(".user-role-wrap").insertAfter($("#fonctions_role_desc").closest("tr"));
+  $("#role").addClass("check_amap_role");
   jQuery.validator.addMethod("check_amap_role", function (value, element) {
 	' . $check_role_js_code . '
-  }, "<p class=\'error\'>Vous ne pouvez pas diminuer son rôle. L\'utilisateur est actuellement : ' . $ref_prod_message . '. Vous devez le déassocier de ce(s) producteur(s) avant de changer son rôle.</p>");
+  }, "<p class=\'error\'>Vous ne pouvez pas diminuer son rôle. L\'utilisateur est actuellement : ' . str_replace( '"', "'", $ref_prod_message ) . '. Vous devez le déassocier de ce(s) producteur(s) avant de changer son rôle.</p>");
 });
 </script>';
 }
@@ -1066,3 +1169,53 @@ function amapress_row_action_user_resend_welcome( $user_id ) {
 
 	wp_redirect_and_exit( wp_get_referer() );
 }
+
+add_action( 'amapress_row_action_user_remove_collectif', 'amapress_row_action_user_remove_collectif' );
+function amapress_row_action_user_remove_collectif( $user_id ) {
+	$user = AmapressUser::getBy( $user_id );
+	if ( ! $user ) {
+		wp_die( 'Amapien introuvable' );
+	}
+
+	$terms = wp_get_object_terms( $user_id, AmapressUser::AMAP_ROLE,
+		array( 'fields' => 'all' ) );
+	if ( ! is_wp_error( $terms ) ) {
+		/** @var WP_Term $term */
+		foreach (
+			$terms as $term
+		) {
+			wp_remove_object_terms( $user_id, $term->term_id, AmapressUser::AMAP_ROLE );
+		}
+	}
+	$user->getUser()->set_role( 'amapien' );
+
+	$refs = AmapressContrats::getReferentProducteursAndLieux( $user->ID );
+	foreach ( $refs as $ref ) {
+		foreach ( $ref['contrat_ids'] as $contrat_id ) {
+			$contrat = AmapressContrat::getBy( $contrat_id );
+			if ( $contrat ) {
+				$contrat->removeReferent( $user->ID );
+			}
+		}
+		$producteur = AmapressProducteur::getBy( $ref['producteur'] );
+		if ( $producteur ) {
+			$producteur->removeReferent( $user->ID );
+		}
+	}
+
+	wp_redirect_and_exit( wp_get_referer() );
+}
+
+add_action( 'admin_head-users.php', function () {
+	$override_title = '';
+	if ( ! empty( $_GET['amapress_mllst_id'] ) ) {
+		$ml             = Amapress_MailingListConfiguration::getBy( $_GET['amapress_mllst_id'] );
+		$override_title = 'Membres de ' . $ml->getName();
+	} elseif ( ! empty( $_GET['amapress_mlgrp_id'] ) ) {
+		$ml             = AmapressMailingGroup::getBy( $_GET['amapress_mlgrp_id'] );
+		$override_title = 'Membres de ' . $ml->getName();
+	}
+	if ( ! empty( $override_title ) ) {
+		echo '<script type="">jQuery(function($) { $(".wp-heading-inline").text(' . wp_json_encode( $override_title ) . ');});</script>';
+	}
+} );

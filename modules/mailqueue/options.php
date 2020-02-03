@@ -72,7 +72,7 @@ function amapress_mailing_queue_menu_options() {
 					),
 					array(
 						'type' => 'note',
-						'desc' => 'Saisir la configuration SMTP de votre fournisseur ou laisser vide pour utiliser la configuration mail de l\'hébergement',
+						'desc' => 'Laisser vide pour utiliser la configuration mail de l\'hébergement (recommandé) ou saisir la configuration SMTP de votre fournisseur',
 					),
 					array(
 						'id'   => 'mail_queue_from_name',
@@ -96,12 +96,13 @@ function amapress_mailing_queue_menu_options() {
 					),
 					array(
 						'id'   => 'mail_queue_smtp_host',
-						'name' => 'Host',
+						'name' => 'SMTP Host',
 						'type' => 'text',
 					),
 					array(
 						'id'   => 'mail_queue_smtp_port',
-						'name' => 'Port',
+						'name' => 'SMTP Port',
+						'desc' => 'Default ports : SMTP 25; SMTP SSL 465; SMTP TLS 587',
 						'type' => 'number',
 					),
 					array(
@@ -115,15 +116,17 @@ function amapress_mailing_queue_menu_options() {
 						'type' => 'checkbox',
 					),
 					array(
-						'id'   => 'mail_queue_smtp_auth_username',
-						'name' => 'Username',
-						'type' => 'text',
+						'id'           => 'mail_queue_smtp_auth_username',
+						'name'         => 'Username',
+						'autocomplete' => false,
+						'type'         => 'text',
 					),
 					array(
-						'id'          => 'mail_queue_smtp_auth_password',
-						'name'        => 'Password',
-						'type'        => 'text',
-						'is_password' => true,
+						'id'           => 'mail_queue_smtp_auth_password',
+						'name'         => 'Password',
+						'type'         => 'text',
+						'autocomplete' => false,
+						'is_password'  => true,
 					),
 					array(
 						'type' => 'save',
@@ -163,7 +166,7 @@ function amapress_mailing_queue_menu_options() {
 						'type'    => 'number',
 						'step'    => 1,
 						'default' => 90,
-						'name'    => 'Nettoyer les logs (jours)',
+						'name'    => 'Nettoyer les logs et mails en erreur (jours)',
 					),
 					array(
 						'type' => 'save',

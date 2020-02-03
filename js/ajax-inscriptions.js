@@ -1,4 +1,4 @@
-﻿jQuery(document).ready(function ($) {
+jQuery(document).ready(function ($) {
     jQuery('body').on('click', '.dist-inscrire-button', function () {
         var $this = jQuery(this);
         if ($this.data('confirm') && !confirm($this.data('confirm'))) {
@@ -11,6 +11,7 @@
             'role': $this.data('role'),
             'user': $this.data('user'),
             'key': $this.data('key'),
+            'not_member': $this.data('not_member'),
             'post-id': $this.data('post-id'),
         };
         var $parentForm = $this.parent('form');

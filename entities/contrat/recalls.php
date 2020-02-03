@@ -15,6 +15,8 @@ add_action( 'amapress_recall_contrat_quantites', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
@@ -28,8 +30,15 @@ add_action( 'amapress_recall_contrat_quantites', function ( $args ) {
 	} );
 
 	$disabled_for_producteurs = Amapress::get_array( Amapress::getOption( 'distribution-quantites-recall-excl-producteurs' ) );
+	$send_to_producteurs      = Amapress::get_array( Amapress::getOption( 'distribution-quantites-recall-send-producteurs' ) );
+	$send_referents           = Amapress::getOption( 'distribution-quantites-recall-send-referents' );
 
+	$sent_mails = false;
 	foreach ( $contrats_by_producteurs as $producteur_id => $contrats ) {
+		if ( isset( $args['prod_id'] ) && $producteur_id != $args['prod_id'] ) {
+			continue;
+		}
+
 		if ( in_array( $producteur_id, $disabled_for_producteurs ) ) {
 			continue;
 		}
@@ -38,45 +47,108 @@ add_action( 'amapress_recall_contrat_quantites', function ( $args ) {
 		if ( empty( $producteur ) ) {
 			continue;
 		}
+		$send_to_producteur    = in_array( $producteur_id, $send_to_producteurs );
+		$show_price_modulables = Amapress::getOption( 'distribution-quantites-recall-price-mod', 0 );
 
-		/** @var AmapressContrat $contrat */
+		/** @var AmapressContrat_instance $contrat */
 		foreach ( $contrats as $contrat ) {
 			$replacements                                      = [];
 			$replacements['producteur_contact']                = '<div><h5>Contact producteur:</h5>' .
-			                                                     $producteur->getUser()->getDisplay(
+			                                                     ( $producteur->getUser() ? $producteur->getUser()->getDisplay(
 				                                                     array(
 					                                                     'show_avatar' => 'false',
 					                                                     'show_tel'    => 'force',
 					                                                     'show_sms'    => 'force',
 					                                                     'show_email'  => 'force',
 					                                                     'show_roles'  => 'false',
-				                                                     ) ) . '</div>';
-			$replacements['producteur_paniers_quantites']      = '<style>table, th, td { border-collapse: collapse; border: 1pt solid #000; } .odd {background-color: #eee; }</style>';
-			$replacements['producteur_paniers_quantites']      = amapress_get_contrat_quantite_datatable(
-				$contrat->ID, null,
-				$dist->getDate(), [
-				'show_contact_producteur' => false,
-				'no_script'               => true,
-			] );
-			$replacements['producteur_paniers_quantites_text'] = '';
+				                                                     ) ) : '' ) . '</div>';
+			$tbl_style                                         = '<style>table, th, td { border-collapse: collapse; border: 1pt solid #000; } .odd {background-color: #eee; }</style>';
+			$replacements['producteur_paniers_quantites']      = $tbl_style . amapress_get_contrat_quantite_datatable(
+					$contrat->ID, null,
+					$dist->getDate(), [
+					'show_contact_producteur' => false,
+					'show_price'              => $contrat->isPanierVariable() && $show_price_modulables,
+					'no_script'               => true,
+					'for_placeholder'         => true,
+				] );
 			$replacements['producteur_paniers_quantites_text'] = amapress_get_contrat_quantite_datatable(
 				$contrat->ID, null,
 				$dist->getDate(), [
 				'show_contact_producteur' => false,
+				'show_price'              => $contrat->isPanierVariable() && $show_price_modulables,
 				'mode'                    => 'text',
 				'no_script'               => true,
+				'for_placeholder'         => true,
 			] );
+
+			$replacements['producteur_paniers_quantites_prix']      = $tbl_style . amapress_get_contrat_quantite_datatable(
+					$contrat->ID, null,
+					$dist->getDate(), [
+					'show_contact_producteur' => false,
+					'show_price'              => true,
+					'no_script'               => true,
+					'for_placeholder'         => true,
+				] );
+			$replacements['producteur_paniers_quantites_text_prix'] = amapress_get_contrat_quantite_datatable(
+				$contrat->ID, null,
+				$dist->getDate(), [
+				'show_contact_producteur' => false,
+				'show_price'              => true,
+				'mode'                    => 'text',
+				'no_script'               => true,
+				'for_placeholder'         => true,
+			] );
+
+			$replacements['producteur_paniers_quantites_amapiens']      = $tbl_style . amapress_get_contrat_quantite_datatable(
+					$contrat->ID, null,
+					$dist->getDate(), [
+					'show_contact_producteur' => false,
+					'show_price'              => false,
+					'show_adherents'          => true,
+					'no_script'               => true,
+					'for_placeholder'         => true,
+				] );
+			$replacements['producteur_paniers_quantites_amapiens_prix'] = $tbl_style . amapress_get_contrat_quantite_datatable(
+					$contrat->ID, null,
+					$dist->getDate(), [
+					'show_contact_producteur' => false,
+					'show_price'              => true,
+					'show_adherents'          => true,
+					'no_script'               => true,
+					'for_placeholder'         => true,
+				] );
+
 
 			$replacements['lien_contrats_quantites'] = Amapress::makeLink( admin_url( 'admin.php?page=contrats_quantites_next_distrib' ) );
 
-			$replacements['producteur_nom']      = $producteur->getUser()->getDisplayName() . ' (' . $producteur->getTitle() . ')';
+			$replacements['producteur_nom']      = ( $producteur->getUser() ? $producteur->getUser()->getDisplayName() : '' ) . ' (' . $producteur->getTitle() . ')';
 			$replacements['producteur_contrats'] = $producteur->getContratsNames();
 
-			$referent_ids = $contrat->getAllReferentsIds();
+			$send_title = [];
+			if ( $send_to_producteur ) {
+				$send_title[] = 'Producteur';
+				if ( $send_referents ) {
+					$send_title[] = 'Référents';
+					$referent_ids = $contrat->getAllReferentsIds();
+				} else {
+					$referent_ids = [];
+				}
+				$referent_ids[] = $producteur->getUserId();
+			} else {
+				$send_title[] = 'Référents';
+				$referent_ids = $contrat->getAllReferentsIds();
+			}
 
-			$target_users = amapress_prepare_message_target_to( "user:include=" . implode( ',', $referent_ids ), "Référents " . $producteur->getTitle(), 'referents' );
+			$target_users = amapress_prepare_message_target_to( "user:include=" . implode( ',', $referent_ids ),
+				implode( ' et ', $send_title ) . $producteur->getTitle(), 'referents' );
 			$subject      = Amapress::getOption( 'distribution-quantites-recall-mail-subject' );
 			$content      = Amapress::getOption( 'distribution-quantites-recall-mail-content' );
+			if ( $contrat->isPanierVariable() ) {
+				$content_modulable = Amapress::getOption( 'distribution-quantites-modulable-recall-mail-content' );
+				if ( ! empty( trim( strip_tags( $content_modulable ) ) ) ) {
+					$content = $content_modulable;
+				}
+			}
 			foreach ( $replacements as $k => $v ) {
 				$subject = str_replace( "%%$k%%", $v, $subject );
 				$content = str_replace( "%%$k%%", $v, $content );
@@ -86,18 +158,28 @@ add_action( 'amapress_recall_contrat_quantites', function ( $args ) {
 				$content,
 				'', $target_users, $dist, array(),
 				amapress_get_recall_cc_from_option( 'distribution-quantites-recall-cc' ) );
+			echo '<p>Email de rappel des quantités aux producteurs envoyé</p>';
+			$sent_mails = true;
 		}
 	}
+
+	if ( ! $sent_mails ) {
+		echo '<p>Pas de quantités à rappeler à cette distribution</p>';
+	}
+
 } );
 
 add_action( 'amapress_recall_contrats_paiements_producteur', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
+
 		return;
 	}
 
 	$disabled_for_producteurs = Amapress::get_array( Amapress::getOption( 'contrats-liste-paiements-recall-excl-producteurs' ) );
 
+	$sent_mails = false;
 	foreach ( $dist->getContrats() as $contrat ) {
 		if ( empty( $contrat->getModel() ) ) {
 			continue;
@@ -113,7 +195,7 @@ add_action( 'amapress_recall_contrats_paiements_producteur', function ( $args ) 
 
 		$replacements['contrat_nom'] = $contrat->getTitle();
 
-		$replacements['producteur_nom']      = $producteur->getUser()->getDisplayName() . ' (' . $producteur->getTitle() . ')';
+		$replacements['producteur_nom']      = ( $producteur->getUser() ? $producteur->getUser()->getDisplayName() : '' ) . ' (' . $producteur->getTitle() . ')';
 		$replacements['producteur_contrats'] = $producteur->getContratsNames();
 		$date_remise                         = from( $contrat->getPaiements_Liste_dates() )
 			->orderBy( function ( $d ) {
@@ -188,6 +270,12 @@ add_action( 'amapress_recall_contrats_paiements_producteur', function ( $args ) 
 			$content,
 			'', $target_users, $dist, $attachments,
 			amapress_get_recall_cc_from_option( 'contrats-liste-paiements-recall-cc' ) );
+		echo '<p>Email de rappel de la liste des chèques envoyé</p>';
+		$sent_mails = true;
+	}
+
+	if ( ! $sent_mails ) {
+		echo '<p>Pas de liste de chèque à rappeler à cette distribution</p>';
 	}
 
 	//%%producteur_nom%% pour %%contrat_nom%% au %%prochaine_date_remise_cheques%%
@@ -197,12 +285,20 @@ add_action( 'amapress_recall_contrats_paiements_producteur', function ( $args ) 
 add_action( 'amapress_recall_contrat_renew', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution intouvable</p>';
+
 		return;
 	}
 
+	$disabled_for_producteurs = Amapress::get_array( Amapress::getOption( 'contrat-renew-recall-excl-producteurs' ) );
+
 	$contrats           = AmapressContrats::get_active_contrat_instances( null, $dist->getDate() );
-	$renewable_contrats = array_filter( $contrats, function ( $c ) {
+	$renewable_contrats = array_filter( $contrats, function ( $c ) use ( $disabled_for_producteurs ) {
 		/** @var AmapressContrat_instance $c */
+		if ( in_array( $c->getModel()->getProducteurId(), $disabled_for_producteurs ) ) {
+			return false;
+		}
+
 		return $c->canRenew();
 	} );
 	$expire_delay       = Amapress::getOption( 'contrat-renew-recall-expire-days' );
@@ -215,8 +311,11 @@ add_action( 'amapress_recall_contrat_renew', function ( $args ) {
 		/** @var AmapressContrat_instance $c */
 		return $c->getDate_fin() < Amapress::end_of_day( $dist->getDate() );
 	} );
+	$renewable_contrats = array_merge( $near_renew, $to_renew );
 
 	if ( empty( $near_renew ) && empty( $to_renew ) ) {
+		echo '<p>Pas de contrat à renouveler</p>';
+
 		return;
 	}
 
@@ -266,6 +365,8 @@ add_action( 'amapress_recall_contrat_renew', function ( $args ) {
 		$content,
 		'', $target_users, $dist, array(),
 		amapress_get_recall_cc_from_option( 'contrat-renew-recall-cc' ) );
+	echo '<p>Email de rappel de contrat à renouveler envoyé</p>';
+
 } );
 
 function amapress_contrat_quantites_recall_options() {
@@ -314,13 +415,42 @@ function amapress_contrat_quantites_recall_options() {
 			'default' => wpautop( "Bonjour,\nVous trouverez ci-dessous (et à l'adresse suivante: %%lien_contrats_quantites%%) les quantités de la semaine pour %%lien_distribution_titre%%:\n%%producteur_paniers_quantites%%\n\n%%nom_site%%" ),
 			'desc'    => 'Les placeholders suivants sont disponibles:' .
 			             Amapress::getPlaceholdersHelpTable( 'liste-quants-placeholders', [
-				             'producteur_contrats'               => 'Contrats du producteur',
-				             'producteur_nom'                    => 'Nom du producteur',
-				             'lien_contrats_quantites'           => 'Lien vers les quantités à la prochaine distribution',
-				             'producteur_paniers_quantites_text' => 'Quantités à la prochaine distribution (en texte)',
-				             'producteur_paniers_quantites'      => 'Quantités à la prochaine distribution (en tableau)',
-				             'producteur_contact'                => 'Coordonnées du producteur',
-			             ], null ),
+				             'producteur_contrats'                        => 'Contrats du producteur',
+				             'producteur_nom'                             => 'Nom du producteur',
+				             'lien_contrats_quantites'                    => 'Lien vers les quantités à la prochaine distribution',
+				             'producteur_paniers_quantites_text'          => 'Quantités à la prochaine distribution (en texte)',
+				             'producteur_paniers_quantites_text_prix'     => 'Quantités à la prochaine distribution (en texte avec montants)',
+				             'producteur_paniers_quantites'               => 'Quantités à la prochaine distribution (en tableau avec/sans montants suivant l\'option Montants pour les paniers modulables)',
+				             'producteur_paniers_quantites_prix'          => 'Quantités à la prochaine distribution (en tableau avec montants)',
+				             'producteur_paniers_quantites_amapiens'      => 'Quantités à la prochaine distribution (en tableau avec le détails par amapien)',
+				             'producteur_paniers_quantites_amapiens_prix' => 'Quantités à la prochaine distribution (en tableau avec le détails par amapien et les montants)',
+				             'producteur_contact'                         => 'Coordonnées du producteur',
+			             ], null, [], 'recall' ),
+		),
+		array(
+			'id'      => 'distribution-quantites-modulable-recall-mail-content',
+			'name'    => 'Contenu de l\'email - Paniers modulables',
+			'type'    => 'editor',
+			'default' => wpautop( "Bonjour,\nVous trouverez ci-dessous (et à l'adresse suivante: %%lien_contrats_quantites%%) les quantités de la semaine pour %%lien_distribution_titre%%:\n%%producteur_paniers_quantites%%\n\nDétails par amapien:\n%%producteur_paniers_quantites_amapiens%%\n\n%%nom_site%%" ),
+			'desc'    => 'Spécifique aux paniers modulables. Si vide, le contenu du mail général sera utlisé.<br/> Les placeholders suivants sont disponibles:' .
+			             Amapress::getPlaceholdersHelpTable( 'liste-quants-placeholders', [
+				             'producteur_contrats'                        => 'Contrats du producteur',
+				             'producteur_nom'                             => 'Nom du producteur',
+				             'lien_contrats_quantites'                    => 'Lien vers les quantités à la prochaine distribution',
+				             'producteur_paniers_quantites_text'          => 'Quantités à la prochaine distribution (en texte)',
+				             'producteur_paniers_quantites_text_prix'     => 'Quantités à la prochaine distribution (en texte avec montants)',
+				             'producteur_paniers_quantites'               => 'Quantités à la prochaine distribution (en tableau avec/sans montants suivant l\'option Montants pour les paniers modulables)',
+				             'producteur_paniers_quantites_prix'          => 'Quantités à la prochaine distribution (en tableau avec montants)',
+				             'producteur_paniers_quantites_amapiens'      => 'Quantités à la prochaine distribution (en tableau avec le détails par amapien)',
+				             'producteur_paniers_quantites_amapiens_prix' => 'Quantités à la prochaine distribution (en tableau avec le détails par amapien et les montants)',
+				             'producteur_contact'                         => 'Coordonnées du producteur',
+			             ], null, [], 'recall' ),
+		),
+		array(
+			'id'   => 'distribution-quantites-recall-price-mod',
+			'name' => 'Montants paniers modulables',
+			'desc' => 'Afficher les montants pour les paniers modulables',
+			'type' => 'checkbox',
 		),
 		array(
 			'id'           => 'distribution-quantites-recall-cc',
@@ -342,11 +472,27 @@ function amapress_contrat_quantites_recall_options() {
 			'desc'         => 'Groupe(s) en copie',
 		),
 		array(
+			'id'      => 'distribution-quantites-recall-send-referents',
+			'name'    => 'Envoi aux référents',
+			'type'    => 'checkbox',
+			'desc'    => 'Envoyer les quantités à livrer aux référents',
+			'default' => 1,
+		),
+		array(
 			'id'        => 'distribution-quantites-recall-excl-producteurs',
 			'type'      => 'multicheck-posts',
-			'name'      => 'Producteurs',
+			'name'      => 'Producteurs exclus',
 			'post_type' => AmapressProducteur::INTERNAL_POST_TYPE,
 			'desc'      => 'Désactiver les rappels pour les producteurs suivants :',
+			'orderby'   => 'post_title',
+			'order'     => 'ASC',
+		),
+		array(
+			'id'        => 'distribution-quantites-recall-send-producteurs',
+			'type'      => 'multicheck-posts',
+			'name'      => 'Envoi Producteurs',
+			'post_type' => AmapressProducteur::INTERNAL_POST_TYPE,
+			'desc'      => 'Envoyer les rappels au producteur (par défaut uniquement aux référents) pour les producteurs suivants :',
 			'orderby'   => 'post_title',
 			'order'     => 'ASC',
 		),
@@ -407,7 +553,7 @@ function amapress_contrat_paiements_recall_options() {
 				             'producteur_nom'                => 'Nom du producteur',
 				             'contrat_nom'                   => 'Nom du contrat',
 				             'lien_contrats_paiements'       => 'Lien vers la liste des chèques à remettre au producteur',
-			             ], null ),
+			             ], null, [], 'recall' ),
 
 		),
 		array(
@@ -482,7 +628,7 @@ function amapress_contrat_renew_recall_options() {
 				             'nb_contrats'            => 'Nombre de contrats à renouveler ou proches de la fin',
 				             'nb_renew_contrats'      => 'Nombre de contrats à renouveler',
 				             'nb_near_renew_contrats' => 'Nombre de contrats proches de la fin',
-			             ], null ),
+			             ], null, [], 'recall' ),
 		),
 		array(
 			'id'           => 'contrat-renew-recall-cc',
@@ -502,6 +648,15 @@ function amapress_contrat_renew_recall_options() {
 			'multiple'     => true,
 			'tags'         => true,
 			'desc'         => 'Groupe(s) en copie',
+		),
+		array(
+			'id'        => 'contrat-renew-recall-excl-producteurs',
+			'type'      => 'multicheck-posts',
+			'name'      => 'Producteurs',
+			'post_type' => AmapressProducteur::INTERNAL_POST_TYPE,
+			'desc'      => 'Désactiver les rappels pour les producteurs suivants :',
+			'orderby'   => 'post_title',
+			'order'     => 'ASC',
 		),
 		array(
 			'type' => 'save',

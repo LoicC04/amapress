@@ -64,8 +64,8 @@ function menu_sanitize_html_class( $sanitized, $class ) {
 	return $sanitized;
 }
 
-add_filter( 'submenu_file', 'amapress_highlight_menu', 99, 3 );
-function amapress_highlight_menu( $submenu, $parent ) {
+add_filter( 'submenu_file', 'amapress_highlight_menu', 99, 1 );
+function amapress_highlight_menu( $submenu ) {
 	global $parent_file;
 	global $submenu_file;
 
@@ -92,6 +92,39 @@ function amapress_highlight_menu( $submenu, $parent ) {
 	}
 
 	return $submenu;
+}
+
+add_filter( 'parent_file', 'amapress_highlight_menu_parent', 99, 1 );
+function amapress_highlight_menu_parent( $file ) {
+	global $parent_file;
+	global $submenu_file;
+
+	$post      = isset( $_REQUEST['post'] ) ? $_REQUEST['post'] : null;
+	$post_type = isset( $_REQUEST['post_type'] ) ? $_REQUEST['post_type'] : null;
+	if ( empty( $post_type ) && ! empty( $post ) ) {
+		$post_type = get_post_type( intval( $post ) );
+	}
+	if ( empty( $post_type ) && isset( $_GET['view'] ) ) {
+		$post_type = $_GET['view'];
+	}
+	if ( empty( $post_type ) && isset( $_GET['taxonomy'] ) ) {
+		$post_type = $_GET['taxonomy'];
+	}
+
+	foreach ( AmapressEntities::getMenu() as $m ) {
+		if ( isset( $m['subpages'] ) ) {
+			foreach ( $m['subpages'] as $subpage ) {
+				if ( isset( $subpage['post_type'] ) && $subpage['post_type'] == $post_type ) { // admin_url($slug) == $full_url) {
+					$parent_file  = $m['id'];
+					$submenu_file = $subpage['slug'];
+
+					return $parent_file;
+				}
+			}
+		}
+	}
+
+	return $file;
 }
 
 // Add to the admin_init action hook
@@ -138,9 +171,9 @@ function amapress_admin_bar_menu( WP_Admin_Bar $admin_bar ) {
 
 	if ( current_user_can( 'list_users' ) ) {
 		$script = '<script type="text/javascript">
-jQuery(function() {
+jQuery(function($) {
               function search_user() {
-                var val = jQuery(\'#amapress_search_user_text\').val();
+                var val = $(\'#amapress_search_user_text\').val();
                 if (val == null || val == \'\') {
                     alert("Champs de recherche vide");
                     return;
@@ -148,10 +181,10 @@ jQuery(function() {
                 window.location.href = \'' . admin_url( '/users.php' ) . '?s=\' + encodeURIComponent(val);
             }
 
-            jQuery(\'#amapress_search_user_btn\').click(function () {
+            $(\'#amapress_search_user_btn\').click(function () {
                 search_user();
             });
-            jQuery(\'#amapress_search_user_text\').keypress(function (e) {
+            $(\'#amapress_search_user_text\').keypress(function (e) {
                 if (e.which === 13) {
                     search_user();
                 }

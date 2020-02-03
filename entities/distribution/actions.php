@@ -362,7 +362,7 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 
 		if ( $show_comment ) {
 			if ( $for_pdf ) {
-				$line['comment'] = '';
+				$line['comment'] = esc_html( $principal_user->getCommentEmargement() );
 			} else {
 				$comment = esc_html( $principal_user->getCommentEmargement() );
 				if ( empty( $comment ) ) {
@@ -375,9 +375,9 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 		$liste[] = $line;
 	}
 
-	$liste = from( $liste )->orderBy( function ( $l ) {
-		return strip_tags( $l['last_name'] );
-	} )->toArray();
+	usort( $liste, function ( $a, $b ) {
+		return strcasecmp( wp_strip_all_tags( $a['last_name'] ), wp_strip_all_tags( $b['last_name'] ) );
+	} );
 
 	ob_start();
 	if ( $for_pdf ) {
@@ -511,31 +511,38 @@ line-height: 1.1;
 
 //    amapress_display_messages_for_post('dist-messages', $dist->ID);
 
-	if ( ! $for_pdf ) {
-		echo '<h3 class="liste-emargement">Liste</h3>';
+	$show_liste = ! Amapress::getOption( 'liste-emargement-disable-liste' );
+	if ( $show_liste ) {
+		if ( ! $for_pdf ) {
+			echo '<h3 class="liste-emargement">Liste</h3>';
+		}
+		amapress_echo_datatable( 'liste-emargement', $columns, $liste,
+			array(
+				'paging'       => false,
+				'searching'    => false,
+				'nowrap'       => false,
+				'responsive'   => false,
+				'init_as_html' => true,
+				'no_script'    => $for_pdf,
+				'aaSorting'    => [ [ 0, 'asc' ] ]
+			),
+			array(
+				Amapress::DATATABLES_EXPORT_EXCEL
+			) );
 	}
-	amapress_echo_datatable( 'liste-emargement', $columns, $liste,
-		array(
-			'paging'       => false,
-			'searching'    => false,
-			'nowrap'       => false,
-			'responsive'   => false,
-			'init_as_html' => true,
-			'no_script'    => $for_pdf,
-			'aaSorting'    => [ [ 0, 'asc' ] ]
-		),
-		array(
-			Amapress::DATATABLES_EXPORT_EXCEL
-		) );
 
+	$had_paniers_variables = false;
 	foreach ( $dist->getContrats() as $contrat ) {
 		if ( $contrat->isPanierVariable() ) {
 			$panier_date      = ! $show_all_contrats ? $dist->getRealDateForContrat( $contrat->ID ) : null;
 			$panier_commandes = AmapressPaniers::getPanierVariableCommandes( $contrat->ID, $panier_date );
 
 			if ( ! empty( $panier_commandes['data'] ) ) {
-				echo '<br/>';
-				echo '<h3 class="liste-emargement-contrat-variable">Détails des paniers - ' . esc_html( $contrat->getTitle() ) . '</h3>';
+//				if ( ! $show_liste && $had_paniers_variables ) {
+				echo '<br pagebreak="true"/>';
+//				}
+				$had_paniers_variables = true;
+				echo '<h3 class="liste-emargement-contrat-variable">Détails des paniers - ' . esc_html( $contrat->getTitle() ) . ' - Distribution du ' . date_i18n( 'd/m/Y', $dist->getDate() ) . '</h3>';
 				amapress_echo_datatable( 'liste-emargement-contrat-variable-' . $contrat->ID,
 					$panier_commandes['columns'], $panier_commandes['data'],
 					array(
@@ -550,6 +557,7 @@ line-height: 1.1;
 						Amapress::DATATABLES_EXPORT_EXCEL,
 						Amapress::DATATABLES_EXPORT_PRINT
 					) );
+				echo '<p>En tout: ' . $panier_commandes['adhs'] . ' adhérent(s) ; ' . esc_html( $panier_commandes['resume'] ) . '</p>';
 			}
 		}
 	}
@@ -557,6 +565,8 @@ line-height: 1.1;
 	$from_date = Amapress::start_of_day( $date );
 	if ( ! $for_pdf ) {
 		echo '<br/>';
+	} elseif ( $had_paniers_variables ) {
+		echo '<br pagebreak="true"/>';
 	}
 	echo '<h3 class="liste-emargement-next-resps">' . esc_html( 'Responsables aux prochaines distributions - ' . $dist->getLieu()->getTitle() ) . '</h3>';
 //	echo '<br/>';

@@ -47,6 +47,10 @@ class AmapressLieu_distribution extends TitanEntity implements iAmapress_Event_L
 //        return $this->getCustom('amapress_lieu_distribution_photo');
 //    }
 
+	public function isPrincipal() {
+		return $this->getCustomAsInt( 'amapress_lieu_distribution_principal', 1 );
+	}
+
 	public function getContact_externe() {
 		$this->ensure_init();
 
@@ -174,6 +178,17 @@ class AmapressLieu_distribution extends TitanEntity implements iAmapress_Event_L
 
 	public function getTitle() {
 		return parent::getTitle();
+	}
+
+	public function resolveAddress() {
+		if ( ! empty( $this->getAdresseAcces() ) ) {
+			Amapress::updateLocalisation( $this->ID, false,
+				'amapress_lieu_distribution_adresse_acces', $this->getAdresseAcces() );
+		}
+		if ( ! empty( $this->getFormattedAdresse() ) ) {
+			Amapress::updateLocalisation( $this->ID, false,
+				'amapress_lieu_distribution', $this->getFormattedAdresse() );
+		}
 	}
 }
 

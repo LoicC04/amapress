@@ -26,7 +26,7 @@ class AmapressSMTPMailingQueue {
 			load_plugin_textdomain( 'smtp-mailing-queue', false, 'smtp-mailing-queue/languages/' );
 		} );
 
-		if ( ! defined( 'FREE_PAGES_PERSO' ) ) {
+		if ( ! defined( 'FREE_PAGES_PERSO' ) || ! FREE_PAGES_PERSO ) {
 			add_action( 'amps_smq_start_queue', [ $this, 'processQueue' ] );
 
 			// Filter
@@ -107,7 +107,7 @@ class AmapressSMTPMailingQueue {
 		}
 
 		$use = Amapress::getOption( 'mail_queue_use_queue' );
-		if ( defined( 'FREE_PAGES_PERSO' ) ) {
+		if ( defined( 'FREE_PAGES_PERSO' ) && FREE_PAGES_PERSO ) {
 			$use = false;
 		}
 		if ( empty( $use ) || ! $use || apply_filters( 'amapress_mail_queue_bypass', false ) ) {
@@ -134,6 +134,14 @@ class AmapressSMTPMailingQueue {
 		$clean_date = Amapress::add_days( Amapress::start_of_day( time() ), - $mail_queue_log_clean_days );
 		foreach (
 			AmapressSMTPMailingQueue::loadDataFromFiles( true, 'logged' )
+			as $filename => $email
+		) {
+			if ( $email['time'] < $clean_date ) {
+				@unlink( $filename );
+			}
+		}
+		foreach (
+			AmapressSMTPMailingQueue::loadDataFromFiles( true, 'errored' )
 			as $filename => $email
 		) {
 			if ( $email['time'] < $clean_date ) {
@@ -191,7 +199,16 @@ class AmapressSMTPMailingQueue {
 		if ( ! $handle ) {
 			return false;
 		}
-		fwrite( $handle, json_encode( $data ) );
+		if ( ! defined( 'JSON_INVALID_UTF8_IGNORE' ) ) {
+			foreach ( $data as $k => $v ) {
+				if ( is_string( $v ) ) {
+					$data[ $k ] = iconv( 'UTF-8', 'UTF-8//IGNORE', $v );
+				}
+			}
+			fwrite( $handle, json_encode( $data ) );
+		} else {
+			fwrite( $handle, json_encode( $data, JSON_INVALID_UTF8_IGNORE ) );
+		}
 		fclose( $handle );
 
 		return true;
@@ -298,8 +315,13 @@ class AmapressSMTPMailingQueue {
 					continue;
 				}
 			}
-			self::sendMail( $data );
-			@unlink( $file );
+			try {
+				self::sendMail( $data );
+			} catch ( Exception $ex ) {
+				@error_log( $ex->getMessage() );
+			} finally {
+				@unlink( $file );
+			}
 		}
 
 		exit;
@@ -325,6 +347,21 @@ class AmapressSMTPMailingQueue {
 			);
 		}
 		require_once( 'AmapressSMTPMailingQueueOriginal.php' );
+		if ( ! isset( $data['to'] ) ) {
+			$data['to'] = '';
+		}
+		if ( ! isset( $data['subject'] ) ) {
+			$data['subject'] = '';
+		}
+		if ( ! isset( $data['message'] ) ) {
+			$data['message'] = '';
+		}
+		if ( ! isset( $data['headers'] ) ) {
+			$data['headers'] = [];
+		}
+		if ( ! isset( $data['attachments'] ) ) {
+			$data['attachments'] = [];
+		}
 		$errors = AmapressSMTPMailingQueueOriginal::wp_mail( $data['to'], $data['subject'], $data['message'], $data['headers'], $data['attachments'] );
 		if ( ! empty( $errors ) ) {
 			@error_log( 'Email send Error : ' . implode( ' ; ', $errors ) );

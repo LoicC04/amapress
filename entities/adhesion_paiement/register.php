@@ -28,6 +28,8 @@ function amapress_register_entities_adhesion_paiement( $entities ) {
 //            'items_list' => 'xxx',
 		),
 		'row_actions'     => array(
+			'mark_rcv'               => 'Marquer reçu',
+			'unmark_rcv'             => 'Marquer Non reçu',
 			'generate_bulletin_docx' => [
 				'label'     => 'Générer le bulletin (DOCX)',
 				'condition' => function ( $adh_id ) {
@@ -114,7 +116,7 @@ function amapress_register_entities_adhesion_paiement( $entities ) {
 				'name'         => amapress__( 'Numéro du chèque' ),
 				'type'         => 'text',
 				'required'     => true,
-				'desc'         => 'Numéro du chèque ou "Esp." pour un règlement en espèces',
+				'desc'         => 'Numéro du chèque ou "Esp." pour un règlement en espèces ou "Vir." pour un virement',
 				'import_key'   => true,
 				'csv_required' => true,
 				'searchable'   => true,
@@ -138,6 +140,17 @@ function amapress_register_entities_adhesion_paiement( $entities ) {
 				'type' => 'readonly',
 				'unit' => '€',
 				'desc' => 'Montant',
+			),
+		),
+		'bulk_actions'    => array(
+			'amp_adh_pmt_mark_recv' => array(
+				'label'    => 'Marquer reçu',
+				'messages' => array(
+					'<0' => 'Une erreur s\'est produit pendant l\'opération',
+					'0'  => 'Une erreur s\'est produit pendant l\'opération',
+					'1'  => 'Un règlement a été marqué comme reçu avec succès',
+					'>1' => '%s règlements ont été marqués comme reçus avec succès',
+				),
 			),
 		),
 	);
@@ -205,15 +218,15 @@ function amapress_get_adhesion_paiements_categories( $paiement_id ) {
 	}
 	$ret .= '</table>';
 	$ret .= '<script type="text/javascript">
-jQuery(function() {
+jQuery(function($) {
     var updateAmount = function() {
         var sum = 0;
-        jQuery(".amapress_pmt_cat_amount").each(function() {
-            sum += parseFloat(jQuery(this).val());
+        $(".amapress_pmt_cat_amount").each(function() {
+            sum += parseFloat($(this).val());
         });
-        jQuery("#amapress_adhesion_paiement_amount").text(sum.toFixed(2));
+        $("#amapress_adhesion_paiement_amount").text(sum.toFixed(2));
      };
-    jQuery(".amapress_pmt_cat_amount").on("change paste keyup", updateAmount);
+    $(".amapress_pmt_cat_amount").on("change paste keyup", updateAmount);
     updateAmount();
 });
  </script>';

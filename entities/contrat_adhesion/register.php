@@ -168,6 +168,7 @@ function amapress_register_entities_adhesion( $entities ) {
 				}
 			}
 
+			$message = '';
 			if ( $principal_contrat ) {
 				Amapress::setFilterForReferent( false );
 				$other_adhs = AmapressAdhesion::getUserActiveAdhesions( $adh->getAdherentId(), $principal_contrat->ID, $adh->getDate_debut(), true );
@@ -176,7 +177,7 @@ function amapress_register_entities_adhesion( $entities ) {
 					return;
 				}
 				$message = "L'amapien {$adh->getAdherent()->getDisplayName()} n'a pas de contrat principal : {$principal_contrat->getTitle()}";
-			} else {
+			} else if ( ! Amapress::getOption( 'disable_principal', false ) ) {
 				$message = 'Pas de contrat principal actif';
 			}
 
@@ -184,6 +185,7 @@ function amapress_register_entities_adhesion( $entities ) {
 
 			printf( '<div class="%1$s"><p>%2$s</p></div>', esc_attr( $class ), esc_html( $message ) );
 
+			echo '<script type="text/javascript">jQuery(function($) { $("body > div#ui-datepicker-div").hide(); });</script>';
 		},
 		'views'            => array(
 			'remove'  => array( 'mine' ),
@@ -198,6 +200,7 @@ function amapress_register_entities_adhesion( $entities ) {
 				'group'         => '1/ Informations',
 				'name'          => amapress__( 'Adhérent' ),
 				'join_meta_key' => 'amapress_adhesion_adherent',
+				'join_on'       => 'user',
 				'sort_column'   => 'display_name',
 				'type'          => 'custom',
 				'column'        => function ( $post_id ) {
@@ -241,6 +244,7 @@ function amapress_register_entities_adhesion( $entities ) {
 				'type'          => 'custom',
 				'join_meta_key' => 'amapress_adhesion_adherent',
 				'sort_column'   => 'last_name',
+				'join_on'       => 'user_meta',
 				'column'        => function ( $post_id ) {
 					$adh = AmapressAdhesion::getBy( $post_id );
 					if ( ! $adh->getAdherentId() ) {
@@ -258,6 +262,7 @@ function amapress_register_entities_adhesion( $entities ) {
 				'name'          => amapress__( 'Email' ),
 				'type'          => 'custom',
 				'join_meta_key' => 'amapress_adhesion_adherent',
+				'join_on'       => 'user',
 				'sort_column'   => 'user_email',
 				'column'        => function ( $post_id ) {
 					$adh = AmapressAdhesion::getBy( $post_id );
@@ -483,11 +488,17 @@ jQuery(function($) {
 				'options'     => array(
 					'chq' => 'Chèque',
 					'esp' => 'Espèces',
+					'vir' => 'Virement',
+					'dlv' => 'A la livraison',
 				),
 				'default'     => 'chq',
 				'required'    => true,
-				'desc'        => 'Moyen de règlement principal : chèques ou espèces',
-				'show_column' => false,
+				'desc'        => 'Moyen de règlement principal : chèques ou espèces ou virement',
+				'show_column' => true,
+				'top_filter'  => array(
+					'name'        => 'amapress_pmt_type',
+					'placeholder' => 'Tous les type de paiement',
+				),
 			),
 			'paiements'         => array(
 				'name'        => amapress__( 'Nombre de paiements' ),
@@ -870,21 +881,12 @@ function amapress_adhesion_contrat_quantite_editor( $post_id ) {
 						$val         = isset( $paniers_variables[ $date ][ $quant->ID ] ) ? $paniers_variables[ $date ][ $quant->ID ] : '';
 						$is_empty    = empty( $val );
 						$empty_class = $is_empty ? 'contrat_panier_vars-empty' : 'contrat_panier_vars-with-value';
-//                        $display_val = $is_empty ? '' : esc_html($val);
-						$ed = '';
-//                        $ed .= '<div class="contrat_panier_vars-wrapper">';
-//                        $ed .= "<span class='contrat_panier_vars-value $empty_class' id='panier_vars_{$date}_{$quant->ID}-value'>{$display_val}</span>";
-//                        $ed .= "<select id='panier_vars_{$date}_{$quant->ID}-select'
-//data-value-id='panier_vars_{$date}_{$quant->ID}-value'
-//name='amapress_adhesion_contrat_panier_vars[$date][{$quant->ID}]' class='contrat_panier_vars-select $empty_class'>";
-						$ed .= "<select name='amapress_adhesion_contrat_panier_vars[$date][{$quant->ID}]' class='contrat_panier_vars-select $empty_class'>";
-						$ed .= tf_parse_select_options( $options, $val, false );
-						$ed .= '</select>';
-//                        $ed .= '</div>';
-						if ( $quant->getAvailFrom() && $quant->getAvailTo() ) {
-							if ( $date < Amapress::start_of_day( $quant->getAvailFrom() ) || $date > Amapress::end_of_day( $quant->getAvailTo() ) ) {
-								$ed = '<span class="contrat_panier_vars-na">NA</span>';
-							}
+						$ed          = '';
+						$ed          .= "<select name='amapress_adhesion_contrat_panier_vars[$date][{$quant->ID}]' class='contrat_panier_vars-select $empty_class'>";
+						$ed          .= tf_parse_select_options( $options, $val, false );
+						$ed          .= '</select>';
+						if ( ! $quant->isInDistributionDates( $date ) ) {
+							$ed = '<span class="contrat_panier_vars-na">NA</span>';
 						}
 						$row[ 'd-' . $date ] = $ed;
 					}
@@ -896,11 +898,6 @@ function amapress_adhesion_contrat_quantite_editor( $post_id ) {
 
 				$had_contrat = true;
 				$ret         .= amapress_get_datatable( 'quant-commandes', $columns, $data, array(
-					'bSort'        => true,
-					'paging'       => false,
-					'searching'    => true,
-					'bAutoWidth'   => true,
-					'responsive'   => false,
 					'initComplete' => 'function() {
                     jQuery(".contrat_panier_vars-select").parent().click(
                         function() {
@@ -909,11 +906,15 @@ function amapress_adhesion_contrat_quantite_editor( $post_id ) {
                     );
                     jQuery(".contrat_panier_vars-select.contrat_panier_vars-empty").css(\'visibility\', \'hidden\');
                     }',
+					'bSort'        => false,
+					'paging'       => false,
+					'searching'    => true,
+					'bAutoWidth'   => true,
+					'responsive'   => false,
+					'init_as_html' => true,
 					'scrollX'      => true,
-//                    'fixedHeader' => array(
-//                        'headerOffset' => 32,
-//                    ),
-					'fixedColumns' => array( 'leftColumns' => 1 ),
+					'scrollY'      => 350,
+					'fixedColumns' => array( 'leftColumns' => 2 ),
 				) );
 			}
 		} else {
@@ -972,7 +973,7 @@ function amapress_adhesion_contrat_quantite_editor( $post_id ) {
 					date_i18n( TitanFrameworkOptionDate::$default_date_format, $contrat_instance->getDate_debut() ),
 					date_i18n( TitanFrameworkOptionDate::$default_date_format, $contrat_instance->getDate_fin() ),
 					$quant_var_editor,
-					esc_html( $quantite->getTitle() . ' ( ' . Amapress::formatPrice( $quantite->getPrix_unitaire() ) . ' € ' . $quantite->getPriceUnitDisplay() . ')' )
+					esc_html( $quantite->getTitle() . ' ( ' . $quantite->getPrix_unitaireDisplay() . ' ' . $quantite->getPriceUnitDisplay() . ')' )
 				);
 
 				$ret .= "<script type='text/javascript'>jQuery('#$id').change(function() {
@@ -1050,7 +1051,7 @@ function amapress_row_action_adhesion_renew( $post_id ) {
 	$adhesion     = AmapressAdhesion::getBy( $post_id );
 	$new_adhesion = $adhesion->cloneAdhesion();
 	if ( ! $new_adhesion ) {
-		wp_die( 'Une erreur s\'est produit lors du renouvèlement de l\'adhésion. Veuillez réessayer' );
+		wp_die( 'Une erreur s\'est produit lors du renouvellement de l\'adhésion. Veuillez réessayer' );
 	}
 
 	wp_redirect_and_exit( admin_url( "post.php?post={$new_adhesion->ID}&action=edit" ) );
@@ -1136,6 +1137,17 @@ function amapress_get_contrat_quantite_datatable(
 	$date = null,
 	$options = array()
 ) {
+	$contrat_instance           = AmapressContrat_instance::getBy( $contrat_instance_id );
+	$contrat_instance_quantites = AmapressContrats::get_contrat_quantites( $contrat_instance_id );
+
+	$root_url = admin_url( 'admin.php?page=contrats_quantites_next_distrib&tab=contrat-quant-tab-' . $contrat_instance_id );
+
+	$date_is_first = false;
+	if ( 'first' == $date ) {
+		$date          = Amapress::start_of_week( $contrat_instance->getDate_debut() );
+		$date_is_first = true;
+	}
+	$date_is_current = false;
 	if ( ! $date ) {
 		$next_distrib = AmapressDistribution::getNextDistribution( $lieu_id, $contrat_instance_id );
 		if ( $next_distrib ) {
@@ -1143,31 +1155,40 @@ function amapress_get_contrat_quantite_datatable(
 		} else {
 			$date = amapress_time();
 		}
+		$date_is_current = true;
 	}
 
 	/** @var AmapressDistribution $dist */
-	$next_distribs = AmapressDistribution::get_next_distributions( $date, 'ASC' );
-	$dist          = null;
+	$next_distribs      = AmapressDistribution::get_next_distributions( $date, 'ASC' );
+	$dist               = null;
+	$next_next_dist     = null;
+	$next_next_distribs = [];
 	foreach ( $next_distribs as $distrib ) {
 		if ( in_array( $contrat_instance_id, $distrib->getContratIds() ) && ( empty( $lieu_id ) || $distrib->getLieuId() == $lieu_id ) ) {
-			$dist = $distrib;
-			break;
+			if ( ! $dist ) {
+				$dist = $distrib;
+			} elseif ( ! $next_next_dist && $dist ) {
+				$next_next_dist = $distrib;
+			} elseif ( $next_next_dist ) {
+				$next_next_distribs[] = $distrib;
+			}
 		}
 	}
 	if ( $dist ) {
 		$date = $dist->getDate();
 	}
 
-	$contrat_instance           = AmapressContrat_instance::getBy( $contrat_instance_id );
-	$contrat_instance_quantites = AmapressContrats::get_contrat_quantites( $contrat_instance_id );
-
-
 	$options = wp_parse_args(
 		$options,
 		array(
 			'show_next_distrib'       => true,
 			'show_contact_producteur' => true,
-			'show_adherents'          => true,
+			'show_adherents'          => $contrat_instance->isPanierVariable(),
+			'show_adherents_count'    => true,
+			'show_all_dates'          => false,
+			'group_by'                => 'none',
+			'show_price'              => false,
+			'show_empty_lines'        => ! $contrat_instance->isPanierVariable(),
 			'show_sum_fact_details'   => true,
 			'show_fact_details'       => $contrat_instance->isQuantiteVariable(),
 			'show_equiv_quantite'     => from( $contrat_instance_quantites )->distinct( function ( $c ) {
@@ -1176,289 +1197,498 @@ function amapress_get_contrat_quantite_datatable(
 				} )->count() > 1,
 			'no_script'               => false,
 			'mode'                    => 'both',
+			'for_placeholder'         => false,
 		)
 	);
 
+	$for_placeholder       = Amapress::toBool( $options['for_placeholder'] );
+	$group_by              = $options['group_by'];
+	$show_empty_lines      = $options['show_empty_lines'];
 	$show_adherents        = $options['show_adherents'];
+	$show_adherents_count  = $options['show_adherents_count'];
 	$show_equiv_quantite   = $options['show_equiv_quantite'];
 	$show_fact_details     = $options['show_fact_details'];
 	$show_sum_fact_details = $options['show_sum_fact_details'];
+	$show_all_dates        = $options['show_all_dates'];
+	$show_price            = $options['show_price'];
 
-	$columns = array(
-		array(
-			'title' => 'Quantité',
+	if ( $show_adherents ) {
+		$show_adherents_count = false;
+		$show_empty_lines     = false;
+	}
+
+	$columns = [];
+	if ( $show_all_dates ) {
+		$columns[] = array(
+			'title' => 'Date',
 			'data'  => array(
-				'_'    => 'quant',
-				'sort' => 'quant',
+				'_'    => 'date',
+				'sort' => 'date_sort',
 			)
-		),
+		);
+	}
+
+	if ( $show_adherents ) {
+		$columns[] = array(
+			'title' => 'Adhérent',
+			'data'  => array(
+				'_'    => 'adherent',
+				'sort' => 'adherent',
+			)
+		);
+	}
+
+	$columns[] = array(
+		'title' => 'Description',
+		'data'  => array(
+			'_'    => 'quant',
+			'sort' => 'quant',
+		)
 	);
-	$lieux   = Amapress::get_lieux();
-	if ( count( $lieux ) > 1 ) {
-		foreach ( $lieux as $lieu ) {
+	$lieux     = Amapress::get_lieux();
+	if ( ! $contrat_instance->isPanierVariable() ) {
+		if ( count( $lieux ) > 1 ) {
+			foreach ( $lieux as $lieu ) {
+				$columns[] = array(
+					'title' => $lieu->getShortName(),
+					'data'  => array(
+						'_'    => "lieu_{$lieu->ID}",
+						'sort' => "lieu_{$lieu->ID}",
+					)
+				);
+			}
 			$columns[] = array(
-				'title' => $lieu->getShortName(),
+				'title' => 'Tous',
 				'data'  => array(
-					'_'    => "lieu_{$lieu->ID}",
-					'sort' => "lieu_{$lieu->ID}",
+					'_'    => 'all',
+					'sort' => 'all',
 				)
 			);
+		} else {
+			foreach ( $lieux as $lieu ) {
+				$columns[] = array(
+					'title' => $lieu->getTitle(),
+					'data'  => array(
+						'_'    => "all",
+						'sort' => "all",
+					)
+				);
+			}
 		}
 	}
+	if ( $show_adherents_count ) {
+		$columns[] = array(
+			'title' => 'Adhérents',
+			'data'  => array(
+				'_'    => "all_adhs",
+				'sort' => "all_adhs",
+			)
+		);
+	}
 	$columns[] = array(
-		'title' => 'Tous',
+		'title' => 'Quantité',
 		'data'  => array(
-			'_'    => 'all',
-			'sort' => 'all',
+			'_'    => "all_num",
+			'sort' => "all_num",
 		)
 	);
 
-	$data                         = array();
-	$adhesions                    = AmapressContrats::get_active_adhesions( $contrat_instance_id, null, $lieu_id, $date, true, false );
+	if ( $show_price ) {
+		$columns[] = array(
+			'title' => 'Total',
+			'data'  => array(
+				'_'    => 'price_d',
+				'sort' => 'price',
+			)
+		);
+	}
+
+	$overall_total_price          = 0;
 	$contrat_instance_quantites[] = null;
-	foreach ( $contrat_instance_quantites as $quant ) {
-		/** @var AmapressContrat_quantite $quant */
-		$row          = array();
-		$quant_title  = $quant ? $quant->getTitle() : '-toutes-';
-		$row['quant'] = $quant ? $quant->getTitle() : '¤-Toutes-¤';
-		$quand_id     = $quant ? $quant->getID() : 0;
-		if ( count( $lieux ) > 1 ) {
-			foreach ( $lieux as $lieu ) {
-				$lieu_quant_adh_count      = 0;
-				$lieu_quant_count          = 0;
-				$lieu_quant_sum            = 0;
-				$lieu_quant_fact_adh_count = [];
-//				$lieu_quant_fact_count     = [];
-				foreach ( $adhesions as $adh ) {
-					if ( $adh->getLieuId() != $lieu->ID ) {
-						continue;
-					}
-					if ( empty( $quand_id ) ) {
-						$lieu_quant_adh_count += 1;
-					}
-					if ( $contrat_instance->isPanierVariable() ) {
-						foreach ( $adh->getVariables_Contrat_quantites( $date ) as $adh_quant ) {
-							if ( ! empty( $quand_id ) && $adh_quant['contrat_quantite']->ID != $quand_id ) {
+	$data                         = array();
+	$sum_data                     = array();
+	$all_distribs                 = [ $dist ];
+	if ( $show_all_dates ) {
+		$all_distribs = [ $dist ];
+		if ( $next_next_dist ) {
+			$all_distribs[] = $next_next_dist;
+		}
+		$all_distribs = array_merge( $all_distribs, $next_next_distribs );
+	}
+	foreach ( $all_distribs as $d ) {
+		$all_adhesions = AmapressContrats::get_active_adhesions( $contrat_instance_id, null, $lieu_id, $d ? $d->getDate() : $date, true, false );
+		if ( $show_adherents ) {
+			usort( $all_adhesions, function ( $a, $b ) {
+				/** @var AmapressAdhesion $a */
+				/** @var AmapressAdhesion $b */
+				return strcmp( $a->getAdherent()->getSortableDisplayName(), $b->getAdherent()->getSortableDisplayName() );
+			} );
+		}
+		$real_date = $d ? $d->getRealDateForContrat( $contrat_instance_id ) : $date;
+		/** @var AmapressAdhesion[] $adhesions */
+		foreach (
+			array_merge( $show_adherents && count( $all_adhesions ) > 1 ? array_map( function ( $adh ) {
+				return [ $adh ];
+			}, $all_adhesions ) : [], [ $all_adhesions ] ) as $adhesions
+		) {
+			foreach ( $contrat_instance_quantites as $quant ) {
+				if ( $contrat_instance->isPanierVariable() && empty( $quant ) && ( ! $show_adherents_count || $show_adherents ) ) {
+					continue;
+				}
+				/** @var AmapressContrat_quantite $quant */
+				$row = array();
+				if ( $show_adherents ) {
+					/** @var AmapressAdhesion $adhesion */
+					$adhesion        = $adhesions[0];
+					$row['adherent'] = $adhesion->getAdherent()->getSortableDisplayName();
+				}
+				$row['date']      = date_i18n( 'd/m/Y', $real_date );
+				$row['date_sort'] = date( 'Y-m-d', $real_date );
+				$quant_title      = $quant ? $quant->getTitle() : '-toutes-';
+				$row['quant']     = $quant ? $quant->getTitle() : '¤-Toutes-¤';
+				$row['qid']       = $quant ? str_pad( $quant->ID, 8, '0', STR_PAD_LEFT ) : '99999999';
+				$quand_id         = $quant ? $quant->getID() : 0;
+				if ( count( $lieux ) > 1 ) {
+					foreach ( $lieux as $lieu ) {
+						$lieu_quant_adh_count      = 0;
+						$lieu_quant_count          = 0;
+						$lieu_quant_sum            = 0;
+						$lieu_quant_fact_adh_count = [];
+						foreach ( $adhesions as $adh ) {
+							if ( $adh->getLieuId() != $lieu->ID ) {
 								continue;
 							}
-
-							if ( ! empty( $quand_id ) ) {
+							if ( empty( $quand_id ) ) {
 								$lieu_quant_adh_count += 1;
 							}
-							$lieu_quant_count += 1;
-							$lieu_quant_sum   += $adh_quant['quantite'];
-
-							if ( ! empty( $quand_id ) ) {
-								$quant_key = trim( $quant->formatValue( $adh_quant['quantite'], '' ) . ' "' . $quant->getCode() ) . '"';
-								if ( empty( $lieu_quant_fact_adh_count[ $quant_key ] ) ) {
-									$lieu_quant_fact_adh_count[ $quant_key ] = 0;
+							foreach ( $adh->getContrat_quantites( $real_date ) as $adh_quant ) {
+								if ( ! empty( $quand_id ) && $adh_quant->getId() != $quand_id ) {
+									continue;
 								}
-//							if ( empty( $lieu_quant_fact_count[ $quant_key ] ) ) {
-//								$lieu_quant_fact_count[ $quant_key ] = 0;
-//							}
 
-								$lieu_quant_fact_adh_count[ $quant_key ] += 1;
+								if ( ! empty( $quand_id ) ) {
+									$lieu_quant_adh_count += 1;
+								}
+								$lieu_quant_count += $adh_quant->getFactor();
+								$lieu_quant_sum   += $adh_quant->getQuantite();
+
+								if ( ! empty( $quand_id ) ) {
+									$quant_key = trim( $quant->formatValue( $adh_quant->getFactor(), '' ) . ' "' . $quant->getCode() ) . '"';
+									if ( empty( $lieu_quant_fact_adh_count[ $quant_key ] ) ) {
+										$lieu_quant_fact_adh_count[ $quant_key ] = 0;
+									}
+
+									$lieu_quant_fact_adh_count[ $quant_key ] += 1;
+								}
 							}
-//							$lieu_quant_fact_count[ $quant_key ] += 1;
 						}
-					} else {
-						foreach ( $adh->getContrat_quantites( $date ) as $adh_quant ) {
-							if ( ! empty( $quand_id ) && $adh_quant->getId() != $quand_id ) {
-								continue;
-							}
+						ksort( $lieu_quant_fact_adh_count );
+						$fact_details = implode( "<br/>", array_map(
+							function ( $k, $v ) {
+								return "$v x $k";
+							},
+							array_keys( $lieu_quant_fact_adh_count ),
+							array_values( $lieu_quant_fact_adh_count )
+						) );
 
-							if ( ! empty( $quand_id ) ) {
-								$lieu_quant_adh_count += 1;
-							}
-							$lieu_quant_count += $adh_quant->getFactor();
-							$lieu_quant_sum   += $adh_quant->getQuantite();
-
-							if ( ! empty( $quand_id ) ) {
-								$quant_key = trim( $quant->formatValue( $adh_quant->getFactor(), '' ) . ' "' . $quant->getCode() ) . '"';
-								if ( empty( $lieu_quant_fact_adh_count[ $quant_key ] ) ) {
-									$lieu_quant_fact_adh_count[ $quant_key ] = 0;
-								}
-//							if ( empty( $lieu_quant_fact_count[ $quant_key ] ) ) {
-//								$lieu_quant_fact_count[ $quant_key ] = 0;
-//							}
-
-								$lieu_quant_fact_adh_count[ $quant_key ] += 1;
-							}
-//							$lieu_quant_fact_count[ $quant_key ] += 1;
+						$row["lieu_{$lieu->ID}_adhs"] = $lieu_quant_adh_count;
+						$row["lieu_{$lieu->ID}_num"]  = $lieu_quant_count;
+						if ( empty( $lieu_quant_adh_count ) ) {
+							$row["lieu_{$lieu->ID}"]     = '';
+							$row["lieu_{$lieu->ID}_txt"] = '';
+						} else if ( abs( $lieu_quant_sum ) < 0.001 || ! $show_equiv_quantite ) {
+							$row["lieu_{$lieu->ID}"]     = ( $show_adherents_count ?
+									"$lieu_quant_adh_count adhérents ; " : '' ) .
+							                               ( $show_fact_details ?
+								                               "<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
+								                               : "$lieu_quant_count x $quant_title" );
+							$row["lieu_{$lieu->ID}_txt"] = ( $show_fact_details ?
+								"<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
+								: "$lieu_quant_count x $quant_title" );
+						} else {
+							$row["lieu_{$lieu->ID}"]     = ( $show_adherents_count ?
+									"$lieu_quant_adh_count adhérents ; " : '' ) .
+							                               ( $show_fact_details ?
+								                               "<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
+								                               : "$lieu_quant_count x $quant_title" ) .
+							                               "<br/><em>équivalent quantité : $lieu_quant_sum</em>";
+							$row["lieu_{$lieu->ID}_txt"] = ( $show_fact_details ?
+								"<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
+								: "$lieu_quant_count x $quant_title" );
 						}
 					}
 				}
-				ksort( $lieu_quant_fact_adh_count );
+				$all_quant_adh_count      = 0;
+				$all_quant_count          = 0;
+				$all_quant_sum            = 0;
+				$all_quant_all_price      = 0;
+				$all_quant_fact_adh_count = [];
+				foreach ( $adhesions as $adh ) {
+					$quants_for_date = $adh->getContrat_quantites( $real_date );
+					if ( empty( $quand_id ) && ! empty( $quants_for_date ) ) {
+						$all_quant_adh_count += 1;
+					}
+					foreach ( $quants_for_date as $adh_quant ) {
+						if ( ! empty( $quand_id ) && $adh_quant->getId() != $quand_id ) {
+							continue;
+						}
+
+						if ( ! empty( $quand_id ) ) {
+							$all_quant_adh_count += 1;
+						}
+						$all_quant_count += $adh_quant->getFactor();
+						$all_quant_sum   += $adh_quant->getQuantite();
+
+						$all_quant_all_price += $adh_quant->getPrice();
+
+						if ( ! empty( $quand_id ) ) {
+							$quant_key = trim( $quant->formatValue( $adh_quant->getFactor(), '' ) ) . ' "' . $quant->getCode() . '"';
+							if ( empty( $all_quant_fact_adh_count[ $quant_key ] ) ) {
+								$all_quant_fact_adh_count[ $quant_key ] = 0;
+							}
+							$all_quant_fact_adh_count[ $quant_key ] += 1;
+						}
+					}
+				}
+				ksort( $all_quant_fact_adh_count );
 				$fact_details = implode( "<br/>", array_map(
 					function ( $k, $v ) {
 						return "$v x $k";
 					},
-					array_keys( $lieu_quant_fact_adh_count ),
-					array_values( $lieu_quant_fact_adh_count )
+					array_keys( $all_quant_fact_adh_count ),
+					array_values( $all_quant_fact_adh_count )
 				) );
+				$total_price  = $all_quant_all_price;
 
-				if ( empty( $lieu_quant_adh_count ) ) {
-					$row["lieu_{$lieu->ID}"]     = '';
-					$row["lieu_{$lieu->ID}_txt"] = '';
-				} else if ( abs( $lieu_quant_sum ) < 0.001 || ! $show_equiv_quantite ) {
-					$row["lieu_{$lieu->ID}"]     = ( $show_adherents ?
-							"$lieu_quant_adh_count adhérents ; " : '' ) .
-					                               ( $show_fact_details ?
-						                               "<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
-						                               : "$lieu_quant_count x $quant_title" );
-					$row["lieu_{$lieu->ID}_txt"] = ( $show_fact_details ?
-						"<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
-						: "$lieu_quant_count x $quant_title" );
+				$row['price_d'] = Amapress::formatPrice( $total_price, true );
+				$row['price']   = $total_price;
+				if ( $quant ) {
+					$overall_total_price += $total_price;
+				}
+
+				$row['all_adhs'] = $all_quant_adh_count;
+				$row['all_num']  = $all_quant_count;
+				if ( empty( $all_quant_adh_count ) ) {
+					$row['all']     = '';
+					$row['all_txt'] = '';
+				} else if ( abs( $all_quant_sum ) < 0.001 || ! $show_equiv_quantite ) {
+					$row['all']     = ( $show_adherents_count ? "$all_quant_adh_count adhérents ; " : '' ) .
+					                  ( $show_fact_details ?
+						                  "<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
+						                  : "$all_quant_count x $quant_title" );
+					$row['all_txt'] = ( $show_fact_details ?
+						"<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
+						: "$all_quant_count x $quant_title" );
 				} else {
-					$row["lieu_{$lieu->ID}"]     = ( $show_adherents ?
-							"$lieu_quant_adh_count adhérents ; " : '' ) .
-					                               ( $show_fact_details ?
-						                               "<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
-						                               : "$lieu_quant_count x $quant_title" ) .
-					                               "<br/><em>équivalent quantité : $lieu_quant_sum</em>";
-					$row["lieu_{$lieu->ID}_txt"] = ( $show_fact_details ?
-						"<br/>$fact_details" . ( $show_sum_fact_details && count( $lieu_quant_fact_adh_count ) > 1 ? "<br/>= $lieu_quant_count x $quant_title" : '' )
-						: "$lieu_quant_count x $quant_title" );
+					$row['all']     = ( $show_adherents_count ? "$all_quant_adh_count adhérents ; " : '' ) .
+					                  ( $show_fact_details ?
+						                  "<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
+						                  : "$all_quant_count x $quant_title" ) . "<br/><em>équivalent quantité : $all_quant_sum</em>";
+					$row['all_txt'] = ( $show_fact_details ?
+						"<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
+						: "$all_quant_count x $quant_title" );
 				}
-			}
-		}
-		$all_quant_adh_count      = 0;
-		$all_quant_count          = 0;
-		$all_quant_sum            = 0;
-		$all_quant_fact_adh_count = [];
-		foreach ( $adhesions as $adh ) {
-			if ( empty( $quand_id ) ) {
-				$all_quant_adh_count += 1;
-			}
-			if ( $contrat_instance->isPanierVariable() ) {
-				foreach ( $adh->getVariables_Contrat_quantites( $date ) as $adh_quant ) {
-					if ( ! empty( $quand_id ) && $adh_quant['contrat_quantite']->ID != $quand_id ) {
-						continue;
+				if ( ! $show_empty_lines && 0 == $all_quant_adh_count ) {
+					continue;
+				}
+				if ( 'month' == $group_by || 'quarter' == $group_by ) {
+					if ( 'quarter' == $group_by ) {
+						$quarter          = ceil( intval( date( 'n', $real_date ) ) / 3 );
+						$row['date']      = "T$quarter";
+						$row['date_sort'] = "T$quarter";
+					} else {
+						$row['date']      = date_i18n( 'm/Y', $real_date );
+						$row['date_sort'] = date( 'Y-m', $real_date );
 					}
-
-					if ( ! empty( $quand_id ) ) {
-						$all_quant_adh_count += 1;
-					}
-					$all_quant_count += 1;
-					$all_quant_sum   += $adh_quant['quantite'];
-
-					if ( ! empty( $quand_id ) ) {
-						$quant_key = trim( $quant->formatValue( $adh_quant['quantite'], '' ) ) . ' "' . $quant->getCode() . '"';
-						if ( empty( $all_quant_fact_adh_count[ $quant_key ] ) ) {
-							$all_quant_fact_adh_count[ $quant_key ] = 0;
+					$key = $row['date_sort'] . $row['quant'] . ( $show_adherents ? $row['adherent'] : '' );
+					if ( isset( $data[ $key ] ) ) {
+						foreach ( $row as $k => $v ) {
+							if ( 'quant' == $k || 'date' == $k || 'date_sort' == $k || 'adherent' == $k ) {
+								continue;
+							}
+							if ( is_string( $v ) ) {
+								$data[ $key ][ $k ] .= $v;
+							} else {
+								$data[ $key ][ $k ] += $v;
+							}
 						}
-//					if ( empty( $all_quant_fact_count[ $quant_key ] ) ) {
-//						$all_quant_fact_count[ $quant_key ] = 0;
-//					}
-
-						$all_quant_fact_adh_count[ $quant_key ] += 1;
+						$data[ $key ]['price_d'] = Amapress::formatPrice( $data[ $key ]['price'], true );
+					} else {
+						$data[ $key ] = $row;
 					}
-//					$all_quant_fact_count[ $quant_key ] += 1;
-				}
-			} else {
-				foreach ( $adh->getContrat_quantites( $date ) as $adh_quant ) {
-					if ( ! empty( $quand_id ) && $adh_quant->getId() != $quand_id ) {
-						continue;
+				} elseif ( $show_adherents ) {
+					if ( count( $adhesions ) > 1 ) {
+						$sum_data[] = $row;
+					} elseif ( 1 == count( $all_adhesions ) ) {
+						$sum_data[] = $row;
+						$data[]     = $row;
+					} else {
+						$data[] = $row;
 					}
-
-					if ( ! empty( $quand_id ) ) {
-						$all_quant_adh_count += 1;
-					}
-					$all_quant_count += $adh_quant->getFactor();
-					$all_quant_sum   += $adh_quant->getQuantite();
-
-					if ( ! empty( $quand_id ) ) {
-						$quant_key = trim( $quant->formatValue( $adh_quant->getFactor(), '' ) ) . ' "' . $quant->getCode() . '"';
-						if ( empty( $all_quant_fact_adh_count[ $quant_key ] ) ) {
-							$all_quant_fact_adh_count[ $quant_key ] = 0;
-						}
-//					if ( empty( $all_quant_fact_count[ $quant_key ] ) ) {
-//						$all_quant_fact_count[ $quant_key ] = 0;
-//					}
-
-						$all_quant_fact_adh_count[ $quant_key ] += 1;
-					}
-//					$all_quant_fact_count[ $quant_key ] += 1;
+				} else {
+					$data[] = $row;
 				}
 			}
 		}
-		ksort( $all_quant_fact_adh_count );
-		$fact_details = implode( "<br/>", array_map(
-			function ( $k, $v ) {
-				return "$v x $k";
-			},
-			array_keys( $all_quant_fact_adh_count ),
-			array_values( $all_quant_fact_adh_count )
-		) );
-		if ( empty( $all_quant_adh_count ) ) {
-			$row['all']     = '';
-			$row['all_txt'] = '';
-		} else if ( abs( $all_quant_sum ) < 0.001 || ! $show_equiv_quantite ) {
-			$row['all']     = ( $show_adherents ? "$all_quant_adh_count adhérents ; " : '' ) .
-			                  ( $show_fact_details ?
-				                  "<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
-				                  : "$all_quant_count x $quant_title" );
-			$row['all_txt'] = ( $show_fact_details ?
-				"<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
-				: "$all_quant_count x $quant_title" );
-		} else {
-			$row['all']     = ( $show_adherents ? "$all_quant_adh_count adhérents ; " : '' ) .
-			                  ( $show_fact_details ?
-				                  "<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
-				                  : "$all_quant_count x $quant_title" ) . "<br/><em>équivalent quantité : $all_quant_sum</em>";
-			$row['all_txt'] = ( $show_fact_details ?
-				"<br/>$fact_details" . ( $show_sum_fact_details && count( $all_quant_fact_adh_count ) > 1 ? "<br/>= $all_quant_count x $quant_title" : '' )
-				: "$all_quant_count x $quant_title" );
-		}
-		$data[] = $row;
+	}
+	$data = array_values( $data );
+	usort( $data, function ( $a, $b ) use ( $show_adherents ) {
+		$key_a = $a['date_sort'] . '-' . ( $show_adherents ? $a['adherent'] : '' ) . '-' . $a['qid'];
+		$key_b = $b['date_sort'] . '-' . ( $show_adherents ? $b['adherent'] : '' ) . '-' . $b['qid'];
+
+		return strcasecmp( $key_a, $key_b );
+	} );
+
+	$next_distrib_text = '';
+	if ( ! $for_placeholder ) {
+		$next_distrib_text .= '<p>' . Amapress::wrapIf( Amapress::makeLink(
+				$root_url . '&all&date=first',
+				'Récapitulatif contrat ' . $contrat_instance->getTitle() ), $show_all_dates && $date_is_first ) . ' | ' .
+		                      Amapress::wrapIf( Amapress::makeLink(
+			                      $root_url . '&all',
+			                      'Quantités par date à partir du ' . date_i18n( 'd/m/Y' ) ), $show_all_dates && ! $date_is_first ) . ' | ' .
+		                      Amapress::wrapIf( Amapress::makeLink(
+			                      $root_url,
+			                      'Quantités à la prochaine distribution à partir du ' . date_i18n( 'd/m/Y' ) ), ! $show_all_dates && $date_is_current ) .
+		                      '</p><hr/>';
+		$next_distrib_text .= '<p>' .
+		                      ( $show_price ? Amapress::makeLink( remove_query_arg( 'with_prices' ), 'Masquer les montants' )
+			                      : Amapress::makeLink( add_query_arg( 'with_prices', 'T' ), 'Afficher les montants' ) ) .
+		                      ' | ' .
+		                      ( $show_adherents ? Amapress::makeLink( remove_query_arg( 'with_adherent' ), 'Masquer les amapiens' )
+			                      : Amapress::makeLink( add_query_arg( 'with_adherent', 'T' ), 'Afficher les amapiens' ) ) .
+		                      ( ! $show_all_dates && ! $show_adherents ? ' | ' .
+		                                                                 ( $show_empty_lines ? Amapress::makeLink( add_query_arg( 'without_empty', 'T' ), 'Masquer les lignes vides' )
+			                                                                 : Amapress::makeLink( remove_query_arg( 'without_empty' ), 'Afficher les lignes vides' ) ) : '' ) .
+		                      ( $show_all_dates ? ' | ' .
+		                                          Amapress::wrapIf( Amapress::makeLink( add_query_arg( 'by', 'month' ), 'Afficher par mois' ), 'month' == $group_by ) .
+		                                          ' | ' .
+		                                          Amapress::wrapIf( Amapress::makeLink( add_query_arg( 'by', 'quarter' ), 'Afficher par trimestre' ), 'quarter' == $group_by ) .
+		                                          ' | ' .
+		                                          Amapress::wrapIf( Amapress::makeLink( add_query_arg( 'by', 'date' ), 'Afficher par date' ), 'date' == $group_by || 'none' == $group_by ) : '' ) .
+		                      '</p><hr/>';
 	}
 
-//	<h4>' . esc_html( $contrat_instance->getTitle() ) . '</h4>
+	$print_title = '';
+	if ( $show_all_dates ) {
+		if ( $date_is_first ) {
+			$next_distrib_text .= '<h4>Informations pour le contrat ' . $contrat_instance->getTitle() . '</h4>';
+			$print_title       = 'Récapitulatif pour le contrat ' . $contrat_instance->getTitle();
+		} else {
+			$next_distrib_text .= '<h4>Informations pour les prochaines distributions à partir du ' . date_i18n( 'd/m/Y', $date ) . '</h4>';
+			$print_title       = 'Récapitulatif pour les prochaines distributions à partir du ' . date_i18n( 'd/m/Y', $date ) . ' pour le contrat ' . $contrat_instance->getTitle();
+		}
+		if ( ! $date_is_current && ! $for_placeholder ) {
+			$next_distrib_text .= '<p>' . Amapress::makeLink(
+					$root_url . '&all',
+					'Afficher les quantités à partir du ' . date_i18n( 'd/m/Y' ) ) . '</p><hr/>';
+		}
+	} else {
+		if ( $dist ) {
+			$next_distrib_text .= '<h4>Informations pour la prochaine distribution du ' . date_i18n( 'd/m/Y', $dist->getDate() ) . '</h4>';
+			$print_title       = 'Récapitulatif pour la prochaine distribution (' . date_i18n( 'd/m/Y', $dist->getDate() ) . ') pour le contrat ' . $contrat_instance->getTitle();
+		} else {
+			$next_distrib_text .= '<h4>Informations pour la prochaine distribution à partir du ' . date_i18n( 'd/m/Y', $date ) . '</h4>';
+			$print_title       = 'Récapitulatif pour la prochaine distribution pour le contrat ' . $contrat_instance->getTitle();
+		}
+		if ( ! $for_placeholder ) {
+			if ( ! $date_is_current ) {
+				$next_distrib_text .= '<p>' . Amapress::makeLink( $root_url,
+						'Revenir à la prochaine distribution à partir du ' . date_i18n( 'd/m/Y' ) ) . '</p><hr/>';
+			}
+			if ( ! $date_is_first ) {
+				$next_distrib_text .= '<p>' . Amapress::makeLink( $root_url . '&date=first',
+						'Revenir à la première distribution à partir du ' . date_i18n( 'd/m/Y', $contrat_instance->getDate_debut() ) ) . '</p><hr/>';
+			}
+		}
+	}
+	if ( $options['show_next_distrib'] && ! $show_all_dates && ! $for_placeholder ) {
+		$next_distrib_text .= '<p>' . ( $dist && Amapress::end_of_day( $dist->getDate() ) > amapress_time() ? 'Prochaine distribution: ' : 'Distribution du ' ) .
+		                      ( $dist ? Amapress::makeLink( $dist->getPermalink(),
+			                      (
+			                      Amapress::start_of_week( amapress_time() ) < $dist->getDate() && $dist->getDate() < Amapress::end_of_week( amapress_time() ) ?
+				                      '<strong>Cette semaine</strong> - ' :
+				                      (
+				                      Amapress::start_of_week( Amapress::add_a_week( amapress_time() ) ) < $dist->getDate() && $dist->getDate() < Amapress::end_of_week( Amapress::add_a_week( amapress_time() ) ) ?
+					                      '<strong>Semaine prochaine</strong> - ' :
+					                      ''
+				                      ) ) . date_i18n( 'd/m/Y H:i', $dist->getStartDateAndHour() ), false ) : 'non planifiée' ) . '</p>';
+		if ( $next_next_dist ) {
+			$next_distrib_text .= '<p>Distribution suivante : ' .
+			                      Amapress::makeLink( $root_url . '&all&date=' . date( 'Y-m-d', $next_next_dist->getDate() ),
+				                      $next_next_dist->getTitle() ) . '</p>';
+		}
 
-	//
-	$next_distrib_text = '';
-	if ( $options['show_next_distrib'] ) {
-		$next_distrib_text = '<p>' . ( $dist && Amapress::end_of_day( $dist->getDate() ) > amapress_time() ? 'Prochaine distribution: ' : 'Distribution du ' ) .
-		                     ( $dist ? Amapress::makeLink( $dist->getPermalink(),
-			                     (
-			                     Amapress::start_of_week( amapress_time() ) < $dist->getDate() && $dist->getDate() < Amapress::end_of_week( amapress_time() ) ?
-				                     '<strong>Cette semaine</strong> - ' :
-				                     (
-				                     Amapress::start_of_week( Amapress::add_a_week( amapress_time() ) ) < $dist->getDate() && $dist->getDate() < Amapress::end_of_week( Amapress::add_a_week( amapress_time() ) ) ?
-					                     '<strong>Semaine prochaine</strong> - ' :
-					                     ''
-				                     ) ) . date_i18n( 'd/m/Y H:i', $dist->getStartDateAndHour() ), false ) : 'non planifiée' ) . '</p>';
-		$next_distrib_text .= '<p>' . Amapress::makeLink( admin_url( "edit.php?post_type=amps_distribution&amapress_date=thismonth" ), 'Autres dates de distribution' ) . '</p>';
+		if ( ! $contrat_instance->isPanierVariable() ) {
+			$next_next_distribs = array_slice( $next_next_distribs, 0, 15 );
+		}
+
+		if ( ! empty( $next_next_distribs ) ) {
+			$next_distrib_text .= '<p>Distributions suivantes : ' . implode( ', ', array_map(
+					function ( $d ) use ( $contrat_instance_id, $root_url ) {
+						/** @var AmapressDistribution $d */
+						return Amapress::makeLink( $root_url . '&all&date=' . date( 'Y-m-d', $d->getDate() ),
+							date_i18n( 'd/m/Y', $d->getDate() ) );
+					}, $next_next_distribs
+				) ) . '</p>';
+		}
+
+		$next_distrib_text .= '<p>' . Amapress::makeLink(
+				admin_url( "edit.php?post_type=amps_distribution&amapress_date=active&amapress_contrat_inst=$contrat_instance_id" ),
+				'Autres dates de distribution' ) . '</p>';
 	}
 	$contact_producteur = '';
 	if ( $options['show_contact_producteur'] ) {
-		$contact_producteur = '<div><h5>Contact producteur:</h5>' .
-		                      $contrat_instance->getModel()->getProducteur()->getUser()->getDisplay(
-			                      array(
-				                      'show_avatar' => 'false',
-				                      'show_tel'    => 'force',
-				                      'show_sms'    => 'force',
-				                      'show_email'  => 'force',
-				                      'show_roles'  => 'false',
-			                      ) ) . '</div>';
+		if ( ! empty( $contrat_instance->getModel() ) && ! empty( $contrat_instance->getModel()->getProducteur() ) && ! empty( $contrat_instance->getModel()->getProducteur()->getUser() ) ) {
+			$contact_producteur = '<div><h5>Contact producteur:</h5>' .
+			                      $contrat_instance->getModel()->getProducteur()->getUser()->getDisplay(
+				                      array(
+					                      'show_avatar' => 'false',
+					                      'show_tel'    => 'force',
+					                      'show_sms'    => 'force',
+					                      'show_email'  => 'force',
+					                      'show_roles'  => 'false',
+				                      ) ) . '</div>';
+		}
 	}
 
 	$output = '';
 	if ( 'table' == $options['mode'] || 'both' == $options['mode'] ) {
+		$dt_options = array(
+			'paging'       => false,
+			'init_as_html' => $options['no_script'] || ( ! $show_all_dates && ! $show_adherents ),
+			'no_script'    => $options['no_script'],
+			'bSort'        => ! $contrat_instance->isPanierVariable(),
+			'empty_desc'   => 'Pas de livraison',
+		);
+		if ( $show_all_dates ) {
+			$dt_options['rowGroup'] = [
+				'dataSrc' => 'date'
+			];
+		} elseif ( $show_adherents ) {
+			$dt_options['rowGroup'] = [
+				'dataSrc' => 'adherent'
+			];
+		}
 		$output .= amapress_get_datatable( 'contrat-instance-recap-' . $contrat_instance_id,
 			$columns, $data,
+			$dt_options,
 			array(
-				'paging'       => false,
-				'bSort'        => true,
-				'init_as_html' => true,
-				'no_script'    => $options['no_script'],
-			),
-			array(
-				Amapress::DATATABLES_EXPORT_EXCEL,
-				Amapress::DATATABLES_EXPORT_PRINT
+				[
+					'extend' => Amapress::DATATABLES_EXPORT_EXCEL,
+					'title'  => $print_title
+				],
+				[
+					'extend'        => Amapress::DATATABLES_EXPORT_PRINT,
+					'title'         => $print_title,
+//					'autoPrint' => false,
+					'exportOptions' => [
+						'rowGroup' => true
+					]
+				],
 			) );
 	}
-	if ( 'text' == $options['mode'] || 'both' == $options['mode'] ) {
+	if ( ! $show_all_dates && ( 'text' == $options['mode'] || 'both' == $options['mode'] ) ) {
 		if ( count( $lieux ) > 1 ) {
 			foreach ( $lieux as $lieu ) {
 				$output        .= '<p>A ' . esc_html( $lieu->getShortName() ) . ' : ';
@@ -1468,25 +1698,213 @@ function amapress_get_contrat_quantite_datatable(
 						$output_quants[] = esc_html( $row["lieu_{$lieu->ID}_txt"] );
 					}
 				}
+				$output .= '(' . $row["lieu_{$lieu->ID}_adhs"] . ' adhérent(s)) ; ';
 				$output .= implode( ', ', $output_quants );
 				$output .= '</p>';
 			}
 		}
 		$output        .= '<p>En tout : ';
 		$output_quants = [];
-		foreach ( $data as $row ) {
+		foreach ( empty( $sum_data ) ? $data : $sum_data as $row ) {
 			if ( ! empty( $row["all_txt"] ) ) {
 				$output_quants[] = strpos( $row["all_txt"], '=' ) !== false ? '[' . $row["all_txt"] . ']' : $row["all_txt"];
 			}
 		}
+		$output .= '(' . $row["all_adhs"] . ' adhérent(s)) ; ';
 		$output .= implode( ', ', $output_quants );
 		$output .= '</p>';
+
+	}
+	if ( $show_price ) {
+		$output .= '<p><strong>Total: ' . Amapress::formatPrice( $overall_total_price, true ) . '</strong></p>';
 	}
 
 	return '<div class="contrat-instance-recap contrat-instance-' . $contrat_instance_id . '">' .
 	       $next_distrib_text .
 	       $contact_producteur .
+	       '<p><em>Information à jour en date du ' . date_i18n( 'd/m/Y', $date ) . ( ! $show_all_dates && $date != $real_date ? ' (panier déplacé du ' . date_i18n( 'd/m/Y', $real_date ) . ')' : '' ) . '</em></p>' .
+	       $output . '</div>';
+}
+
+function amapress_producteurs_finances_custom() {
+	return amapress_get_producteurs_finances_datatable( null, [
+		'group_date_by' => isset( $_GET['date_by'] ) ? $_GET['date_by'] : 'none',
+		'group_by'      => isset( $_GET['by'] ) ? $_GET['by'] : 'date',
+	] );
+}
+
+function amapress_get_producteurs_finances_datatable(
+	$date = null,
+	$options = array()
+) {
+	$contrat_instances = AmapressContrats::get_active_contrat_instances( null, $date );
+
+	$options = wp_parse_args(
+		$options,
+		array(
+			'show_adherents' => true,
+			'group_by'       => 'date',
+			'group_date_by'  => 'none',
+			'no_script'      => false,
+		)
+	);
+
+	$group_date_by = $options['group_date_by'];
+	if ( empty( $group_date_by ) ) {
+		$group_date_by = 'none';
+	}
+	$show_adherents = $options['show_adherents'];
+
+	$columns = [
+		array(
+			'title' => 'Date',
+			'data'  => array(
+				'_'    => 'date',
+				'sort' => 'date_sort',
+			)
+		),
+		array(
+			'title' => 'Producteur',
+			'data'  => array(
+				'_'    => 'prod',
+				'sort' => 'prod',
+			)
+		)
+	];
+
+	if ( $show_adherents ) {
+		$columns[] = array(
+			'title' => 'Adhérents',
+			'data'  => array(
+				'_'    => "all_adhs",
+				'sort' => "all_adhs",
+			)
+		);
+	}
+	$columns[] = array(
+		'title' => 'Total',
+		'data'  => array(
+			'_'    => 'price_d',
+			'sort' => 'price',
+		)
+	);
+
+	$data = [];
+	foreach ( $contrat_instances as $contrat_instance ) {
+		$stats = $contrat_instance->getInscriptionsStats()['lines'];
+		foreach ( $stats as $date_stat ) {
+			$real_date = intval( $date_stat['date_int'] );
+			$row       = array();
+
+			$row['prod'] = $contrat_instance->getModel()->getTitle()
+			               . '<br />'
+			               . '<em>' . $contrat_instance->getModel()->getProducteur()->getTitle() . '</em>';
+
+			$row['price_d'] = Amapress::formatPrice( $date_stat['lieu_all_p'], true );
+			$row['price']   = $date_stat['lieu_all_p'];
+
+			$row['all_adhs'] = $date_stat['lieu_all_inscriptions'];
+
+			if ( 'quarter' == $group_date_by ) {
+				$quarter          = ceil( intval( date( 'n', $real_date ) ) / 3 );
+				$row['date']      = "T$quarter";
+				$row['date_sort'] = "T$quarter";
+			} elseif ( 'month' == $group_date_by ) {
+				$row['date']      = date_i18n( 'm/Y', $real_date );
+				$row['date_sort'] = date( 'Y-m', $real_date );
+			} else {
+				$row['date']      = date_i18n( 'd/m/Y', $real_date );
+				$row['date_sort'] = date( 'Y-m-d', $real_date );
+			}
+			$key = $row['date_sort'] . $row['prod'];
+			if ( isset( $data[ $key ] ) ) {
+				foreach ( $row as $k => $v ) {
+					if ( 'prod' == $k || 'date' == $k || 'date_sort' == $k ) {
+						continue;
+					}
+					if ( 'all_adhs' == $k ) {
+						$data[ $key ][ $k ] = $v > $data[ $key ][ $k ] ? $v : $data[ $key ][ $k ];
+						continue;
+					}
+					if ( is_string( $v ) ) {
+						$data[ $key ][ $k ] .= $v;
+					} else {
+						$data[ $key ][ $k ] += $v;
+					}
+				}
+				$data[ $key ]['price_d'] = Amapress::formatPrice( $data[ $key ]['price'], true );
+			} else {
+				$data[ $key ] = $row;
+			}
+		}
+	}
+	$data     = array_values( $data );
+	$group_by = ! empty( $options['group_by'] ) ? $options['group_by'] : 'date';
+	if ( 'date' == $group_by ) {
+		usort( $data, function ( $a, $b ) {
+			$ret = strcmp( $a['date_sort'], $b['date_sort'] );
+			if ( 0 == $ret ) {
+				$ret = strcmp( $a['prod'], $b['prod'] );
+			}
+
+			return $ret;
+		} );
+	} elseif ( 'prod' == $group_by ) {
+		usort( $data, function ( $a, $b ) {
+			$ret = strcmp( $a['prod'], $b['prod'] );
+			if ( 0 == $ret ) {
+				$ret = strcmp( $a['date_sort'], $b['date_sort'] );
+			}
+
+			return $ret;
+		} );
+	}
+
+
+	$print_title = 'Récapitulatif financier des producteurs';
+
+	$dt_options             = array(
+		'paging'       => false,
+		'init_as_html' => $options['no_script'],
+		'no_script'    => $options['no_script'],
+		'bSort'        => false,
+	);
+	$dt_options['rowGroup'] = [
+		'dataSrc' => ! empty( $options['group_by'] ) ? $options['group_by'] : 'date'
+	];
+	$output                 = amapress_get_datatable( 'contrat-instance_finances-recap',
+		$columns, $data,
+		$dt_options,
+		array(
+			[
+				'extend' => Amapress::DATATABLES_EXPORT_EXCEL,
+				'title'  => $print_title
+			],
+			[
+				'extend'        => Amapress::DATATABLES_EXPORT_PRINT,
+				'title'         => $print_title,
+				'exportOptions' => [
+					'rowGroup' => true
+				]
+			],
+		) );
+
+	$filters = '<p>' .
+	           Amapress::makeLink( add_query_arg( 'date_by', 'date' ), 'Afficher par date' ) .
+	           ' | ' .
+	           Amapress::makeLink( add_query_arg( 'date_by', 'month' ), 'Afficher par mois' ) .
+	           ' | ' .
+	           Amapress::makeLink( add_query_arg( 'date_by', 'quarter' ), 'Afficher par trimestre' ) .
+	           '</p><hr/>';
+	$filters .= '<p>' .
+	            Amapress::makeLink( add_query_arg( 'by', 'date' ), 'Grouper par date' ) .
+	            ' | ' .
+	            Amapress::makeLink( add_query_arg( 'by', 'prod' ), 'Grouper par producteur' ) .
+	            '</p><hr/>';
+
+	return '<div class="contrat-instances-finances-recap">' .
 	       '<p><em>Information à jour en date du ' . date_i18n( 'd/m/Y', $date ) . '</em></p>' .
+	       $filters .
 	       $output . '</div>';
 }
 
@@ -1755,15 +2173,17 @@ function amapress_get_paiement_table_by_dates(
 	}
 	$contact_producteur = '';
 	if ( $options['show_contact_producteur'] ) {
-		$contact_producteur = '<div><h5>Contact producteur:</h5>' .
-		                      $contrat_instance->getModel()->getProducteur()->getUser()->getDisplay(
-			                      array(
-				                      'show_avatar' => 'false',
-				                      'show_tel'    => 'force',
-				                      'show_sms'    => 'force',
-				                      'show_email'  => 'force',
-				                      'show_roles'  => 'false',
-			                      ) ) . '</div>';
+		if ( ! empty( $contrat_instance->getModel() ) && ! empty( $contrat_instance->getModel()->getProducteur() ) && ! empty( $contrat_instance->getModel()->getProducteur()->getUser() ) ) {
+			$contact_producteur = '<div><h5>Contact producteur:</h5>' .
+			                      $contrat_instance->getModel()->getProducteur()->getUser()->getDisplay(
+				                      array(
+					                      'show_avatar' => 'false',
+					                      'show_tel'    => 'force',
+					                      'show_sms'    => 'force',
+					                      'show_email'  => 'force',
+					                      'show_roles'  => 'false',
+				                      ) ) . '</div>';
+		}
 	}
 
 	$ret = '<div class="contrat-instance-recap contrat-instance-' . $contrat_instance_id . '">
@@ -1979,20 +2399,20 @@ function amapress_create_user_and_adhesion_assistant( $post_id, TitanFrameworkOp
 			'step',
 			'assistant'
 		] ) . '" class="button button-primary">Choisir un autre amapien</a></p>';
-	echo '<script type="text/javascript">jQuery(function() {
-    jQuery("#user_id").select2({
+	echo '<script type="text/javascript">jQuery(function($) {
+    $("#user_id").select2({
         allowClear: true,
 		  escapeMarkup: function(markup) {
 		return markup;
 	},
 		  templateResult: function(data) {
-		return jQuery("<span>"+data.text+"</span>");
+		return $("<span>"+data.text+"</span>");
 	},
 		  templateSelection: function(data) {
-		return jQuery("<span>"+data.text+"</span>");
+		return $("<span>"+data.text+"</span>");
 	},
     });
-    jQuery("form#new_user").validate({
+    $("form#new_user").validate({
                 onkeyup: false,
         }
     );
@@ -2054,8 +2474,8 @@ function amapress_create_user_for_distribution( $post_id, TitanFrameworkOption $
 		echo '</table>';
 		echo '<input style="min-width: 50%" type="submit" class="button button-primary" value="Créer la personne" />';
 		echo '</form>';
-		echo '<script type="text/javascript">jQuery(function() {
-    jQuery("form#new_user_distrib").validate({
+		echo '<script type="text/javascript">jQuery(function($) {
+    $("form#new_user_distrib").validate({
                 onkeyup: false,
         }
     );
@@ -2152,20 +2572,20 @@ function amapress_create_ooadhesion_assistant( $post_id, TitanFrameworkOption $o
 	}
 	echo '<hr />';
 	echo '<p><a href="' . remove_query_arg( 'user_id' ) . '" class="button button-primary">Associer un autre amapien</a></p>';
-	echo '<script type="text/javascript">jQuery(function() {
-    jQuery("#user_id").select2({
+	echo '<script type="text/javascript">jQuery(function($) {
+    $("#user_id").select2({
         allowClear: true,
 		  escapeMarkup: function(markup) {
 		return markup;
 	},
 		  templateResult: function(data) {
-		return jQuery("<span>"+data.text+"</span>");
+		return $("<span>"+data.text+"</span>");
 	},
 		  templateSelection: function(data) {
-		return jQuery("<span>"+data.text+"</span>");
+		return $("<span>"+data.text+"</span>");
 	},
     });
-    jQuery("form#new_coadherent").validate({
+    $("form#new_coadherent").validate({
                 onkeyup: false,
         }
     );

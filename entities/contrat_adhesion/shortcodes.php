@@ -86,6 +86,41 @@ add_action( 'amapress_init', function () {
 			$amapien->removeCoadherent( $amapien->getCoAdherent3Id(), $notify_email );
 		}
 
+
+		$quest1         = wp_unslash( Amapress::getOption( 'online_new_user_quest1' ) );
+		$quest1_answser = '';
+		if ( isset( $_REQUEST['online_new_user_quest1'] ) ) {
+			$quest1_answser = sanitize_textarea_field( $_REQUEST['online_new_user_quest1'] );
+		}
+		$quest2         = wp_unslash( Amapress::getOption( 'online_new_user_quest2' ) );
+		$quest2_answser = '';
+		if ( isset( $_REQUEST['online_new_user_quest2'] ) ) {
+			$quest2_answser = sanitize_textarea_field( $_REQUEST['online_new_user_quest2'] );
+		}
+		$quest_email = Amapress::getOption( 'online_new_user_quest_email' );
+		if ( empty( $quest_email ) ) {
+			$quest_email = get_option( 'admin_email' );
+		}
+
+		if ( ! Amapress::isHtmlEmpty( $quest1_answser ) || ! Amapress::isHtmlEmpty( $quest2_answser ) ) {
+			$amapien           = AmapressUser::getBy( $user_id );
+			$user_display_name = $amapien->getDisplayName();
+			$user_email        = $amapien->getEmail();
+			$user_link         = Amapress::makeLink( $amapien->getEditLink(), $amapien->getDisplayName() );
+			$quest1            = wp_strip_all_tags( $quest1, true );
+			$quest2            = wp_strip_all_tags( $quest2, true );
+			amapress_wp_mail(
+				$quest_email,
+				"Réponses nouvel adhérent - $user_display_name ($user_email)",
+				wpautop(
+					"Bonjour,\n\nLe nouvel ahdérent $user_link a répondu aux questions:\n" .
+					( ! Amapress::isHtmlEmpty( $quest1 ) ? "- $quest1:\n$quest1_answser\n" : '' ) .
+					( ! Amapress::isHtmlEmpty( $quest2 ) ? "- $quest2:\n$quest2_answser\n" : '' ) .
+					"\n\n" . get_bloginfo( 'name' )
+				)
+			);
+		}
+
 		wp_redirect_and_exit(
 			add_query_arg( [
 				'step'    => ! empty( $_REQUEST['coords_next_step'] ) ? $_REQUEST['coords_next_step'] : 'contrats',
@@ -148,63 +183,105 @@ add_action( 'amapress_init', function () {
 	}
 } );
 
-function amapress_mes_contrats( $atts, $content = null ) {
-	$atts                  = wp_parse_args( $atts );
-	$atts['for_logged']    = 'true';
-	$atts['show_contrats'] = 'true';
+function amapress_logged_self_inscription( $atts, $content = null, $tag ) {
+	$atts               = wp_parse_args( $atts );
+	$atts['for_logged'] = 'true';
+	unset( $atts['key'] );
 
-	return amapress_self_inscription( $atts, $content );
+	return amapress_self_inscription( $atts, $content, $tag );
+}
+
+function amapress_mes_contrats( $atts, $content = null, $tag ) {
+	$atts               = wp_parse_args( $atts );
+	$atts['for_logged'] = 'true';
+	unset( $atts['edit_names'] );
+	unset( $atts['only_contrats'] );
+	unset( $atts['shorturl'] );
+	unset( $atts['max_coadherents'] );
+	unset( $atts['mob_phone_required'] );
+	unset( $atts['allow_remove_coadhs'] );
+	unset( $atts['track_no_renews'] );
+	unset( $atts['track_no_renews_email'] );
+	unset( $atts['notify_email'] );
+	unset( $atts['allow_coadherents_inscription'] );
+	unset( $atts['allow_coadherents_access'] );
+	unset( $atts['allow_coadherents_adhesion'] );
+	unset( $atts['show_coadherents_address'] );
+	unset( $atts['email'] );
+	if ( isset( $atts['allow_adhesion'] ) ) {
+		$atts['adhesion'] = $atts['allow_adhesion'];
+	} else {
+		$atts['adhesion'] = 'false';
+	}
+
+	return amapress_self_inscription( $atts, $content, $tag );
 }
 
 /**
  * @param $atts
  */
-function amapress_self_inscription( $atts, $content = null ) {
+function amapress_self_inscription( $atts, $content = null, $tag ) {
 	amapress_ensure_no_cache();
 
-	$step = isset( $_REQUEST['step'] ) ? $_REQUEST['step'] : 'email';
+	$step              = isset( $_REQUEST['step'] ) ? $_REQUEST['step'] : 'email';
+	$disable_principal = Amapress::getOption( 'disable_principal', false );
 
 	$atts = shortcode_atts(
 		[
-			'key'                           => '',
-			'for_logged'                    => 'false',
-			'show_contrats'                 => 'false',
-			'filter_multi_contrat'          => 'false',
-			'admin_mode'                    => 'false',
-			'agreement'                     => 'false',
-			'mob_phone_required'            => 'false',
-			'check_principal'               => 'true',
-			'adhesion'                      => 'true',
-			'send_referents'                => 'true',
-			'send_tresoriers'               => 'true',
-			'allow_new_mail'                => 'true',
-			'track_no_renews'               => 'false',
-			'track_no_renews_email'         => get_option( 'admin_email' ),
-			'notify_email'                  => '',
-			'edit_names'                    => 'true',
-			'allow_remove_coadhs'           => 'false',
-			'contact_referents'             => 'true',
-			'show_adherents_infos'          => 'true',
-			'allow_coadherents_access'      => 'true',
-			'allow_coadherents_inscription' => 'true',
-			'allow_coadherents_adhesion'    => 'true',
-			'show_coadherents_address'      => 'false',
-			'only_contrats'                 => '',
-			'shorturl'                      => '',
-			'adhesion_shift_weeks'          => 0,
-			'before_close_hours'            => 24,
-			'max_coadherents'               => 3,
-			'email'                         => get_option( 'admin_email' ),
+			'key'                              => '',
+			'for_logged'                       => 'false',
+			'filter_multi_contrat'             => 'false',
+			'admin_mode'                       => 'false',
+			'agreement'                        => 'false',
+			'mob_phone_required'               => 'false',
+			'check_principal'                  => 'true',
+			'adhesion'                         => 'true',
+			'send_adhesion_confirm'            => 'true',
+			'send_contrat_confirm'             => 'true',
+			'send_referents'                   => 'true',
+			'allow_inscription_all_dates'      => 'false',
+			'send_tresoriers'                  => 'true',
+			'allow_inscriptions'               => 'true',
+			'allow_new_mail'                   => 'true',
+			'track_no_renews'                  => 'false',
+			'track_no_renews_email'            => get_option( 'admin_email' ),
+			'notify_email'                     => '',
+			'max_produit_label_width'          => '10em',
+			'paiements_info_required'          => 'false',
+			'paniers_modulables_editor_height' => 350,
+			'edit_names'                       => 'true',
+			'allow_remove_coadhs'              => 'false',
+			'contact_referents'                => 'true',
+			'show_adherents_infos'             => 'true',
+//			'allow_edit_inscriptions'          => 'true',
+			'allow_coadherents_access'         => 'true',
+			'allow_coadherents_inscription'    => 'true',
+			'allow_coadherents_adhesion'       => 'true',
+			'show_coadherents_address'         => 'false',
+			'contrat_print_button_text'        => 'Imprimer',
+			'adhesion_print_button_text'       => 'Imprimer',
+			'only_contrats'                    => '',
+			'shorturl'                         => '',
+			'show_due_amounts'                 => 'false',
+			'show_delivery_details'            => 'false',
+			'show_calendar_delivs'             => 'false',
+			'adhesion_shift_weeks'             => 0,
+			'before_close_hours'               => 24,
+			'max_coadherents'                  => 3,
+			'email'                            => get_option( 'admin_email' ),
 		]
 		, $atts );
 
-	$for_logged = Amapress::toBool( $atts['for_logged'] );
-	$ret        = '';
-	$admin_mode = Amapress::toBool( $atts['admin_mode'] );
+	$contrat_print_button_text  = $atts['contrat_print_button_text'];
+	$adhesion_print_button_text = $atts['adhesion_print_button_text'];
+	$for_logged                 = Amapress::toBool( $atts['for_logged'] );
+	$ret                        = '';
+	$admin_mode                 = Amapress::toBool( $atts['admin_mode'] );
 	if ( $admin_mode && ! is_admin() ) {
 		wp_die( 'admin_mode ne peut pas être utilisé directement' );
 	}
 
+	$paiements_info_required       = Amapress::toBool( $atts['paiements_info_required'] );
 	$activate_adhesion             = Amapress::toBool( $atts['adhesion'] );
 	$activate_agreement            = Amapress::toBool( $atts['agreement'] );
 	$allow_remove_coadhs           = Amapress::toBool( $atts['allow_remove_coadhs'] );
@@ -213,7 +290,10 @@ function amapress_self_inscription( $atts, $content = null ) {
 	$show_adherents_infos          = Amapress::toBool( $atts['show_adherents_infos'] );
 	$track_no_renews               = Amapress::toBool( $atts['track_no_renews'] );
 	$show_coadherents_address      = Amapress::toBool( $atts['show_coadherents_address'] );
-	$notify_email                  = $atts['notify_email'];
+	$show_due_amounts              = Amapress::toBool( $atts['show_due_amounts'] );
+	$show_delivery_details         = Amapress::toBool( $atts['show_delivery_details'] );
+//	$allow_edit_inscriptions       = Amapress::toBool( $atts['allow_edit_inscriptions'] );
+	$notify_email = $atts['notify_email'];
 	if ( ! $allow_coadherents_inscription ) {
 		$show_adherents_infos = true;
 	}
@@ -228,7 +308,7 @@ function amapress_self_inscription( $atts, $content = null ) {
 			return '<div class="alert alert-danger">Accès interdit</div>';
 		}
 		if ( ! isset( $_REQUEST['step'] ) ) {
-			if ( Amapress::toBool( $atts['show_contrats'] ) ) {
+			if ( 'mes-contrats' == $tag ) {
 				$step = 'contrats';
 			} else {
 				$step = 'coords_logged';
@@ -247,14 +327,26 @@ Vous pouvez également utiliser un service de réduction d\'URL tel que <a href=
 Vous pouvez également utiliser l\'un des QRCode suivants : 
 <div>' . amapress_print_qrcode( $url ) . amapress_print_qrcode( $url, 3 ) . amapress_print_qrcode( $url, 2 ) . '</div><br/>
 <strong>Attention : les lien ci-dessus, QR code et bit.ly NE doivent PAS être visible publiquement sur le site. Ce lien permet de créer des comptes sur le site et l\'exposer sur internet pourrait permettre à une personne malvaillante de polluer le site avec des comptes de SPAM.</strong><br />
-Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' . admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_mails' ) . '">ici</a>.</div>';
+Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_mails' ) . '">ici</a> et retrouver toutes les options de ce shortcode dans l\'<a target="_blank" href="' . admin_url( 'admin.php?page=amapress_help_page&tab=shortcodes' ) . '">Aide</a>.</div>';
 				$ret .= amapress_get_panel_end();
 			} else {
 				$ret .= '<div class="alert alert-info"><a href="' . esc_attr( get_permalink() ) . '">Afficher les instructions d\'accès à cet assistant.</a></div>';
 			}
 		}
 		if ( empty( $key ) || empty( $_REQUEST['key'] ) || $_REQUEST['key'] != $key ) {
-			$ret .= '<div class="alert alert-danger">Vous êtes dans un espace sécurisé. Accès interdit</div>';
+			if ( empty( $key ) && amapress_can_access_admin() ) {
+				$ret .= '<div style="color:red">L\'argument key (par ex, key="' . uniqid() . uniqid() . '") doit être défini sur le shortcode [inscription-en-ligne] de cette page : par exemple "[inscription-en-ligne key='
+				        . uniqid() . uniqid() . ']". L\'accès à cette page ne peut se faire que de manière non connectée avec cette clé par la amapiens pour s\'inscrire.</div>';
+			} elseif ( ! empty( $key ) && empty( $_REQUEST['key'] ) && amapress_is_user_logged_in() ) {
+				$url              = esc_attr( add_query_arg( 'key', $key, get_permalink() ) );
+				$mes_contrat_href = esc_attr( Amapress::get_mes_contrats_page_href() );
+				$ret              .= "<p>Pour accéder à l'assistant d'inscription, cliquez <a href='$url'>ici</a></p>";
+				if ( ! empty( $mes_contrat_href ) ) {
+					$ret .= "<p>Pour accéder à vos contrats, cliquez <a href='$mes_contrat_href'>ici</a></p>";
+				}
+			} else {
+				$ret .= '<div class="alert alert-danger">Vous êtes dans un espace sécurisé. Accès interdit</div>';
+			}
 
 			$ret .= $content;
 
@@ -280,7 +372,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 	if ( ! $admin_mode ) {
 		$subscribable_contrats         = array_filter( $subscribable_contrats, function ( $c ) {
 			/** @var AmapressContrat_instance $c */
-			return $c->canSelfSubscribe();
+			return $c->canSelfSubscribe() && ! $c->isEnded();
 		} );
 		$all_subscribable_contrats_ids = array_map( function ( $c ) {
 			return $c->ID;
@@ -329,7 +421,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			$max_contrat_date = $c->getDate_fin();
 		}
 	}
-	if ( empty( $subscribable_contrats ) ) {
+	if ( 'mes-contrats' != $tag && empty( $subscribable_contrats ) ) {
 		ob_clean();
 
 		if ( amapress_can_access_admin() ) {
@@ -340,7 +432,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 	}
 
 	//TODO better ???
-	$adh_period_date = Amapress::add_a_week( $min_contrat_date, $atts['adhesion_shift_weeks'] );
+	$adh_period_date = Amapress::add_a_week( $min_contrat_date <= 0 ? amapress_time() : $min_contrat_date, $atts['adhesion_shift_weeks'] );
 
 	$contrats_step_url = add_query_arg( 'step', 'contrats', remove_query_arg( [ 'contrat_id', 'message' ] ) );
 	$adhesion_step_url = add_query_arg( 'step', 'adhesion', remove_query_arg( [ 'contrat_id', 'message' ] ) );
@@ -364,7 +456,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			return $a->getContrat_instance()->ID;
 		}, $adhs );
 
-		if ( in_array( $contrat_id, $adhs_contrat_ids ) ) {
+		if ( empty( $_REQUEST['edit_inscr_id'] ) && in_array( $contrat_id, $adhs_contrat_ids ) ) {
 			$amapien = AmapressUser::getBy( $user_id );
 			if ( $admin_mode ) {
 				ob_clean();
@@ -393,12 +485,21 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		$user_has_contrat = ! empty( $adhs );
 	}
 
-	if ( Amapress::toBool( $atts['check_principal'] ) && ! $admin_mode && empty( $principal_contrats ) ) {
+	if ( defined( 'AMAPRESS_DEMO_MODE' ) && isset( $_REQUEST['user_id'] ) ) {
+		$user_id = intval( $_REQUEST['user_id'] );
+		$amapien = AmapressUser::getBy( $user_id );
+		if ( $amapien ) {
+			global $amapress_send_mail_to;
+			$amapress_send_mail_to = $amapien->getEmail();
+		}
+	}
+
+	if ( Amapress::toBool( $atts['check_principal'] ) && ! $disable_principal && ! $admin_mode && empty( $principal_contrats ) ) {
 		if ( amapress_can_access_admin() ) {
 			ob_clean();
 
 			return 'Aucun contrat principal. Veuillez définir un contrat principal depuis ' . Amapress::makeLink( admin_url( 'edit.php?post_type=amps_contrat_inst' ), 'Edition des contrats' );
-		} else if ( ! $user_has_contrat ) {
+		} else if ( 'mes-contrats' != $tag && ! $user_has_contrat ) {
 			ob_clean();
 
 			return 'Les inscriptions en ligne sont closes.';
@@ -425,6 +526,27 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 
 	$invalid_access_message = '<p>Accès invalide : veuillez repartir de la <a href="' . esc_attr( $start_step_url ) . '">première étape</a></p>';
 
+	$edit_inscription = null;
+	if ( ! empty( $_REQUEST['edit_inscr_id'] ) ) {
+		Amapress::setFilterForReferent( false );
+		$edit_inscription = AmapressAdhesion::getBy( intval( $_REQUEST['edit_inscr_id'] ) );
+		Amapress::setFilterForReferent( true );
+
+		if ( ! $edit_inscription ) {
+			wp_die( $invalid_access_message );
+		}
+		if ( ! $edit_inscription->canSelfEdit() ) {
+			ob_clean();
+
+			return 'Cette incription n\'est pas éditable';
+		}
+		if ( empty( $_REQUEST['user_id'] ) || $edit_inscription->getAdherentId() != intval( $_REQUEST['user_id'] ) ) {
+			ob_clean();
+
+			return 'Cette incription n\'est pas à vous';
+		}
+	}
+
 	if ( ! empty( $_REQUEST['message'] ) ) {
 		$message = '';
 		switch ( $_REQUEST['message'] ) {
@@ -446,13 +568,13 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
         <form method="post" action="<?php echo esc_attr( add_query_arg( 'step', 'coords' ) ) ?>" id="inscr_email"
               class="amapress_validate">
             <label for="email">Pour démarrer votre inscription à l’AMAP pour la saison
-	            <?php echo date_i18n( 'F Y', $min_contrat_date ) . ' - ' . date_i18n( 'F Y', $max_contrat_date ) ?>
+				<?php echo date_i18n( 'F Y', $min_contrat_date ) . ' - ' . date_i18n( 'F Y', $max_contrat_date ) ?>
                 , renseignez votre
                 adresse mail :</label>
             <input id="email" name="email" type="text" class="email required" placeholder="email"/>
-	        <?php
-	        if ( $track_no_renews ) {
-		        ?>
+			<?php
+			if ( $track_no_renews ) {
+				?>
                 <div class="amap-preinscr-norenew">
                     <label for="no_renew"><input type="checkbox" id="no_renew" name="no_renew"/> Je ne souhaite pas
                         renouveler.</label>
@@ -470,9 +592,9 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                         });
                     </script>
                 </div>
-		        <?php
-	        }
-	        ?>
+				<?php
+			}
+			?>
             <input type="submit" value="Valider" class="btn btn-default btn-assist-inscr"/>
         </form>
 		<?php
@@ -652,11 +774,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
             <input type="hidden" name="email" value="<?php echo esc_attr( $email ); ?>"/>
             <input type="hidden" name="notify_email" value="<?php echo esc_attr( $notify_email ); ?>"/>
             <input type="hidden" name="inscr_assistant" value="validate_coords"/>
-	        <?php if ( $activate_agreement ) { ?>
+			<?php if ( $activate_agreement ) { ?>
                 <input type="hidden" name="coords_next_step" value="agreement"/>
-	        <?php } else if ( $activate_adhesion && empty( $adh_pmt ) ) { ?>
+			<?php } else if ( $activate_adhesion && empty( $adh_pmt ) ) { ?>
                 <input type="hidden" name="coords_next_step" value="adhesion"/>
-	        <?php } ?>
+			<?php } ?>
             <input type="hidden" name="inscr_key" value="<?php echo esc_attr( $key ); ?>"/>
             <table style="min-width: 50%">
                 <tr>
@@ -698,9 +820,9 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                 </tr>
             </table>
             <div>
-	            <?php echo wp_unslash( amapress_replace_mail_placeholders( Amapress::getOption( 'online_adhesion_coadh_message' ), null ) ); ?>
+				<?php echo wp_unslash( amapress_replace_mail_placeholders( Amapress::getOption( 'online_adhesion_coadh_message' ), null ) ); ?>
             </div>
-	        <?php if ( $max_coadhs >= 1 ) { ?>
+			<?php if ( $max_coadhs >= 1 ) { ?>
                 <table style="min-width: 50%">
                     <tr>
                         <th colspan="2">Co adhérent 1 <em>(si vous payez les contrats à plusieurs)</em> / Conjoint</th>
@@ -745,15 +867,15 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                                                                                   value="<?php echo esc_attr( $coadh1_mobile_phones ) ?>"/>
                         </td>
                     </tr>
-	                <?php if ( $show_coadherents_address ) { ?>
+					<?php if ( $show_coadherents_address ) { ?>
                         <tr>
                             <th style="text-align: left; width: auto"><label for="coadh1_address">Adresse : </label>
                             </th>
                             <td><textarea style="width: 100%" rows="4" id="coadh1_address" name="coadh1_address"
                                           class=""><?php echo esc_textarea( $coadh1_address ); ?></textarea></td>
                         </tr>
-	                <?php } ?>
-	                <?php if ( $allow_remove_coadhs && ! empty( $coadh1_email ) ) { ?>
+					<?php } ?>
+					<?php if ( $allow_remove_coadhs && ! empty( $coadh1_email ) ) { ?>
                         <tr>
                             <th style="text-align: left; width: auto"></th>
                             <td>
@@ -763,10 +885,10 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                                 </label>
                             </td>
                         </tr>
-	                <?php } ?>
+					<?php } ?>
                 </table>
-	        <?php } ?>
-	        <?php if ( $max_coadhs >= 2 ) { ?>
+			<?php } ?>
+			<?php if ( $max_coadhs >= 2 ) { ?>
                 <table style="min-width: 50%">
                     <tr>
                         <th colspan="2">Co adhérent 2 <em>(si vous payez les contrats à plusieurs)</em></th>
@@ -811,15 +933,15 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                                                                                   value="<?php echo esc_attr( $coadh2_mobile_phones ) ?>"/>
                         </td>
                     </tr>
-	                <?php if ( $show_coadherents_address ) { ?>
+					<?php if ( $show_coadherents_address ) { ?>
                         <tr>
                             <th style="text-align: left; width: auto"><label for="coadh2_address">Adresse : </label>
                             </th>
                             <td><textarea style="width: 100%" rows="4" id="coadh2_address" name="coadh2_address"
                                           class=""><?php echo esc_textarea( $coadh2_address ); ?></textarea></td>
                         </tr>
-	                <?php } ?>
-	                <?php if ( $allow_remove_coadhs && ! empty( $coadh2_email ) ) { ?>
+					<?php } ?>
+					<?php if ( $allow_remove_coadhs && ! empty( $coadh2_email ) ) { ?>
                         <tr>
                             <th style="text-align: left; width: auto"></th>
                             <td>
@@ -829,10 +951,10 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                                 </label>
                             </td>
                         </tr>
-	                <?php } ?>
+					<?php } ?>
                 </table>
-	        <?php } ?>
-	        <?php if ( $max_coadhs >= 3 ) { ?>
+			<?php } ?>
+			<?php if ( $max_coadhs >= 3 ) { ?>
                 <table style="min-width: 50%">
                     <tr>
                         <th colspan="2">Co adhérent 3 <em>(si vous payez les contrats à plusieurs)</em></th>
@@ -877,15 +999,15 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                                                                                   value="<?php echo esc_attr( $coadh3_mobile_phones ) ?>"/>
                         </td>
                     </tr>
-	                <?php if ( $show_coadherents_address ) { ?>
+					<?php if ( $show_coadherents_address ) { ?>
                         <tr>
                             <th style="text-align: left; width: auto"><label for="coadh3_address">Adresse : </label>
                             </th>
                             <td><textarea style="width: 100%" rows="4" id="coadh3_address" name="coadh3_address"
                                           class=""><?php echo esc_textarea( $coadh3_address ); ?></textarea></td>
                         </tr>
-	                <?php } ?>
-	                <?php if ( $allow_remove_coadhs && ! empty( $coadh3_email ) ) { ?>
+					<?php } ?>
+					<?php if ( $allow_remove_coadhs && ! empty( $coadh3_email ) ) { ?>
                         <tr>
                             <th style="text-align: left; width: auto"></th>
                             <td>
@@ -895,11 +1017,30 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                                 </label>
                             </td>
                         </tr>
-	                <?php } ?>
+					<?php } ?>
                 </table>
-	        <?php } ?>
+			<?php } ?>
             <p style="color:red">* Champ obligatoire</p>
-	        <?php echo $member_message; ?>
+			<?php echo $member_message; ?>
+			<?php if ( ! $user ) {
+				$quest1 = wp_unslash( Amapress::getOption( 'online_new_user_quest1' ) );
+				if ( ! Amapress::isHtmlEmpty( $quest1 ) ) {
+					?>
+                    <label for="online_new_user_quest1"><?php echo $quest1 ?></label>
+                    <textarea style="width: 100%" rows="4" id="online_new_user_quest1"
+                              name="online_new_user_quest1"></textarea>
+					<?php
+				}
+				$quest2 = wp_unslash( Amapress::getOption( 'online_new_user_quest2' ) );
+				if ( ! Amapress::isHtmlEmpty( $quest2 ) ) {
+					?>
+                    <label for="online_new_user_quest2"><?php echo $quest2 ?></label>
+                    <textarea style="width: 100%" rows="4" id="online_new_user_quest2"
+                              name="online_new_user_quest2"></textarea>
+					<?php
+				}
+			}
+			?>
             <input style="min-width: 50%" type="submit" class="btn btn-default btn-assist-inscr" value="Valider"/>
         </form>
 		<?php
@@ -925,7 +1066,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
                 <input type="hidden" name="coords_next_step" value="adhesion"/>
 			<?php } ?>
             <div class="amap-agreement">
-				<?php echo amapress_replace_mail_placeholders( Amapress::getOption( 'online_subscription_agreement' ), null ); ?>
+	            <?php echo wp_unslash( amapress_replace_mail_placeholders( Amapress::getOption( 'online_subscription_agreement' ), null ) ); ?>
             </div>
             <p class="accept-agreement">
                 <label for="accept_agreement"><input type="checkbox" name="accept" id="accept_agreement"
@@ -958,7 +1099,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			return ( 'Aucune période d\'adhésion n\'est configurée.' );
 		}
 
-		echo '<h4>Étape 3/8 : Adhésion (obligatoire)</h4>';
+		if ( $for_logged ) {
+			echo '<h4>Étape Adhésion (obligatoire)</h4>';
+		} else {
+			echo '<h4>Étape 3/8 : Adhésion (obligatoire)</h4>';
+		}
 		echo $adh_period->getOnlineDescription();
 
 		$taxes            = get_categories( array(
@@ -972,7 +1117,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		$ret              .= '<input type="hidden" name="user_id" value="' . esc_attr( $user_id ) . '"/>';
 		$amap_term        = Amapress::getOption( 'adhesion_amap_term' );
 		$reseau_amap_term = Amapress::getOption( 'adhesion_reseau_amap_term' );
-		$ret              .= '<table style="max-width: 50%">';
+		$ret              .= '<table style="max-width: 70%">';
 		foreach ( $taxes as $tax ) {
 			$tax_amount = 0;
 			if ( $tax->term_id == $amap_term ) {
@@ -981,20 +1126,26 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			if ( $tax->term_id == $reseau_amap_term ) {
 				$tax_amount = $adh_period->getMontantReseau();
 			}
-			$ret .= '<tr>';
-			$ret .= '<th style="text-align: left; width: auto">
+			if ( ( $tax->term_id == $amap_term || $tax->term_id == $reseau_amap_term ) && abs( $tax_amount ) < 0.001 ) {
+				$ret .= '<input type="hidden" id="amapress_pmt_amount-' . $tax->term_id . '" name="amapress_pmt_amounts[' . $tax->term_id . ']" class="amapress_pmt_cat_amount" value="' . $tax_amount . '" />';
+			} else {
+				$ret .= '<tr>';
+				$ret .= '<th style="text-align: left; width: auto">
 <label for="amapress_pmt_amount-' . $tax->term_id . '">' . esc_html( $tax->name ) . '</label>
 ' . ( ! empty( $tax->description ) ? '<p style="font-style: italic; font-weight: normal">' . $tax->description . '</p>' : '' ) . '
 </th>';
-			if ( $tax->term_id == $amap_term || $tax->term_id == $reseau_amap_term ) {
-				$ret .= '<td><input type="hidden" id="amapress_pmt_amount-' . $tax->term_id . '" name="amapress_pmt_amounts[' . $tax->term_id . ']" class="amapress_pmt_cat_amount" value="' . $tax_amount . '" />' . $tax_amount . '&nbsp;€</td>';
-			} else {
-				$ret .= '<td><input type="number" id="amapress_pmt_amount-' . $tax->term_id . '" style="width: 80%" name="amapress_pmt_amounts[' . $tax->term_id . ']" class="price required amapress_pmt_cat_amount" value="' . $tax_amount . '" />&nbsp;€</td>';
+				if ( $tax->term_id == $amap_term || $tax->term_id == $reseau_amap_term ) {
+					$ret .= '<td style="min-width: 8em"><input type="hidden" id="amapress_pmt_amount-' . $tax->term_id . '" name="amapress_pmt_amounts[' . $tax->term_id . ']" class="amapress_pmt_cat_amount" value="' . $tax_amount . '" />' . $tax_amount . '&nbsp;€</td>';
+				} else {
+					$ret .= '<td style="min-width: 8em"><input type="number" id="amapress_pmt_amount-' . $tax->term_id . '" style="width: 80%" name="amapress_pmt_amounts[' . $tax->term_id . ']" class="price required amapress_pmt_cat_amount" value="' . $tax_amount . '" />&nbsp;€</td>';
+				}
+				$ret .= '</tr>';
 			}
-			$ret .= '</tr>';
 		}
 		$ret .= '</table>';
 		$ret .= '<p>Montant total : <span id="amapress_adhesion_paiement_amount"></span> €</p>';
+		$ret .= '<p><label for="amapress_adhesion_paiement_numero">Numéro de chèque :</label><input type="text" id="amapress_adhesion_paiement_numero" class="' . ( $paiements_info_required ? 'required' : '' ) . '" name="amapress_adhesion_paiement_numero"/></p>';
+		$ret .= '<p><label for="amapress_adhesion_paiement_banque">Banque :</label><input type="text" id="amapress_adhesion_paiement_banque" class="' . ( $paiements_info_required ? 'required' : '' ) . '" name="amapress_adhesion_paiement_banque"/></p>';
 		$ret .= '<input type="submit" class="btn btn-default btn-assist-adh" value="Valider"/>';
 		$ret .= '</form>';
 
@@ -1033,6 +1184,12 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		}
 		update_post_meta( $adh_paiement->ID, 'amapress_adhesion_paiement_repartition', $amounts );
 		update_post_meta( $adh_paiement->ID, 'amapress_adhesion_paiement_amount', $total_amount );
+		if ( isset( $_REQUEST['amapress_adhesion_paiement_banque'] ) ) {
+			update_post_meta( $adh_paiement->ID, 'amapress_adhesion_paiement_banque', $_REQUEST['amapress_adhesion_paiement_banque'] );
+		}
+		if ( isset( $_REQUEST['amapress_adhesion_paiement_numero'] ) ) {
+			update_post_meta( $adh_paiement->ID, 'amapress_adhesion_paiement_numero', $_REQUEST['amapress_adhesion_paiement_numero'] );
+		}
 		wp_set_post_terms( $adh_paiement->ID, $terms, 'amps_paiement_category' );
 
 		amapress_compute_post_slug_and_title( $adh_paiement->getPost() );
@@ -1051,7 +1208,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		}
 
 		$attachments = [];
-		$doc_file    = $adh_paiement->generateBulletinDoc( false );
+		try {
+			$doc_file = $adh_paiement->generateBulletinDoc( false );
+		} catch ( Exception $ex ) {
+			wp_die( 'Impossible de générer le bulletin d\'adhésion. Merci de réessayer en appuyant sur F5' );
+		}
 		if ( ! empty( $doc_file ) ) {
 			$attachments[] = $doc_file;
 			$mail_content  = preg_replace( '/\[sans_bulletin\].+?\[\/sans_bulletin\]/', '', $mail_content );
@@ -1061,9 +1222,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			$mail_content = preg_replace( '/\[\/?sans_bulletin\]/', '', $mail_content );
 		}
 
-		amapress_wp_mail( $amapien->getAllEmails(), $mail_subject, $mail_content, [
-			'Reply-To: ' . implode( ',', $tresoriers )
-		], $attachments );
+		if ( Amapress::toBool( $atts['send_adhesion_confirm'] ) ) {
+			amapress_wp_mail( $amapien->getAllEmails(), $mail_subject, $mail_content, [
+				'Reply-To: ' . implode( ',', $tresoriers )
+			], $attachments );
+		}
 
 		if ( Amapress::toBool( $atts['send_tresoriers'] ) ) {
 			amapress_wp_mail(
@@ -1076,23 +1239,24 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 
 		echo '<h4>Validation du Bulletin d\'adhésion</h4>';
 
-		echo wp_unslash( amapress_replace_mail_placeholders( Amapress::getOption( 'online_subscription_greating_adhesion' ), null ) );
+		$online_subscription_greating_adhesion = wp_unslash( Amapress::getOption( 'online_subscription_greating_adhesion' ) );
 
 		if ( $adh_paiement->getPeriod()->getWordModelId() ) {
-			$print_bulletin = Amapress::makeButtonLink(
+			$print_bulletin                        = Amapress::makeButtonLink(
 				add_query_arg( [
 					'inscr_assistant' => 'generate_bulletin',
 					'adh_id'          => $adh_paiement->ID,
 					'inscr_key'       => $key
 				] ),
-				'Imprimer', true, true, 'btn btn-default'
+				$adhesion_print_button_text, true, true, 'btn btn-default'
 			);
-			echo '<p>Veuillez imprimer le bulletin et le remettre avec votre chèque/règlement lors de la première distribution<br/>' . $print_bulletin . '</p>';
+			$online_subscription_greating_adhesion = str_replace( '%%print_button%%', $print_bulletin, $online_subscription_greating_adhesion );
 		} else {
-			echo '<p>Veuillez remettre le chèque/règlement lors de la première distribution</p>';
+			$online_subscription_greating_adhesion = str_replace( '%%print_button%%', '', $online_subscription_greating_adhesion );
 		}
+		echo amapress_replace_mail_placeholders( $online_subscription_greating_adhesion, null );
 
-		echo '<p>Vous pouvez maintenant vous inscrires aux contrats de l\'AMAP :<br/>
+		echo '<p>Vous pouvez maintenant vous inscrire aux contrats de l\'AMAP :<br/>
 <form method="get" action="' . esc_attr( $contrats_step_url ) . '">
 <input type="hidden" name="key" value="' . $key . '" />
 <input type="hidden" name="step" value="contrats" />
@@ -1113,12 +1277,12 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		Amapress::setFilterForReferent( false );
 		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
 		Amapress::setFilterForReferent( true );
-		$adhs = array_filter( $adhs,
-			function ( $adh ) use ( $all_subscribable_contrats_ids ) {
-				/** @var AmapressAdhesion $adh */
-				return in_array( $adh->getContrat_instanceId(), $all_subscribable_contrats_ids );
-			} );
-		if ( Amapress::toBool( $atts['check_principal'] ) ) {
+//		$adhs = array_filter( $adhs,
+//			function ( $adh ) use ( $all_subscribable_contrats_ids ) {
+//				/** @var AmapressAdhesion $adh */
+//				return in_array( $adh->getContrat_instanceId(), $all_subscribable_contrats_ids );
+//			} );
+		if ( Amapress::toBool( $atts['check_principal'] ) && ! $disable_principal ) {
 			foreach ( $adhs as $adh ) {
 				if ( $adh->getContrat_instance()->isPrincipal() ) {
 					$has_principal_contrat = true;
@@ -1132,7 +1296,9 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		} );
 		$amapien = AmapressUser::getBy( $user_id );
 		if ( ! $admin_mode ) {
-			if ( ! Amapress::toBool( $atts['show_contrats'] ) ) {
+			if ( $for_logged ) {
+				echo '<h4>Vos contrats</h4>';
+			} else {
 				echo '<h4>Étape 4/8 : les contrats</h4>';
 			}
 		} else {
@@ -1150,13 +1316,20 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				$adh_paiement = AmapressAdhesion_paiement::getForUser( $user_id, $adh_period_date, false );
 
 				if ( empty( $adh_paiement ) ) {
-					echo '<p><strong>Pour vous engager dans l’AMAP, vous devez adhérer à notre Association.</strong><br/>
+					if ( 'mes-contrats' == $tag ) {
+						echo '<p><strong>Vous n\'avez pas d\'adhésion à l\'AMAP sur la période ' . esc_html( $adh_period->getTitle() ) . '</strong></p>';
+					} else {
+						echo '<p><strong>Pour vous engager dans l’AMAP et pouvoir s\'inscrire aux contrats disponibles, vous devez adhérer à notre Association.</strong><br/>
 <form method="get" action="' . esc_attr( $adhesion_step_url ) . '">
 <input type="hidden" name="key" value="' . $key . '" />
-<input type="hidden" name="step" value="adhesion" />
+<input type="hidden" name="step" value="' . ( $activate_agreement ? 'agreement' : 'adhesion' ) . '" />
 <input type="hidden" name="user_id" value="' . $user_id . '" />
 <input class="btn btn-default btn-assist-inscr" type="submit" value="Adhérer" />
 </form></p>';
+						if ( $activate_adhesion ) {
+							return ob_get_clean();
+						}
+					}
 				} else {
 					$print_bulletin = '';
 					if ( $adh_paiement->getPeriod()->getWordModelId() ) {
@@ -1166,7 +1339,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 								'adh_id'          => $adh_paiement->ID,
 								'inscr_key'       => $key
 							] ),
-							'Imprimer', true, true, 'btn btn-default'
+							$adhesion_print_button_text, true, true, 'btn btn-default'
 						);
 					}
 					echo '<p>Votre adhésion à l\'AMAP est valable jusqu\'au ' . date_i18n( 'd/m/Y', $adh_period->getDate_fin() ) . '.<br />
@@ -1210,8 +1383,20 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			<?php
 		}
 
+		if ( Amapress::toBool( $atts['show_calendar_delivs'] ) ) {
+			echo '<p>';
+			echo Amapress::makeButtonLink( add_query_arg( [
+				'step' => 'calendar_delivs',
+			] ), 'Calendrier des livraisons', true, true, 'btn btn-default' );
+			echo '</p>';
+		}
+
+		$allow_inscriptions         = Amapress::toBool( $atts['allow_inscriptions'] );
 		$display_remaining_contrats = true;
-		if ( ! $admin_mode && ! $has_principal_contrat ) {
+		if ( ! $admin_mode && ! $allow_inscriptions ) {
+			$display_remaining_contrats = false;
+		}
+		if ( ! $admin_mode && ! $has_principal_contrat && $allow_inscriptions ) {
 			$display_remaining_contrats = false;
 			if ( ! $allow_coadherents_inscription && $amapien->isCoAdherent() ) {
 				echo '<p><strong>L\'inscription aux contrats doit être faite par l\'adhérent principal.</strong></p>';
@@ -1269,6 +1454,24 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				}
 			}
 		} else if ( ! empty( $adhs ) ) {
+			if ( $show_due_amounts || $show_delivery_details ) {
+				echo '<p>';
+				if ( $show_due_amounts ) {
+					echo Amapress::makeButtonLink( add_query_arg( [
+						'step' => 'details_all_paiements',
+					] ), 'Récapitulatif des sommes dues', true, true, 'btn btn-default' );
+				}
+				if ( $show_delivery_details ) {
+					echo Amapress::makeButtonLink( add_query_arg( [
+						'step' => 'details_all_delivs',
+					] ), 'Récapitulatif des livraisons (par date)', true, true, 'btn btn-default' );
+					echo Amapress::makeButtonLink( add_query_arg( [
+						'step'    => 'details_all_delivs',
+						'by_prod' => '1',
+					] ), 'Récapitulatif des livraisons (par producteur)', true, true, 'btn btn-default' );
+				}
+				echo '</p>';
+			}
 			if ( ! $admin_mode ) {
 				echo '<p>Vos contrats :</p>';
 			} else {
@@ -1284,7 +1487,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 							'inscr_id'        => $adh->ID,
 							'inscr_key'       => $key
 						] ),
-						'Imprimer', true, true, 'btn btn-default'
+						$contrat_print_button_text, true, true, 'btn btn-default'
 					);
 				}
 				if ( $admin_mode ) {
@@ -1293,7 +1496,12 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 						     ' (' . Amapress::makeLink( $adh->getAdminEditLink(), 'Editer', true, true ) . ')<br/>' . $print_contrat . '</li>' : '' );
 				} else {
 					$rattrapage   = $adh->getProperty( 'dates_rattrapages' );
-					$contrat_info = 'Vous avez choisi le(s) panier(s) "' . $adh->getProperty( 'quantites' ) . '" pour '
+					$contrat_info = ( $adh->getContrat_instance()->isPanierVariable() ?
+							'Vous avez composé votre panier "' . $adh->getContrat_instance()->getModelTitle() . '" (' . Amapress::makeLink( add_query_arg( [
+								'step'       => 'details',
+								'contrat_id' => $adh->ID
+							] ), 'Détails', true, true ) . ') pour ' :
+							'Vous avez choisi le(s) panier(s) "' . $adh->getProperty( 'quantites' ) . '" pour ' )
 					                . $adh->getProperty( 'nb_distributions' ) . ' distribution(s) pour un montant total de ' . $adh->getProperty( 'total' ) . ' € (' . $adh->getProperty( 'option_paiements' ) . ')'
 					                . '<br/>' . $adh->getProperty( 'nb_dates' ) . ' dates distributions : ' . $adh->getProperty( 'dates_distribution_par_mois' )
 					                . ( ! empty( $rattrapage ) ? '<br/>Dates de rattrages : ' . $rattrapage : '' );
@@ -1301,30 +1509,58 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 						$refs_emails  = $adh->getContrat_instance()->getAllReferentsEmails( $adh->getLieuId() );
 						$contrat_info .= '<br/>' . Amapress::makeLink( 'mailto:' . urlencode( implode( ',', $refs_emails ) ) . '?subject=' . urlencode( 'Mon inscription ' . $adh->getTitle() ), 'Contacter les référents' );
 					}
-					echo '<li style="margin-left: 35px">' . esc_html( $adh->getTitle() ) . '<br/><em style="font-size: 0.9em">' . $contrat_info . '</em><br/>' . $print_contrat . '</li>';
+					$edit_contrat = '';
+					if ( $adh->canSelfEdit() ) {
+						$inscription_url = add_query_arg( [
+							'step'       => 'inscr_contrat_date_lieu',
+							'contrat_id' => $adh->getContrat_instanceId()
+						] );
+						$edit_contrat    = '<br/>
+<form style="display: inline-block; margin-left: 5px" method="get" action="' . esc_attr( $inscription_url ) . '">
+<input type="hidden" name="key" value="' . $key . '" />
+<input type="hidden" name="step" value="inscr_contrat_date_lieu" />
+<input type="hidden" name="user_id" value="' . $user_id . '" />
+<input type="hidden" name="contrat_id" value="' . $adh->getContrat_instanceId() . '" />
+<input type="hidden" name="edit_inscr_id" value="' . $adh->ID . '" />
+<input type="submit" value="Modifier" class="btn btn-default btn-assist-inscr" />
+</form>';
+						$edit_contrat    .= '<form method="get" style="display: inline-block; margin-left: 5px" action="' . esc_attr( $inscription_url ) . '">
+<input type="hidden" name="key" value="' . $key . '" />
+<input type="hidden" name="step" value="details" />
+<input type="hidden" name="user_id" value="' . $user_id . '" />
+<input type="hidden" name="contrat_id" value="' . $adh->ID . '" />
+<input type="hidden" name="cancel_inscr_id" value="' . $adh->ID . '" />
+<input type="submit" value="Annuler" class="btn btn-default btn-assist-inscr" />
+</form>';
+					}
+					echo '<li style="margin-left: 35px">' . esc_html( $adh->getTitle() ) . '<br/><em style="font-size: 0.9em">' . $contrat_info . '</em>' . $edit_contrat . '<br/>' . $print_contrat . '</li>';
 				}
 			}
 			echo '</ul>';
-			if ( ! $admin_mode && ! $allow_coadherents_inscription && $amapien->isCoAdherent() ) {
-				echo '<p><strong>L\'inscription aux contrats doit être faite par l\'adhérent principal.</strong></p>';
-				$display_remaining_contrats = false;
-			} else {
-				if ( ! empty( $user_subscribable_contrats ) ) {
-					if ( ! $admin_mode ) {
-						echo '<p>A quel contrat souhaitez-vous vous inscrire ?</p>';
-					} else {
-						echo '<p>A quel contrat souhaitez-vous vous inscrire cet amapien ?</p>';
+			if ( $allow_inscriptions ) {
+				if ( ! $admin_mode && ! $allow_coadherents_inscription && $amapien->isCoAdherent() ) {
+					echo '<p><strong>L\'inscription aux contrats doit être faite par l\'adhérent principal.</strong></p>';
+					$display_remaining_contrats = false;
+				} else {
+					if ( ! empty( $user_subscribable_contrats ) ) {
+						if ( ! $admin_mode ) {
+							echo '<p>A quel contrat souhaitez-vous vous inscrire ?</p>';
+						} else {
+							echo '<p>A quel contrat souhaitez-vous vous inscrire cet amapien ?</p>';
+						}
 					}
 				}
 			}
 		} else {
-			if ( ! $admin_mode && ! $allow_coadherents_inscription && $amapien->isCoAdherent() ) {
+			if ( ! $admin_mode && ! $allow_coadherents_inscription && $amapien->isCoAdherent() && $allow_inscriptions ) {
 				echo '<p><strong>L\'inscription aux contrats doit être faite par l\'adhérent principal.</strong></p>';
 				$display_remaining_contrats = false;
 			} else {
 				if ( ! $admin_mode ) {
 					echo '<p>Vous n\'avez pas encore de contrats</p>';
-					echo '<p>Vous pouvez vous inscrire aux contrats ci-dessous :</p>';
+					if ( $allow_inscriptions ) {
+						echo '<p>Vous pouvez vous inscrire aux contrats ci-dessous :</p>';
+					}
 				} else {
 					echo '<p>Il/Elle n\'a pas encore de contrats</p>';
 					echo '<p>Vous pouvez l\'inscrire aux autres contrats ci-dessous :</p>';
@@ -1407,7 +1643,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 						'contrat_id' => $contrat->ID
 					] );
 					if ( $admin_mode ) {
-						echo '<li style="margin-left: 35px">' . esc_html( $contrat->getTitle() ) . ' (' . Amapress::makeLink( $contrat->getAdminEditLink(), 'Editer', true, true ) . ') : <br/><a class="button button-secondary" href="' . esc_attr( $inscription_url ) . '">Ajouter une inscription</a></li>';
+						if ( $contrat->isFull() ) {
+							echo '<li style="margin-left: 35px">' . esc_html( $contrat->getTitle() ) . ', contrat <strong>COMPLET</strong> :<br/>' . Amapress::makeLink( $contrat->getAdminEditLink(), 'Editer ses quota', true, true ) . ' (nb maximum d\'amapiens et/ou nb maximum d\'amapiens par panier)</li>';
+						} else {
+							echo '<li style="margin-left: 35px">' . esc_html( $contrat->getTitle() ) . ' (' . Amapress::makeLink( $contrat->getAdminEditLink(), 'Editer', true, true ) . ') : <br/><a class="button button-secondary" href="' . esc_attr( $inscription_url ) . '">Ajouter une inscription</a></li>';
+						}
 					} else {
 						echo '<li style="margin-left: 35px">' . esc_html( $contrat->getTitle() ) . ' (' . $contrat->getModel()->linkToPermalinkBlank( 'plus d\'infos' ) . ') : 
 <br/>
@@ -1423,14 +1663,18 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				echo '</ul>';
 			} else {
 				if ( ! $admin_mode ) {
-					echo '<p>Vous êtes déjà inscrit à tous les contrats.</p>';
+					if ( empty( $subscribable_contrats ) ) {
+						echo '<p>Les inscriptions sont closes.</p>';
+					} else {
+						echo '<p>Vous êtes déjà inscrit à tous les contrats.</p>';
+					}
 				} else {
 					echo '<p>Il/Elle est inscrit à tous les contrats que vous gérez.</p>';
 				}
 			}
 		}
 
-		if ( ! $admin_mode && $has_principal_contrat && ! Amapress::toBool( $atts['show_contrats'] ) ) {
+		if ( ! $admin_mode && $has_principal_contrat && 'mes-contrats' != $tag ) {
 			echo '<p>J\'ai fini :<br/>
 <form method="get" action="' . esc_attr( $the_end_url ) . '">
 <input type="hidden" name="key" value="' . $key . '" />
@@ -1456,8 +1700,13 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 
 			return ( $additional_css . '<p><strong>Attention</strong> : le contrat ' . Amapress::makeLink( $contrat->getAdminEditLink(), $contrat->getTitle() ) . ' n\'a aucun lieu de livraison associé. Veuillez corriger ce contrat avant de poursuivre.</p>' );
 		}
+		if ( $for_logged ) {
+			echo '<h4>Étape 1/4 : Date et lieu - ' . esc_html( $contrat->getTitle() ) . '</h4>';
+		} else {
+			echo '<h4>Étape 5/8 : Date et lieu - ' . esc_html( $contrat->getTitle() ) . '</h4>';
+		}
 		?>
-        <h4>Étape 5/8 : Date et lieu - <?php echo esc_html( $contrat->getTitle() ) ?></h4>
+
         <form action="<?php echo $next_step_url; ?>" method="post" class="amapress_validate">
 			<?php
 			$before_close_hours = 0;
@@ -1476,11 +1725,12 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 
 					return Amapress::start_of_day( $real_date ) < Amapress::end_of_day( $contrat->getDate_cloture() );
 				} );
-				$dates                = array_filter( $dates, function ( $d ) use ( $contrat, $before_close_hours, $dates_before_cloture ) {
+				$allow_all_dates      = Amapress::toBool( $atts['allow_inscription_all_dates'] );
+				$dates                = array_filter( $dates, function ( $d ) use ( $contrat, $before_close_hours, $dates_before_cloture, $allow_all_dates ) {
 					$real_date = $contrat->getRealDateForDistribution( $d );
 
 					return ( Amapress::start_of_day( $real_date ) - HOUR_IN_SECONDS * $before_close_hours ) > amapress_time()
-					       && ( empty( $dates_before_cloture ) || Amapress::start_of_day( $real_date ) < Amapress::end_of_day( $contrat->getDate_cloture() ) );
+					       && ( $allow_all_dates || empty( $dates_before_cloture ) || Amapress::start_of_day( $real_date ) < Amapress::end_of_day( $contrat->getDate_cloture() ) );
 				} );
 			} else {
 				$dates = array_filter( $dates, function ( $d ) use ( $contrat, $before_close_hours ) {
@@ -1532,7 +1782,8 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 									$val_date = "Première distribution ($val_date)";
 								}
 							}
-							echo '<option value="' . esc_attr( $date ) . '">' . esc_html( $val_date ) . '</option>';
+							$selected = selected( $edit_inscription && Amapress::start_of_day( $date ) == Amapress::start_of_day( $edit_inscription->getDate_debut() ), true, false );
+							echo '<option ' . $selected . ' value="' . esc_attr( $date ) . '">' . esc_html( $val_date ) . '</option>';
 						}
 						?>
                     </select>
@@ -1550,10 +1801,12 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				foreach ( $lieux as $lieu ) {
 					$lieu_id    = $lieu->ID;
 					$lieu_title = $lieu->linkToPermalinkBlank( esc_html( $lieu->getLieuTitle() ) ) . ' (' . esc_html( $lieu->getFormattedAdresse() ) . ')';
-					echo "<p style='margin-top: 0;margin-bottom: 0'><input id='lieu-$lieu_id' name='lieu_id' value='$lieu_id' type='radio' class='required' /><label for='lieu-$lieu_id'>$lieu_title</label></p>";
+					$checked    = checked( $edit_inscription && $lieu_id == $edit_inscription->getLieuId(), true, false );
+					echo "<p style='margin-top: 0;margin-bottom: 0'><input id='lieu-$lieu_id' name='lieu_id' $checked value='$lieu_id' type='radio' class='required' /><label for='lieu-$lieu_id'>$lieu_title</label></p>";
 				}
 			} else {
-				echo '<p>Je récupérerai mon panier à ' . esc_html( $lieux[0]->getLieuTitle() ) . '</p>';
+				$lieu_title = $lieux[0]->linkToPermalinkBlank( esc_html( $lieux[0]->getLieuTitle() ) ) . ' (' . esc_html( $lieux[0]->getFormattedAdresse() ) . ')';
+				echo '<p>Je récupérerai mon panier à ' . $lieu_title . '</p>';
 				echo '<input name="lieu_id" value="' . $lieux[0]->ID . '" type="hidden" />';
 			}
 			//			foreach ( $dates as $date ) {
@@ -1564,6 +1817,371 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
             <input type="submit" value="Valider" class="btn btn-default btn-assist-inscr"/>
         </form>
 		<?php
+	} else if ( 'details_all_paiements' == $step ) {
+		if ( ! $show_due_amounts ) {
+			wp_die( $invalid_access_message );
+		}
+		if ( $for_logged && amapress_is_user_logged_in() ) {
+			$user_id = wp_get_current_user()->ID;
+		} else {
+			if ( empty( $_REQUEST['user_id'] ) ) {
+				wp_die( $invalid_access_message );
+			}
+			$user_id = intval( $_REQUEST['user_id'] );
+		}
+
+		Amapress::setFilterForReferent( false );
+		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		Amapress::setFilterForReferent( true );
+
+		$print_title = 'Récapitulatif des sommes dues';
+		echo '<h4>' . esc_html( $print_title ) . '</h4>';
+		$columns   = [];
+		$columns[] = array(
+			'title' => 'Producteur',
+			'data'  => array(
+				'_'    => 'prod',
+				'sort' => 'prod_sort',
+			)
+		);
+		$columns[] = array(
+			'title' => 'Total',
+			'data'  => array(
+				'_'    => 'total_d',
+				'sort' => 'total',
+			)
+		);
+		$columns[] = array(
+			'title' => 'Option paiements',
+			'data'  => array(
+				'_'    => 'opt_pmts',
+				'sort' => 'opt_pmts',
+			)
+		);
+		$columns[] = array(
+			'title' => 'Info',
+			'data'  => array(
+				'_'    => 'info',
+				'sort' => 'info',
+			)
+		);
+
+
+		$data = [];
+		foreach ( $adhs as $adh ) {
+			$row              = [];
+			$row['prod']      = date_i18n( 'd/m/Y', $adh->getContrat_instance()->getDate_debut() ) .
+			                    ' - ' . $adh->getContrat_instance()->getModel()->getTitle()
+			                    . '<br />'
+			                    . '<em>' . $adh->getContrat_instance()->getModel()->getProducteur()->getTitle() . '</em>';
+			$row['prod_sort'] = date_i18n( 'Y-m-d', $adh->getContrat_instance()->getDate_debut() ) .
+			                    $adh->getContrat_instance()->getModel()->getTitle();
+			$row['opt_pmts']  = $adh->getProperty( 'option_paiements' );
+			$info             = 'Ordre: ' . $adh->getProperty( 'paiements_ordre' );
+			$info             .= ! empty( $adh->getProperty( 'paiements_mention' ) ) ? '<br/>' . $adh->getProperty( 'paiements_mention' ) : '';
+			$row['info']      = $info;
+			$row['total_d']   = Amapress::formatPrice( $adh->getTotalAmount(), true );
+			$row['total']     = $adh->getTotalAmount();
+			$data[]           = $row;
+		}
+		echo amapress_get_datatable( 'details_all_paiements', $columns, $data,
+			array(
+				'paging'    => false,
+				'searching' => false,
+			),
+			array(
+				[
+					'extend' => Amapress::DATATABLES_EXPORT_EXCEL,
+					'title'  => $print_title
+				],
+				[
+					'extend'        => Amapress::DATATABLES_EXPORT_PRINT,
+					'title'         => $print_title,
+					'exportOptions' => [
+						'rowGroup' => true
+					]
+				],
+			) );
+	} else if ( 'details_all_delivs' == $step ) {
+		if ( ! $show_delivery_details ) {
+			wp_die( $invalid_access_message );
+		}
+		if ( $for_logged && amapress_is_user_logged_in() ) {
+			$user_id = wp_get_current_user()->ID;
+		} else {
+			if ( empty( $_REQUEST['user_id'] ) ) {
+				wp_die( $invalid_access_message );
+			}
+			$user_id = intval( $_REQUEST['user_id'] );
+		}
+
+		Amapress::setFilterForReferent( false );
+		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		Amapress::setFilterForReferent( true );
+
+		$print_title = 'Récapitulatif des livraisons';
+		echo '<h4>' . esc_html( $print_title ) . '</h4>';
+		$columns = [];
+		if ( isset( $_GET['by_prod'] ) ) {
+			$columns[] = array(
+				'title' => 'Producteur',
+				'data'  => array(
+					'_'    => 'prod',
+					'sort' => 'prod',
+				)
+			);
+			$columns[] = array(
+				'title' => 'Date',
+				'data'  => array(
+					'_'    => 'date_d',
+					'sort' => 'date',
+				)
+			);
+		} else {
+			$columns[] = array(
+				'title' => 'Date',
+				'data'  => array(
+					'_'    => 'date_d',
+					'sort' => 'date',
+				)
+			);
+			$columns[] = array(
+				'title' => 'Producteur',
+				'data'  => array(
+					'_'    => 'prod',
+					'sort' => 'prod',
+				)
+			);
+		}
+
+		$columns[] = array(
+			'title' => 'Description',
+			'data'  => array(
+				'_'    => 'desc',
+				'sort' => 'desc',
+			)
+		);
+		$columns[] = array(
+			'title' => 'Quantité',
+			'data'  => array(
+				'_'    => 'fact',
+				'sort' => 'fact',
+			)
+		);
+		$columns[] = array(
+			'title' => 'Total',
+			'data'  => array(
+				'_'    => 'total_d',
+				'sort' => 'total',
+			)
+		);
+
+		$data = [];
+		foreach ( $adhs as $adh ) {
+			if ( $adh->getContrat_instance()->isPanierVariable() ) {
+				$paniers = $adh->getPaniersVariables();
+				foreach ( $adh->getRemainingDates() as $date ) {
+					foreach ( AmapressContrats::get_contrat_quantites( $adh->getContrat_instanceId() ) as $quant ) {
+						if ( ! empty( $paniers[ $date ][ $quant->ID ] ) ) {
+							$row           = [];
+							$row['date_d'] = date_i18n( 'd/m/Y', $date );
+							$row['date']   = $date;
+
+							$row['prod']    = $adh->getContrat_instance()->getModel()->getTitle()
+							                  . '<br />'
+							                  . '<em>' . $adh->getContrat_instance()->getModel()->getProducteur()->getTitle() . '</em>';
+							$row['desc']    = $quant->getTitle();
+							$row['fact']    = $paniers[ $date ][ $quant->ID ];
+							$price          = $paniers[ $date ][ $quant->ID ] * $quant->getPrix_unitaire();
+							$row['total_d'] = Amapress::formatPrice( $price, true );
+							$row['total']   = $price;
+							$data[]         = $row;
+						}
+					}
+				}
+
+			} else {
+				foreach ( $adh->getRemainingDates() as $date ) {
+					foreach ( $adh->getContrat_quantites( $date ) as $quant ) {
+						$row           = [];
+						$row['date_d'] = date_i18n( 'd/m/Y', $date );
+						$row['date']   = $date;
+
+						$row['prod']    = $adh->getContrat_instance()->getModel()->getTitle()
+						                  . '<br />'
+						                  . '<em>' . $adh->getContrat_instance()->getModel()->getProducteur()->getTitle() . '</em>';
+						$row['desc']    = $quant->getTitle();
+						$row['fact']    = $quant->getFactor();
+						$row['total_d'] = Amapress::formatPrice( $quant->getPrice(), true );
+						$row['total']   = $quant->getPrice();
+						$data[]         = $row;
+					}
+				}
+			}
+		}
+		if ( isset( $_GET['by_prod'] ) ) {
+			usort( $data, function ( $a, $b ) {
+				return strcmp( $a['prod'], $b['prod'] );
+			} );
+		} else {
+			usort( $data, function ( $a, $b ) {
+				if ( $a['date'] == $b['date'] ) {
+					return 0;
+				}
+
+				return $a['date'] > $b['date'] ? 1 : - 1;
+			} );
+		}
+		echo amapress_get_datatable( 'details_all_delivs', $columns, $data,
+			array(
+				'paging'    => false,
+				'searching' => false,
+				'rowGroup'  => [
+					'dataSrc' => isset( $_GET['by_prod'] ) ? 'prod' : 'date_d',
+				]
+			),
+			array(
+				[
+					'extend' => Amapress::DATATABLES_EXPORT_EXCEL,
+					'title'  => $print_title
+				],
+				[
+					'extend'        => Amapress::DATATABLES_EXPORT_PRINT,
+					'title'         => $print_title,
+					'exportOptions' => [
+						'rowGroup' => true
+					]
+				],
+			) );
+	} else if ( 'calendar_delivs' == $step ) {
+		$print_title = 'Calendrier des livraisons';
+		echo '<h4>' . esc_html( $print_title ) . '</h4>';
+		$dates = [];
+		foreach ( $subscribable_contrats as $contrat ) {
+			foreach ( $contrat->getRemainingDates() as $d ) {
+				$dates[] = $d;
+			}
+		}
+		$dates = array_unique( $dates );
+		sort( $dates );
+		$columns   = [];
+		$columns[] = array(
+			'title' => 'Producteur',
+			'data'  => array(
+				'_'    => 'prod',
+				'sort' => 'prod',
+			)
+		);
+		foreach ( $dates as $date ) {
+			$columns[] = array(
+				'title' => date_i18n( 'd/m/Y', $date ),
+				'data'  => array(
+					'_'    => 'date_' . $date,
+					'sort' => 'date_' . $date,
+				)
+			);
+		}
+
+		$data = [];
+		foreach ( $subscribable_contrats as $contrat ) {
+			$row             = [];
+			$row['prod']     = $contrat->getModel()->getTitle()
+			                   . '<br />'
+			                   . '<em>' . $contrat->getModel()->getProducteur()->getTitle() . '</em>';
+			$remaining_dates = $contrat->getRemainingDates();
+			foreach ( $dates as $date ) {
+				if ( in_array( $date, $remaining_dates ) ) {
+					$row[ 'date_' . $date ] = 'X';
+				} else {
+					$row[ 'date_' . $date ] = '';
+				}
+			}
+			$data[] = $row;
+		}
+
+		echo amapress_get_datatable( 'calend_delivs', $columns, $data,
+			array(
+				'paging'      => false,
+				'searching'   => false,
+				'responsive'  => false,
+				'scrollX'     => true,
+				'scrollY'     => '300px',
+				'fixedHeader' => true,
+			),
+			array(
+				[
+					'extend' => Amapress::DATATABLES_EXPORT_EXCEL,
+					'title'  => $print_title
+				],
+				[
+					'extend' => Amapress::DATATABLES_EXPORT_PRINT,
+					'title'  => $print_title,
+				],
+			) );
+	} else if ( 'details' == $step ) {
+		if ( empty( $_GET['contrat_id'] ) ) {
+			wp_die( $invalid_access_message );
+		}
+		if ( $for_logged && amapress_is_user_logged_in() ) {
+			$user_id = wp_get_current_user()->ID;
+		} else {
+			if ( empty( $_REQUEST['user_id'] ) ) {
+				wp_die( $invalid_access_message );
+			}
+			$user_id = intval( $_REQUEST['user_id'] );
+		}
+
+		$adh = AmapressAdhesion::getBy( intval( $_GET['contrat_id'] ) );
+		if ( $adh->getAdherentId() != intval( $user_id ) ) {
+			wp_die( $invalid_access_message );
+		}
+		if ( ! empty( $_GET['cancel_inscr_id'] ) ) {
+			if ( intval( $_GET['cancel_inscr_id'] ) != $adh->ID ) {
+				wp_die( $invalid_access_message );
+			}
+			if ( ! $adh->canSelfEdit() ) {
+				wp_die( $invalid_access_message );
+			}
+			if ( isset( $_GET['confirm'] ) ) {
+				if ( ! wp_delete_post( $adh->ID, true ) ) {
+					wp_die( $invalid_access_message );
+				}
+				echo '<p>Votre inscription ' . esc_html( $adh->getTitle() ) . ' a été annulée avec succès.</p>';
+				echo '<p>' . Amapress::makeLink( $contrats_step_url, 'Retourner à la liste des contrats' ) . '</p>';
+
+				return ob_get_clean();
+			} else {
+				echo '<p>Vous avez demandé l\'annulation de l\'inscription suivante :<br/>
+' . Amapress::makeLink( add_query_arg( 'confirm', 'T' ), 'Confirmer l\'annulation' ) . '<br/>
+' . Amapress::makeLink( $contrats_step_url, 'Retourner à la liste des contrats' ) . '</p>';
+			}
+		}
+		$print_contrat = '';
+		if ( ! empty( $adh->getContrat_instance()->getContratModelDocFileName() ) ) {
+			$print_contrat = Amapress::makeButtonLink(
+				add_query_arg( [
+					'inscr_assistant' => 'generate_contrat',
+					'inscr_id'        => $adh->ID,
+					'inscr_key'       => $key
+				] ),
+				$contrat_print_button_text, true, true, 'btn btn-default'
+			);
+		}
+		$rattrapage   = $adh->getProperty( 'dates_rattrapages' );
+		$contrat_info = ( $adh->getContrat_instance()->isPanierVariable() ?
+				'Vous avez composé votre panier "' . $adh->getContrat_instance()->getModelTitle() . '" pour ' :
+				'Vous avez choisi le(s) panier(s) "' . $adh->getProperty( 'quantites' ) . '" pour ' )
+		                . $adh->getProperty( 'nb_distributions' ) . ' distribution(s) pour un montant total de ' . $adh->getProperty( 'total' ) . ' €'
+		                . '<h3>Distributions</h3><p>' . $adh->getProperty( 'nb_dates' ) . ' dates distributions : ' . $adh->getProperty( 'dates_distribution_par_mois' )
+		                . ( ! empty( $rattrapage ) ? '<br/>Dates de rattrages : ' . $rattrapage : '' ) . '</p>';
+		$contrat_info .= '<h3>Lieu</h3><p>' . Amapress::makeLink( $adh->getLieu()->getPermalink(), $adh->getProperty( 'lieu' ), true, true ) . '</p>';
+		$contrat_info .= '<h3>Détails</h3><p>' . $adh->getProperty( 'quantites_prix' ) . '</p><p>' . $print_contrat . '</p>';
+		$contrat_info .= '<h3>Options de paiements</h3><p>' . $adh->getProperty( 'option_paiements' ) . '</p><p>' . $adh->getProperty( 'paiements_mention' ) . '</p>';
+		$refs_emails  = $adh->getContrat_instance()->getAllReferentsEmails( $adh->getLieuId() );
+		$contrat_info .= '<h3>Référents</h3>';
+		$contrat_info .= '<p>' . $adh->getProperty( 'referents' ) . '</p>';
+		$contrat_info .= '<p>' . Amapress::makeLink( 'mailto:' . urlencode( implode( ',', $refs_emails ) ) . '?subject=' . urlencode( 'Mon inscription ' . $adh->getTitle() ), 'Contacter les référents' ) . '</p>';
+		echo '<h4>' . esc_html( $adh->getTitle() ) . '</h4><p>' . $contrat_info . '</p>';
 	} else if ( 'inscr_contrat_engage' == $step ) {
 		if ( empty( $_REQUEST['contrat_id'] ) ) {
 			wp_die( $invalid_access_message );
@@ -1614,9 +2232,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			$rattrapage[] = '1.5 distribution ' . _n( 'le', 'les', count( $un5_rattrapage ) ) . ' ' . implode( ', ', $un5_rattrapage );
 		}
 
-		?>
-        <h4>Étape 6/8 : Panier - <?php echo esc_html( $contrat->getTitle() ); ?></h4>
-		<?php
+		if ( $for_logged ) {
+			echo '<h4>Étape 2/4 : Panier - ' . esc_html( $contrat->getTitle() ) . '</h4>';
+		} else {
+			echo '<h4>Étape 6/8 : Panier - ' . esc_html( $contrat->getTitle() ) . '</h4>';
+		}
 		$min_total = $contrat->getMinEngagement();
 
 		$grouped_dates = from( $dates )->groupBy( function ( $d ) {
@@ -1673,6 +2293,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		} else {
 			echo '<p>Choisissez la quantité ou la taille de votre panier :</p>';
 		}
+		$quants_full = [];
 		echo '<form method="post" action="' . $next_step_url . '" class="amapress_validate">';
 		if ( $contrat->isPanierVariable() ) {
 			$columns = array(
@@ -1695,8 +2316,8 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			$data = array();
 			foreach ( AmapressContrats::get_contrat_quantites( $contrat->ID ) as $quant ) {
 				$row     = array(
-					'produit'       => esc_html( $quant->getTitle() ),
-					'prix_unitaire' => esc_html( sprintf( '%.2f€', $quant->getPrix_unitaire() ) ),
+					'produit'       => '<span class="panier-mod-produit-label">' . esc_html( $quant->getTitle() ) . ( ! empty( $quant->getDescription() ) ? '<br/><em>' . esc_html( $quant->getDescription() ) . '</em>' : '' ) . '</span>',
+					'prix_unitaire' => esc_html( $quant->getPrix_unitaireDisplay() ),
 				);
 				$options = $quant->getQuantiteOptions();
 				if ( ! isset( $options['0'] ) ) {
@@ -1706,26 +2327,32 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 					$price_unit = esc_attr( $quant->getPrix_unitaire() );
 					$ed         = '';
 					$ed         .= "<select style='max-width: none;min-width: 0' data-price='0' data-price-unit='$price_unit' name='panier_vars[$date][{$quant->ID}]' id='panier_vars-$date-{$quant->ID}' class='quant-var'>";
-					$ed         .= tf_parse_select_options( $options, null, false );
+					$ed         .= tf_parse_select_options( $options,
+						$edit_inscription
+							? $edit_inscription->getContrat_quantite_factor( $quant->ID, $date )
+							: null,
+						false );
 					$ed         .= '</select>';
-					if ( $quant->getAvailFrom() && $quant->getAvailTo() ) {
-						if ( $date < Amapress::start_of_day( $quant->getAvailFrom() ) || $date > Amapress::end_of_day( $quant->getAvailTo() ) ) {
-							$ed = '<span class="contrat_panier_vars-na">NA</span>';
-						}
+					$ed         .= '<a title="Recopier la même quantité sur les dates suivantes" href="#" class="quant-var-recopier">&gt;</a>';
+					if ( ! $quant->isInDistributionDates( $date ) ) {
+						$ed = '<span class="contrat_panier_vars-na">NA</span>';
 					}
 					$row[ 'd-' . $date ] = $ed;
 				}
 				$data[] = $row;
 			}
 
+			echo '<style type="text/css">.quant-var-recopier{text-shadow: none !important; text-decoration: none !important;}.panier-mod-produit-label{display: inline-block;white-space: normal;word-wrap: break-word; max-width: ' . $atts['max_produit_label_width'] . ';}</style>';
+
 			echo amapress_get_datatable( 'quant-commandes', $columns, $data, array(
-				'bSort'        => true,
+				'bSort'        => false,
 				'paging'       => false,
 				'searching'    => true,
 				'bAutoWidth'   => true,
 				'responsive'   => false,
 				'init_as_html' => true,
 				'scrollX'      => true,
+				'scrollY'      => intval( $atts['paniers_modulables_editor_height'] ),
 				'fixedColumns' => array( 'leftColumns' => 2 ),
 			) );
 			echo '<p>* Cliquez sur la case pour faire apparaître le choix de quantités</p>';
@@ -1733,7 +2360,10 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			$contrat_quants = AmapressContrats::get_contrat_quantites( $contrat->ID );
 			foreach ( $contrat_quants as $quantite ) {
 				if ( $contrat->isFull( $quantite->ID ) ) {
-					continue;
+					if ( ! $edit_inscription || ! in_array( $quantite->ID, $edit_inscription->getContrat_quantites_IDs() ) ) {
+						$quants_full[] = $quantite->getTitle();
+						continue;
+					}
 				}
 
 				$dates_factors = 0;
@@ -1750,20 +2380,23 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				$id_factor          = 'factor' . $quantite->ID;
 				$id_price           = 'price' . $quantite->ID;
 				$price              = $dates_factors * $quantite->getPrix_unitaire();
-				$price_compute_text = esc_html( $dates_factors ) . ' x ' . esc_html( $quantite->getPrix_unitaire() ) . '€';
+				$price_compute_text = esc_html( $dates_factors ) . ' x ' . esc_html( $quantite->getPrix_unitaireDisplay() );
 				if ( $contrat->isQuantiteVariable() ) {
 					$quant_var_editor .= "<select  style='max-width: none;min-width: 0' id='$id_factor' class='quant-factor' data-quant-id='$id_quant' data-price-id='$id_price' data-price-unit='$price' name='factors[{$quantite->ID}]' style='display: inline-block'>";
 					$quant_var_editor .= tf_parse_select_options(
 						$quantite->getQuantiteOptions(),
-						null,
+						$edit_inscription
+							? $edit_inscription->getContrat_quantite_factor( $quantite->ID )
+							: null,
 						false );
 					$quant_var_editor .= '</select>';
 				}
 
-				$type = $contrat->isQuantiteMultiple() ? 'checkbox' : 'radio';
+				$checked = checked( $edit_inscription && $edit_inscription->getContrat_quantite_factor( $quantite->ID ) > 0, true, false );
+				$type    = $contrat->isQuantiteMultiple() ? 'checkbox' : 'radio';
 				echo '<p style="margin-top: 1em; margin-bottom: 0"><label for="' . $id_quant . '">
-			<input id="' . $id_quant . '" name="quants[]" class="quant" value="' . $quantite->ID . '" type="' . $type . '" data-factor-id="' . $id_factor . '" data-price="' . $price . '"/> 
-			' . $quant_var_editor . ' ' . esc_html( $quantite->getTitle() ) . ' ' . $price_compute_text . ' = <span id="' . $id_price . '">' . $price . '</span>€</label></p>';
+			<input id="' . $id_quant . '" name="quants[]" ' . $checked . ' class="quant" value="' . $quantite->ID . '" type="' . $type . '" data-factor-id="' . $id_factor . '" data-price="' . $price . '" data-pricew="' . ( abs( $quantite->getPrix_unitaire() ) < 0.001 ? 1 : 0 ) . '"/> 
+			' . $quant_var_editor . ' ' . esc_html( $quantite->getTitle() ) . ' ' . $price_compute_text . ( abs( $quantite->getPrix_unitaire() ) > 0.001 ? ' = <span id="' . $id_price . '">' . $price . '</span>€</label></p>' : '' );
 
 				$spec_dates = $quantite->getSpecificDistributionDates();
 				if ( ! empty( $spec_dates ) ) {
@@ -1793,6 +2426,11 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		echo '<p><input type="submit" class="btn btn-default btn-assist-inscr" value="Valider" /></p>';
 		echo '</form>';
 
+		if ( $admin_mode && ! empty( $quants_full ) ) {
+			echo '<p>Les paniers "' . implode( ',', $quants_full ) . '" sont <strong>COMPLETS</strong> et n\'apparaissent donc pas ci-dessus. Pour augmenter les quotas, ' .
+			     Amapress::makeLink( $contrat->getAdminEditLink(), 'éditez le contrat ' . $contrat->getTitle(), true, true ) . '</p>';
+		}
+
 	} else if ( 'inscr_contrat_paiements' == $step ) {
 		if ( empty( $_REQUEST['user_id'] ) ) {
 			wp_die( $invalid_access_message );
@@ -1813,7 +2451,12 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		}
 		$next_step_url = add_query_arg( [ 'step' => 'inscr_contrat_create' ] );
 
-		echo '<h4>Étape 7/8 : Règlement</h4>';
+		$pay_at_deliv = [];
+		if ( $for_logged ) {
+			echo '<h4>Étape 3/4 : Règlement</h4>';
+		} else {
+			echo '<h4>Étape 7/8 : Règlement</h4>';
+		}
 		if ( $contrat->isPanierVariable() ) {
 			$panier_vars = isset( $_REQUEST['panier_vars'] ) ? $_REQUEST['panier_vars'] : [];
 			if ( empty( $panier_vars ) ) {
@@ -1834,6 +2477,9 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 					$quant         = AmapressContrat_quantite::getBy( $q_id );
 					$date_values[] = $quant->getFormattedTitle( $factor );
 					$total         += $factor * $quant->getPrix_unitaire();
+					if ( abs( $quant->getPrix_unitaire() ) < 0.001 ) {
+						$pay_at_deliv[] = $quant->getTitle();
+					}
 				}
 				if ( ! empty( $date_values ) ) {
 					$chosen_quants[ $date_k ] = $date_values;
@@ -1844,10 +2490,10 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			$serial_quants = $panier_vars;
 
 			if ( ! $admin_mode ) {
-				echo '<p style="margin-bottom: 0">Vous allez vous inscrire au contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant de ' . $total . '€ avec les options suivantes:</p>';
+				echo '<p style="margin-bottom: 0">Vous allez vous inscrire au contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant ' . ( $total > 0 ? 'de ' . Amapress::formatPrice( $total, true ) : 'payable à la livraison' ) . ' avec les options suivantes:</p>';
 			} else {
 				$amapien = AmapressUser::getBy( $user_id );
-				echo '<p style="margin-bottom: 0">Vous allez inscrire ' . esc_html( $amapien->getDisplayName() ) . ' au contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant de ' . $total . '€ avec les options suivantes:</p>';
+				echo '<p style="margin-bottom: 0">Vous allez inscrire ' . esc_html( $amapien->getDisplayName() ) . ' au contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant ' . ( $total > 0 ? 'de ' . Amapress::formatPrice( $total, true ) : 'payable à la livraison' ) . ' avec les options suivantes:</p>';
 			}
 			echo '<ul style="list-style-type: square">';
 			foreach ( $chosen_quants as $dt => $quant_descs ) {
@@ -1896,16 +2542,19 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				$quant           = AmapressContrat_quantite::getBy( $q_id );
 				$chosen_quants[] = $quant->getFormattedTitle( $factor );
 				$total           += $dates_factors * $factor * $quant->getPrix_unitaire();
+				if ( abs( $quant->getPrix_unitaire() ) < 0.001 ) {
+					$pay_at_deliv[] = $quant->getTitle();
+				}
 			}
 
 			if ( count( $chosen_quants ) == 1 && ! $admin_mode ) {
-				echo '<p style="margin-bottom: 0">Vous avez choisi l\'option “' . esc_html( $chosen_quants[0] ) . '” du contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant de ' . $total . '€</p>';
+				echo '<p style="margin-bottom: 0">Vous avez choisi l\'option “' . esc_html( $chosen_quants[0] ) . '” du contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant ' . ( $total > 0 ? 'de ' . Amapress::formatPrice( $total, true ) : 'payable à la livraison' ) . '</p>';
 			} else {
 				if ( ! $admin_mode ) {
-					echo '<p style="margin-bottom: 0">Vous avez choisi les options suivantes du contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant de ' . $total . '€ :</p>';
+					echo '<p style="margin-bottom: 0">Vous avez choisi les options suivantes du contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant ' . ( $total > 0 ? 'de ' . Amapress::formatPrice( $total, true ) : 'payable à la livraison' ) . ' :</p>';
 				} else {
 					$amapien = AmapressUser::getBy( $user_id );
-					echo '<p style="margin-bottom: 0">Vous allez inscrire ' . esc_html( $amapien->getDisplayName() ) . ' au contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant de ' . $total . '€ avec les options suivantes:</p>';
+					echo '<p style="margin-bottom: 0">Vous allez inscrire ' . esc_html( $amapien->getDisplayName() ) . ' au contrat ' . esc_html( $contrat->getTitle() ) . ' pour un montant ' . ( $total > 0 ? 'de ' . Amapress::formatPrice( $total, true ) : 'payable à la livraison' ) . ' avec les options suivantes:</p>';
 				}
 				echo '<ul style="list-style-type: disc">';
 				foreach ( $chosen_quants as $q ) {
@@ -1929,26 +2578,117 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 		echo "<input type='hidden' name='quants' value='$serial_quants'/>";
 		if ( $contrat->getManage_Cheques() ) {
 			$min_cheque_amount = $contrat->getMinChequeAmount();
-			foreach ( $contrat->getPossiblePaiements() as $nb_cheque ) {
-				if ( $total / $nb_cheque < $min_cheque_amount ) {
-					continue;
-				}
+			if ( $total > 0 ) {
+				foreach ( $contrat->getPossiblePaiements() as $nb_cheque ) {
+					if ( $total / $nb_cheque < $min_cheque_amount ) {
+						continue;
+					}
 
-				$cheques = $contrat->getChequeOptionsForTotal( $nb_cheque, $total );
-				$option  = esc_html( $cheques['desc'] );
-//			$cheque_main_amount = $cheques['main_amount'];
-//			$last_cheque        = $cheques['remain_amount'];
-				echo "<input type='radio' name='cheques' id='cheques-$nb_cheque' value='$nb_cheque' class='required' /><label for='cheques-$nb_cheque'>$option</label><br/>";
+					$checked            = checked( $edit_inscription && $edit_inscription->getPaiements() == $nb_cheque, true, false );
+					$cheques            = $contrat->getChequeOptionsForTotal( $nb_cheque, $total );
+					$option             = esc_html( $cheques['desc'] );
+					$cheque_main_amount = esc_attr( Amapress::formatPrice( $cheques['main_amount'] ) );
+					$last_cheque        = esc_attr( Amapress::formatPrice( ! empty( $cheques['remain_amount'] ) ? $cheques['remain_amount'] : $cheques['main_amount'] ) );
+					$chq_label          = '';
+					if ( $cheque_main_amount != $last_cheque ) {
+						$chq_label = "$nb_cheque chèque(s) : ";
+					}
+					echo "<label for='cheques-$nb_cheque' style='font-weight: normal'><input type='radio' '.$checked.' name='cheques' id='cheques-$nb_cheque' data-main-amount='$cheque_main_amount €' data-last-amount='$last_cheque €' value='$nb_cheque' class='input-nb-cheques required' />$chq_label$option</label><br/>";
+				}
+			} else {
+				echo '<p><strong>Paiement à la livraison</strong></p>';
+			}
+			if ( $contrat->getAllow_Delivery_Pay() || abs( $total ) < 0.001 ) {
+				$checked = checked( $edit_inscription && 'dlv' == $edit_inscription->getMainPaiementType(), true, false );
+				echo "<label for='cheques-dlv' style='font-weight: normal'><input type='radio' name='cheques' id='cheques-dlv' $checked value='-3' class='input-nb-cheques required' />Paiement à la livraison</label><br/>";
 			}
 			if ( $contrat->getAllow_Cash() ) {
-				echo "<input type='radio' name='cheques' id='cheques-esp' value='-1' class='required' /><label for='cheques-esp'>En espèces</label><br/>";
+				$checked = checked( $edit_inscription && 'esp' == $edit_inscription->getMainPaiementType(), true, false );
+				echo "<label for='cheques-esp' style='font-weight: normal'><input type='radio' name='cheques' id='cheques-esp' $checked value='-1' class='input-nb-cheques required' />En espèces</label><br/>";
+			}
+			if ( $contrat->getAllow_Transfer() ) {
+				$checked = checked( $edit_inscription && 'vir' == $edit_inscription->getMainPaiementType(), true, false );
+				echo "<label for='cheques-vir' style='font-weight: normal'><input type='radio' name='cheques' id='cheques-vir' $checked value='-2' class='input-nb-cheques required' />Par virement</label><br/>";
+			}
+			if ( $contrat->getAllowAmapienInputPaiementsDetails() && $total > 0 ) {
+				$amapien  = AmapressUser::getBy( $user_id );
+				$emetteur = esc_attr( $amapien->getDisplayName() );
+				echo '<script type="application/javascript">
+jQuery(function($) {
+    var show_cheque_line = function() {
+        if (!$(this).is(":checked"))
+            return;
+        var nb_cheques = parseInt($(this).val());
+        var main_amount = $(this).data("main-amount");
+        var last_amount = $(this).data("last-amount");
+        var i = 0;
+        $("#cheques-details tr").each(function() {
+           if (i<=nb_cheques) {
+                $(this).show();
+           } else {
+                $(this).hide();
+           }
+           $(".amps-pmt-amount", this).text(main_amount);
+           if (i == nb_cheques)
+               $(".amps-pmt-amount", this).text(last_amount);
+           i++;
+        });
+    };
+    $(\'.input-nb-cheques\').each(show_cheque_line).change(show_cheque_line);
+});
+</script>';
+				echo '<table id="cheques-details"><thead>
+<th>Date encaissement</th>
+<th>Numéro chèque</th>
+<th>Banque</th>
+<th>Emetteur</th>
+<th>Montant</th>
+</thead><tbody>';
+				Amapress::setFilterForReferent( false );
+				$edit_all_paiements = $edit_inscription ? $edit_inscription->getAllPaiements() : null;
+				Amapress::setFilterForReferent( true );
+				$req = ( $paiements_info_required ? 'required' : '' );
+				for ( $i = 1; $i <= 12; $i ++ ) {
+					$edit_paiement   = $edit_all_paiements && isset( $edit_all_paiements[ $i - 1 ] ) ? $edit_all_paiements[ $i - 1 ] : null;
+					$paiements_dates = array_map(
+						function ( $d ) use ( $edit_paiement ) {
+							$selected = selected( $edit_paiement && Amapress::start_of_day( $edit_paiement->getDate() ) == Amapress::start_of_day( $d ), true, false );
+
+							return '<option ' . $selected . ' value="' . esc_attr( $d ) . '">' . esc_html( date_i18n( 'd/m/Y', $d ) ) . '</option>';
+						}, $contrat->getPaiements_Liste_dates()
+					);
+					if ( ! $edit_inscription ) {
+						if ( isset( $paiements_dates[ $i - 1 ] ) ) {
+							$paiements_dates[ $i - 1 ] = str_replace( '<option ', '<option selected="selected" ', $paiements_dates[ $i - 1 ] );
+						}
+					}
+
+					$paiement_num      = esc_attr( $edit_paiement ? $edit_paiement->getNumero() : '' );
+					$paiement_banque   = esc_attr( $edit_paiement ? $edit_paiement->getBanque() : '' );
+					$paiement_emetteur = esc_attr( $edit_paiement ? $edit_paiement->getEmetteur() : $emetteur );
+					$paiements_dates   = implode( '', $paiements_dates );
+					echo "<tr style='display: none'>
+<td><select id='pmt-$i-date' name='pmt[$i][date]' class='$req'>
+$paiements_dates
+</select></td>
+<td><input type='text' id='pmt-$i-num' name='pmt[$i][num]' class='$req' value='$paiement_num' /></td>
+<td><input type='text' id='pmt-$i-banque' name='pmt[$i][banque]' class='$req' value='$paiement_banque' /></td>
+<td><input type='text' id='pmt-$i-emetteur' name='pmt[$i][emetteur]' class='$req' value='$paiement_emetteur' /></td>
+<td class='amps-pmt-amount'></td>
+</tr>";
+				}
+				echo '</tbody></table>';
 			}
 		} else {
 			echo "<input type='hidden' name='cheques' value='0'/>";
 		}
 		echo '<br />';
+		if ( ! empty( $pay_at_deliv ) ) {
+			echo '<p><strong>Produits payables à la livraison</strong> : ' . implode( ', ', $pay_at_deliv ) . '</p>';
+			echo '<br />';
+		}
 		if ( ! $admin_mode ) {
-			echo '<label for="inscr_message">Message pour le référent :</label><textarea id="inscr_message" name="message"></textarea>';
+			echo '<label for="inscr_message">Message pour le référent :</label><textarea id="inscr_message" name="message">' . ( $edit_inscription ? esc_textarea( $edit_inscription->getMessage() ) : '' ) . '</textarea>';
 		} else {
 			echo '<p><input type="checkbox" checked="checked" id="inscr_confirm_mail" name="inscr_confirm_mail" /><label for="inscr_confirm_mail"> Confirmer par email à l\'adhérent</label></p>';
 		}
@@ -2026,12 +2766,23 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 
 
 		if ( $any_full ) {
-			$contrats_step_url_attr = esc_attr( $contrats_step_url );
-			$mailto_refs            = esc_attr( "mailto:$referents_mails" );
-			wp_die( "<p>Désolé, ce contrat ou l'un des paniers que vous avez choisi est complet<br/>
+			if ( $admin_mode ) {
+				$contrat_edit_link      = Amapress::makeLink( $contrat->getAdminEditLink(), $contrat->getTitle(), true, true );
+				$contrats_step_url_attr = esc_attr( $contrats_step_url );
+				$mailto_refs            = esc_attr( "mailto:$referents_mails" );
+				wp_die( "<p>Désolé, ce contrat ou l'un des paniers que vous avez choisi est complet<br/>
+<a href='{$contrats_step_url_attr}'>Retour aux contrats</a><br/>
+Pour augmenter les quota du contrat ou de ses paniers, cliquez sur le lien suivant : $contrat_edit_link<br/>
+LE cas écheant, une fois les quota mis à jour, appuyer sur F5 pour terminer l'inscription en cours.
+</p>" );
+			} else {
+				$contrats_step_url_attr = esc_attr( $contrats_step_url );
+				$mailto_refs            = esc_attr( "mailto:$referents_mails" );
+				wp_die( "<p>Désolé, ce contrat ou l'un des paniers que vous avez choisi est complet<br/>
 <a href='{$contrats_step_url_attr}'>Retour aux contrats</a><br/>
 <a href='$mailto_refs'>Contacter les référents</a>
 </p>" );
+			}
 		}
 
 		$meta = [
@@ -2040,11 +2791,17 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			'amapress_adhesion_date_debut'       => $start_date,
 			'amapress_adhesion_contrat_instance' => $contrat_id,
 			'amapress_adhesion_message'          => $message,
-			'amapress_adhesion_paiements'        => ( - 1 == $cheques ? 1 : $cheques ),
+			'amapress_adhesion_paiements'        => ( $cheques < 0 ? 1 : ( $cheques > 0 ? $cheques : 0 ) ),
 			'amapress_adhesion_lieu'             => $lieu_id,
 		];
 		if ( - 1 == $cheques ) {
 			$meta['amapress_adhesion_pmt_type'] = 'esp';
+		}
+		if ( - 2 == $cheques ) {
+			$meta['amapress_adhesion_pmt_type'] = 'vir';
+		}
+		if ( - 3 == $cheques ) {
+			$meta['amapress_adhesion_pmt_type'] = 'dlv';
 		}
 		if ( ! empty( $quantite_ids ) ) {
 			$meta['amapress_adhesion_contrat_quantite'] = $quantite_ids;
@@ -2062,19 +2819,31 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 			'post_status'  => 'publish',
 			'meta_input'   => $meta,
 		);
-		$new_id  = wp_insert_post( $my_post );
+		if ( $edit_inscription ) {
+			$my_post['ID'] = $edit_inscription->ID;
+			$new_id        = wp_update_post( $my_post, true );
+		} else {
+			$new_id = wp_insert_post( $my_post, true );
+		}
 		if ( ! $new_id || is_wp_error( $new_id ) ) {
 			//TODO ???
 			wp_die( 'Une erreur s\'est produite' );
 		}
+		if ( $edit_inscription && $cheques > 0 ) {
+			delete_post_meta( $new_id, 'amapress_adhesion_pmt_type' );
+		}
 
-		$inscription = AmapressAdhesion::getBy( $new_id );
+		Amapress::setFilterForReferent( false );
+		$inscription = AmapressAdhesion::getBy( $new_id, true );
+		Amapress::setFilterForReferent( true );
 		if ( $inscription->getContrat_instance()->getManage_Cheques() ) {
-			$inscription->preparePaiements();
+			$inscription->preparePaiements( isset( $_REQUEST['pmt'] ) ? $_REQUEST['pmt'] : [] );
 		}
 
 		if ( ! $admin_mode || isset( $_REQUEST['inscr_confirm_mail'] ) ) {
-			$inscription->sendConfirmationMail();
+			if ( Amapress::toBool( $atts['send_contrat_confirm'] ) ) {
+				$inscription->sendConfirmationMail();
+			}
 		}
 
 		if ( ! $admin_mode ) {
@@ -2082,7 +2851,9 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				$inscription->sendReferentsNotificationMail( false, $notify_email );
 			}
 
-			$adhs                               = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+			Amapress::setFilterForReferent( false );
+			$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+			Amapress::setFilterForReferent( true );
 			$adhs_contrat_ids                   = array_map( function ( $a ) {
 				/** @var AmapressAdhesion $a */
 				return $a->getContrat_instance()->ID;
@@ -2095,22 +2866,71 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a href="' 
 				/** @var AmapressContrat_instance $c */
 				return $c->getModelTitle() . ( ! empty( $c->getSubName() ) ? ' - ' . $c->getSubName() : '' );
 			}, $user_subscribable_contrats ) ) );
-			echo '<h4>étape 8/8 : Félicitations !</h4>';
-			echo '<div class="alert alert-success">Votre pré-inscription a bien été prise en compte. 
-Vous allez recevoir un email de confirmation avec votre contrat dans quelques minutes. (Pensez à regarder vos spams, cet email peut s\'y trouver à cause du contrat joint ou pour expéditeur inconnu de votre carnet d\'adresses)</div>';
+			if ( $for_logged ) {
+				echo '<h4>étape 4/4 : Félicitations !</h4>';
+			} else {
+				echo '<h4>étape 8/8 : Félicitations !</h4>';
+			}
+
+			$online_contrats_end_step_message      = wp_unslash( Amapress::getOption( 'online_contrats_end_step_message' ) );
+			$online_contrats_end_step_edit_message = wp_unslash( Amapress::getOption( 'online_contrats_end_step_edit_message' ) );
+			echo '<div class="alert alert-success">Votre pré-inscription a bien été prise en compte.</div>';
+			if ( Amapress::toBool( $atts['send_contrat_confirm'] ) ) {
+				echo '<p>Vous allez recevoir un email de confirmation avec votre contrat dans quelques minutes. (Pensez à regarder vos spams, cet email peut s\'y trouver à cause du contrat joint ou pour expéditeur inconnu de votre carnet d\'adresses)</p>';
+			}
 			if ( ! empty( $inscription->getContrat_instance()->getContratModelDocFileName() ) ) {
-				$print_contrat = Amapress::makeButtonLink(
+				$print_contrat                         = Amapress::makeButtonLink(
 					add_query_arg( [
 						'inscr_assistant' => 'generate_contrat',
 						'inscr_id'        => $inscription->ID,
 						'inscr_key'       => $key
 					] ),
-					'Imprimer', true, true, 'btn btn-default'
+					$contrat_print_button_text, true, true, 'btn btn-default'
 				);
-				echo '<p>Pour finaliser votre inscription, vous devez imprimer ce contrat et le remettre aux référents concernés (' . $inscription->getProperty( 'referents' ) . ') avec les chèques/règlements correspondants lors de la prochaine distribution<br />
-' . $print_contrat . '</p>';
+				$online_contrats_end_step_message      = str_replace( '%%print_button%%', $print_contrat, $online_contrats_end_step_message );
+				$online_contrats_end_step_edit_message = str_replace( '%%print_button%%', $print_contrat, $online_contrats_end_step_edit_message );
+			} else {
+				$online_contrats_end_step_message      = str_replace( '%%print_button%%', '', $online_contrats_end_step_message );
+				$online_contrats_end_step_edit_message = str_replace( '%%print_button%%', '', $online_contrats_end_step_edit_message );
 			}
-			if ( Amapress::toBool( $atts['show_contrats'] ) ) {
+			if ( $inscription->canSelfEdit() ) {
+				$inscription_url = add_query_arg( [
+					'step'       => 'inscr_contrat_date_lieu',
+					'contrat_id' => $inscription->getContrat_instanceId()
+				] );
+				$modify_button   = '<form method="get" action="' . esc_attr( $inscription_url ) . '">
+<input type="hidden" name="key" value="' . $key . '" />
+<input type="hidden" name="step" value="inscr_contrat_date_lieu" />
+<input type="hidden" name="user_id" value="' . $user_id . '" />
+<input type="hidden" name="contrat_id" value="' . $inscription->getContrat_instanceId() . '" />
+<input type="hidden" name="edit_inscr_id" value="' . $inscription->ID . '" />
+<input type="submit" value="Modifier" class="btn btn-default btn-assist-inscr" />
+</form>';
+				$cancel_button   = '<form method="get" action="' . esc_attr( $inscription_url ) . '">
+<input type="hidden" name="key" value="' . $key . '" />
+<input type="hidden" name="step" value="details" />
+<input type="hidden" name="user_id" value="' . $user_id . '" />
+<input type="hidden" name="contrat_id" value="' . $inscription->ID . '" />
+<input type="hidden" name="cancel_inscr_id" value="' . $inscription->ID . '" />
+<input type="submit" value="Annuler" class="btn btn-default btn-assist-inscr" />
+</form>';
+				if ( strpos( $online_contrats_end_step_edit_message, '%%modify_button%%' ) !== false ) {
+					$online_contrats_end_step_edit_message = str_replace( '%%modify_button%%', $modify_button, $online_contrats_end_step_edit_message );
+				} else {
+					echo '<br/>' . $modify_button;
+				}
+				if ( strpos( $online_contrats_end_step_edit_message, '%%cancel_button%%' ) !== false ) {
+					$online_contrats_end_step_edit_message = str_replace( '%%cancel_button%%', $cancel_button, $online_contrats_end_step_edit_message );
+				} else {
+					echo '<br/>' . $cancel_button;
+				}
+			} else {
+				$online_contrats_end_step_edit_message = '';
+			}
+			echo amapress_replace_mail_placeholders( $online_contrats_end_step_edit_message, $amapien, $inscription );
+			echo amapress_replace_mail_placeholders( $online_contrats_end_step_message, $amapien, $inscription );
+
+			if ( 'mes-contrats' == $tag ) {
 				echo '<p>Retourner à la liste de mes contrats :<br/>
 <form method="get" action="' . esc_attr( $contrats_step_url ) . '">
 <input type="hidden" name="key" value="' . $key . '" />
@@ -2129,10 +2949,17 @@ Vous allez recevoir un email de confirmation avec votre contrat dans quelques mi
 </form></p>';
 				} else {
 					echo '<p>Vous êtes déjà inscrit à tous les contrats.</p>';
+					echo '<p>Retourner à la liste de mes contrats :<br/>
+<form method="get" action="' . esc_attr( $contrats_step_url ) . '">
+<input type="hidden" name="key" value="' . $key . '" />
+<input type="hidden" name="step" value="contrats" />
+<input type="hidden" name="user_id" value="' . $user_id . '" />
+<input class="btn btn-default btn-assist-inscr" type="submit" value="Poursuivre" />
+</form></p>';
 				}
 			}
 
-			if ( ! $admin_mode && ! Amapress::toBool( $atts['show_contrats'] ) ) {
+			if ( ! $admin_mode && 'mes-contrats' != $tag ) {
 				echo '<p>J\'ai fini :<br/>
 <form method="get" action="' . esc_attr( $contrats_step_url ) . '">
 <input type="hidden" name="key" value="' . $key . '" />
@@ -2148,10 +2975,7 @@ Vous allez recevoir un email de confirmation avec votre contrat dans quelques mi
 
 	} else if ( 'the_end' == $step ) {
 		echo '<h4>Félicitations, vous avez terminé vos inscriptions !</h4>';
-		echo '<p>Si vous êtes nouvel adhérent vous allez recevoir un email vous indiquant comment vous connecter au site et choisir votre mot de passe.</p>';
-		echo '<p>Vous allez recevoir un email de confirmation pour chacune de vos inscriptions avec le contrat à imprimer et les instructions pour remettre vos chèques/règlements aux référents.</p>';
-		echo '<p>(Pensez à regarder vos spams, ces emails peuvent s\'y trouver à cause des contrats joints ou pour expéditeur inconnu de votre carnet d\'adresses)</p>';
-		echo '<p>Vous pouvez maintenant fermer cette fenêtre/onglet et regarder votre messagerie</p>';
+		echo wp_unslash( amapress_replace_mail_placeholders( Amapress::getOption( 'online_final_step_message' ), null ) );
 	}
 	?>
     <style type="text/css">
@@ -2170,23 +2994,23 @@ Vous allez recevoir un email de confirmation avec votre contrat dans quelques mi
     <script type="text/javascript">
         //<![CDATA[
         jQuery(function ($) {
-            jQuery('#quant-commandes').on('click', 'td', function () {
-                jQuery(this).find(".quant-var").css('visibility', 'visible');
+            $('#quant-commandes').on('click', 'td', function () {
+                jQuery(this).find(".quant-var, .quant-var-recopier").css('visibility', 'visible');
             });
-            jQuery(".amapress_validate").validate({
+            $(".amapress_validate").validate({
                     onkeyup: false,
-                errorPlacement: function (error, element) {
-                    var $commandes = element.closest('.dataTables_wrapper');
-                    if ($commandes.length) {
-                        error.insertAfter($commandes);
-                    } else {
-                        if ("radio" === element.attr("type") || "checkbox" === element.attr("type")) {
-                            error.insertBefore(element);
+                    errorPlacement: function (error, element) {
+                        var $commandes = element.closest('.dataTables_wrapper');
+                        if ($commandes.length) {
+                            error.insertAfter($commandes);
                         } else {
-                            error.insertAfter(element);
+                            if ("radio" === element.attr("type") || "checkbox" === element.attr("type")) {
+                                error.insertBefore(element);
+                            } else {
+                                error.insertAfter(element);
+                            }
                         }
                     }
-                }
                 }
             );
 
@@ -2205,11 +3029,14 @@ Vous allez recevoir un email de confirmation avec votre contrat dans quelques mi
                 "min_sum",
                 function (value, element, params) {
                     var sumOfVals = 0;
+                    var priceW = 0;
                     var parent = $(element).closest("form");
                     jQuery(parent).find(".quant:checked,.quant-var").each(function () {
                         sumOfVals = sumOfVals + parseFloat(jQuery(this).data('price'));
+                        priceW = priceW + parseInt(jQuery(this).data('pricew'));
                     });
                     if (sumOfVals > params) return true;
+                    if (priceW > 0) return true;
                     return false;
                 },
                 "Le montant total doit être supérieur à {0}€<br/>"
@@ -2229,24 +3056,52 @@ Vous allez recevoir un email de confirmation avec votre contrat dans quelques mi
                 var val = parseFloat($this.val());
                 var quantElt = jQuery('#' + $this.data('quant-id'));
                 var priceElt = jQuery('#' + $this.data('price-id'));
-                priceElt.text((val * priceUnit).toFixed(2));
-                quantElt.data('price', val * priceUnit);
+                if (Math.abs(priceUnit) < 0.001) {
+                    priceElt.text('Prix au poids');
+                    quantElt.data('price', 0);
+                    quantElt.data('pricew', 1);
+                } else {
+                    priceElt.text((val * priceUnit).toFixed(2));
+                    quantElt.data('price', val * priceUnit);
+                    quantElt.data('pricew', 0);
+                }
                 computeTotal();
             }
 
             jQuery('.quant-factor').change(computePrices).each(computePrices);
+            $(".quant-var-recopier").click(function () {
+                var $td = $(this).closest("td");
+                var val = parseFloat($td.find("select").val());
+                $td.nextAll().find("select, a").each(function () {
+                    if (val <= 0) {
+                        $(this).css('visibility', 'hidden');
+                    } else {
+                        $(this).css('visibility', 'visible');
+                    }
+                });
+                $td.nextAll().find("select").each(function () {
+                    $(this).val(val);
+                });
+                return false;
+            });
             jQuery('.quant-var').each(function () {
                 var $this = jQuery(this);
+                var priceUnit = parseFloat($this.data('price-unit'));
                 var val = parseFloat($this.val());
-                if (val <= 0) {
+                $this.data('price', val * priceUnit);
+                if (Math.abs(priceUnit) < 0.001) {
+                    $this.data('pricew', 1);
+                } else {
+                    $this.data('pricew', 0);
+                }
+                if (val <= 0 && priceUnit > 0) {
                     $this.css('visibility', 'hidden');
+                    $this.parent().find('a').css('visibility', 'hidden');
                 }
             }).change(function () {
                 var $this = jQuery(this);
                 var priceUnit = parseFloat($this.data('price-unit'));
                 var val = parseFloat($this.val());
-//                var priceElt = jQuery('#' + $this.data('price-id'));
-//                priceElt.text(val * priceUnit);
                 $this.data('price', val * priceUnit);
                 computeTotal();
             });

@@ -4,6 +4,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
+function amapress_is_current_user_producteur( $post_id = null ) {
+	return amapress_current_user_can( 'producteur' );
+}
+
 add_filter( 'amapress_register_entities', 'amapress_register_entities_producteur' );
 function amapress_register_entities_producteur( $entities ) {
 	$entities['producteur'] = array(
@@ -19,6 +23,17 @@ function amapress_register_entities_producteur( $entities ) {
 		'custom_archive_template' => true,
 		'default_orderby'         => 'post_title',
 		'default_order'           => 'ASC',
+		'row_actions'             => array(
+			'relocate' => array(
+				'label'     => 'Géolocaliser',
+				'condition' => function ( $user_id ) {
+					$prod = AmapressProducteur::getBy( $user_id );
+
+					return $prod && ! $prod->isAdresseExploitationLocalized();
+				},
+				'confirm'   => true,
+			),
+		),
 		'views'                   => array(
 			'remove'  => array( 'mine' ),
 			'exp_csv' => true,
@@ -82,6 +97,10 @@ function amapress_register_entities_producteur( $entities ) {
 						return true;
 					}
 
+					if ( amapress_is_current_user_producteur() ) {
+						return true;
+					}
+
 					return false;
 				},
 				'required'   => true,
@@ -93,11 +112,11 @@ function amapress_register_entities_producteur( $entities ) {
 				'type'         => 'select-users',
 				'role'         => amapress_can_be_referent_roles(),
 				'group'        => '2/ Référents',
-//                'required' => true,
-				'desc'         => 'Référent',
+				'desc'         => 'Référent producteur pour tous les lieux',
 				'searchable'   => true,
 				'autocomplete' => true,
 				'orderby'      => 'display_name',
+				'readonly'     => 'amapress_is_current_user_producteur',
 				'order'        => 'ASC',
 			),
 			'referent2'            => array(
@@ -105,10 +124,10 @@ function amapress_register_entities_producteur( $entities ) {
 				'type'         => 'select-users',
 				'role'         => amapress_can_be_referent_roles(),
 				'group'        => '2/ Référents',
-//                'required' => true,
-				'desc'         => 'Référent 2',
+				'desc'         => 'Deuxième référent producteur pour tous les lieux',
 				'searchable'   => true,
 				'autocomplete' => true,
+				'readonly'     => 'amapress_is_current_user_producteur',
 				'orderby'      => 'display_name',
 				'order'        => 'ASC',
 			),
@@ -117,10 +136,10 @@ function amapress_register_entities_producteur( $entities ) {
 				'type'         => 'select-users',
 				'role'         => amapress_can_be_referent_roles(),
 				'group'        => '2/ Référents',
-//                'required' => true,
-				'desc'         => 'Référent 3',
+				'desc'         => 'Troisième référent producteur pour tous les lieux',
 				'searchable'   => true,
 				'autocomplete' => true,
+				'readonly'     => 'amapress_is_current_user_producteur',
 				'orderby'      => 'display_name',
 				'order'        => 'ASC',
 			),
@@ -164,11 +183,11 @@ function amapress_producteur_fields( $fields ) {
 				'name'         => amapress__( 'Référent ' . $lieu->getShortName() ),
 				'type'         => 'select-users',
 				'role'         => amapress_can_be_referent_roles(),
-				'group'        => 'Référents',
+				'group'        => '2/ Référents',
 				'searchable'   => true,
 				'autocomplete' => true,
-//                'required' => true,
-				'desc'         => 'Référent',
+				'readonly'     => 'amapress_is_current_user_producteur',
+				'desc'         => 'Référent producteur spécifique à ' . $lieu->getTitle(),
 				'orderby'      => 'display_name',
 				'order'        => 'ASC',
 			);
@@ -268,3 +287,12 @@ add_filter( 'amapress_can_edit_producteur', function ( $can, $post_id ) {
 
 	return $can;
 }, 10, 2 );
+
+add_action( 'amapress_row_action_producteur_relocate', 'amapress_row_action_producteur_relocate' );
+function amapress_row_action_producteur_relocate( $post_id ) {
+	$prod = AmapressProducteur::getBy( $post_id );
+	if ( $prod ) {
+		$prod->resolveAddress();
+	}
+	wp_redirect_and_exit( wp_get_referer() );
+}

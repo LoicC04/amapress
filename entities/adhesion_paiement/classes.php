@@ -7,6 +7,8 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 	const INTERNAL_POST_TYPE = 'amps_adh_pmt';
 	const POST_TYPE = 'adhesion_paiement';
 	const PAIEMENT_TAXONOMY = 'amps_paiement_category';
+	const NOT_RECEIVED = 'not_received';
+	const RECEIVED = 'received';
 
 	function __construct( $post_id ) {
 		parent::__construct( $post_id );
@@ -65,6 +67,10 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 		return $this->getCustom( 'amapress_adhesion_paiement_date' );
 	}
 
+	public function setStatus( $status ) {
+		$this->setCustom( 'amapress_adhesion_paiement_status', $status );
+	}
+
 	public function getStatusDisplay() {
 		$this->ensure_init();
 		switch ( $this->getStatus() ) {
@@ -86,6 +92,10 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 
 	public function getNumero() {
 		return $this->getCustom( 'amapress_adhesion_paiement_numero' );
+	}
+
+	public function getBanque() {
+		return $this->getCustom( 'amapress_adhesion_paiement_banque' );
 	}
 
 	public function getAmount( $type = null ) {
@@ -179,14 +189,14 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 				'ev_id'    => "upmt-{$this->ID}",
 				'date'     => $date,
 				'date_end' => $date,
-				'type'     => 'user-paiement',
+				'type'     => 'user-paiement adhesion-paiement',
 				'category' => 'Encaissements',
 				'label'    => "Encaissement {$price}€",
 				'class'    => "agenda-user-paiement",
 				'lieu'     => $adh->getLieu(),
 				'priority' => 0,
 				'icon'     => 'flaticon-business',
-				'alt'      => 'Vous allez être encaissé ' . ( 'Esp.' == $num ? ' des espèces remises ' : 'du chèque numéro ' . $num ) . ' d\'un montante de ' . $price . '€ à la date du ' . date_i18n( 'd/m/Y', $date ),
+				'alt'      => 'Vous allez être encaissé ' . ( 'Esp.' == $num ? 'des espèces remises ' : ( 'Vir.' == $num ? 'du virement ' : 'du chèque numéro ' . $num ) ) . ' d\'un montante de ' . $price . '€ à la date du ' . date_i18n( 'd/m/Y', $date ),
 				'href'     => '/mes-adhesions'
 			) );
 		}
@@ -287,6 +297,10 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 		}
 
 		$placeholders = [];
+		foreach ( amapress_replace_mail_placeholders_help( '', false, false ) as $k => $v ) {
+			$prop_name                  = $k;
+			$placeholders[ $prop_name ] = amapress_replace_mail_placeholders( "%%$prop_name%%", null );
+		}
 		foreach ( self::getProperties() as $prop_name => $prop_config ) {
 			$placeholders[ $prop_name ] = call_user_func( $prop_config['func'], $this );
 		}
@@ -323,44 +337,50 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 
 	public static function getProperties() {
 		if ( null == self::$properties ) {
-			$ret                         = [];
-			$ret['date_debut']           = [
-				'desc' => 'Date début de l\'adhésion (par ex, 01/09/2018)',
+			$ret                     = [];
+			$ret['date_debut']       = [
+				'desc' => 'Date début de la période d\'adhésion (par ex, 01/09/2018)',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return date_i18n( 'd/m/Y', $adh->getPeriod()->getDate_debut() );
 				}
 			];
-			$ret['date_fin']             = [
-				'desc' => 'Date fin de l\'adhésion (par ex, 31/08/2019)',
+			$ret['date_fin']         = [
+				'desc' => 'Date fin de période d\'adhésion (par ex, 31/08/2019)',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return date_i18n( 'd/m/Y', $adh->getPeriod()->getDate_fin() );
 				}
 			];
-			$ret['date_debut_annee']     = [
-				'desc' => 'Année de début de l\'adhésion',
+			$ret['date_debut_annee'] = [
+				'desc' => 'Année de début de période d\'adhésion',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return date_i18n( 'Y', $adh->getPeriod()->getDate_debut() );
 				}
 			];
-			$ret['date_fin_annee']       = [
-				'desc' => 'Année de fin de l\'adhésion',
+			$ret['date_fin_annee']   = [
+				'desc' => 'Année de fin de période d\'adhésion',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return date_i18n( 'Y', $adh->getPeriod()->getDate_fin() );
 				}
 			];
-			$ret['montant_amap']         = [
+			$ret['paiement_date']    = [
+				'desc' => 'Date du paiement/adhésion à l\'AMAP',
+				'func' => function ( AmapressAdhesion_paiement $adh ) {
+					return date_i18n( 'd/m/Y', $adh->getDate() );
+				}
+			];
+			$ret['montant_amap']     = [
 				'desc' => 'Montant versé à l\'AMAP',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return Amapress::formatPrice( $adh->getPeriod()->getMontantAmap() );
 				}
 			];
-			$ret['montant_reseau']       = [
+			$ret['montant_reseau']   = [
 				'desc' => 'Montant versé au réseau de l\'AMAP',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return Amapress::formatPrice( $adh->getPeriod()->getMontantReseau() );
 				}
 			];
-			$ret['tresoriers']           = [
+			$ret['tresoriers']       = [
 				'desc' => 'Nom des référents de l\'adhésion',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return implode( ', ', array_unique( array_map(
@@ -420,6 +440,24 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 				'desc' => 'Adresse adhérent',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return $adh->getUser()->getFormattedAdresse();
+				}
+			];
+			$ret['adherent.code_postal'] = [
+				'desc' => 'Code postal adhérent',
+				'func' => function ( AmapressAdhesion_paiement $adh ) {
+					return $adh->getUser()->getCode_postal();
+				}
+			];
+			$ret['adherent.ville'] = [
+				'desc' => 'Ville adhérent',
+				'func' => function ( AmapressAdhesion_paiement $adh ) {
+					return $adh->getUser()->getVille();
+				}
+			];
+			$ret['adherent.rue'] = [
+				'desc' => 'Rue (adresse) adhérent',
+				'func' => function ( AmapressAdhesion_paiement $adh ) {
+					return $adh->getUser()->getAdresse();
 				}
 			];
 			$ret['adherent.tel']         = [
@@ -528,19 +566,31 @@ class AmapressAdhesion_paiement extends Amapress_EventBase {
 					}
 				];
 			}
-			$ret['total']     = [
+			$ret['total']           = [
 				'desc' => 'Total de l\'adhésion',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return Amapress::formatPrice( $adh->getAmount() );
 				}
 			];
-			$ret['montant']   = [
+			$ret['montant']         = [
 				'desc' => 'Total de l\'adhésion',
 				'func' => function ( AmapressAdhesion_paiement $adh ) {
 					return Amapress::formatPrice( $adh->getAmount() );
 				}
 			];
-			self::$properties = $ret;
+			$ret['paiement_numero'] = [
+				'desc' => 'Numéro du chèque',
+				'func' => function ( AmapressAdhesion_paiement $adh ) {
+					return $adh->getNumero();
+				}
+			];
+			$ret['paiement_banque'] = [
+				'desc' => 'Banque du chèque',
+				'func' => function ( AmapressAdhesion_paiement $adh ) {
+					return $adh->getBanque();
+				}
+			];
+			self::$properties       = $ret;
 		}
 
 		return self::$properties;

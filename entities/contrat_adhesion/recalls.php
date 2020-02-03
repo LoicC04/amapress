@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 add_action( 'amapress_recall_inscriptions_validate', function ( $args ) {
 	$dist = AmapressDistribution::getBy( $args['id'] );
 	if ( null == $dist ) {
+		echo '<p>Distribution introuvable</p>';
 		return;
 	}
 
@@ -27,6 +28,7 @@ add_action( 'amapress_recall_inscriptions_validate', function ( $args ) {
 	] ) );
 
 	if ( empty( $adhesions ) ) {
+		echo '<p>Pas de\'inscriptions à valider</p>';
 		return;
 	}
 
@@ -61,6 +63,7 @@ add_action( 'amapress_recall_inscriptions_validate', function ( $args ) {
 			'', [],
 			amapress_get_recall_cc_from_option( 'inscriptions-validate-recall-cc' )
 		);
+		echo '<p>Email d\'inscriptions à valider envoyé</p>';
 	}
 } );
 
@@ -103,7 +106,7 @@ function amapress_inscriptions_to_validate_recall_options() {
 				             'nb_inscriptions'   => 'Nombre d\'inscriptions à valider',
 				             'inscriptions'      => 'Liste des inscriptions à valider',
 				             'lien_inscriptions' => 'Lien vers la liste des inscriptions à valider'
-			             ], null ),
+			             ], null, [], 'recall' ),
 		),
 		array(
 			'id'           => 'inscriptions-validate-recall-cc',

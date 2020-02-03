@@ -110,7 +110,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 						'type'       => 'amap_role',
 						'lieu'       => null,
 						'object_id'  => $this->ID,
-						'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ),
+						'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ) . '#amapress_user_amap_roles',
 						'other_link' => admin_url( "users.php?{$amap_role->taxonomy}={$amap_role->slug}" ),
 					);
 			}
@@ -122,38 +122,41 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 				if ( ! $prod ) {
 					continue;
 				}
-				$had_local_referents = false;
+				//$had_local_referents = false;
 				foreach ( $lieu_ids as $lieu_id ) {
-					if ( ! in_array( $this->ID, $contrat->getReferentsIds( $lieu_id ) ) ) {
+					if ( ! in_array( $this->ID, $contrat->getReferentsIds( $lieu_id, true ) ) ) {
 						continue;
 					}
-					$owner_id                                      = in_array( $this->ID, $prod->getReferentsIds( $lieu_id ) ) ? $prod->ID : $contrat->ID;
-					$had_local_referents                           = true;
-					$this_user_roles[ 'ref_prod_' . $contrat->ID ] =
+					$owner_id = in_array( $this->ID, $prod->getReferentsIds( $lieu_id, true ) ) ? $prod->ID : $contrat->ID;
+					//$had_local_referents                                            = true;
+					$lieu                                                           = AmapressLieu_distribution::getBy( $lieu_id );
+					$this_user_roles[ 'ref_prod_' . $contrat->ID . '_' . $lieu_id ] =
 						array(
-							'title'      => sprintf( 'Référent %s', $contrat->getTitle() ),
+							'title'      => sprintf( 'Référent %s à %s', $contrat->getTitle(), $lieu->getLieuTitle() ),
 							'type'       => 'referent_producteur',
 							'lieu'       => $lieu_id,
 							'object_id'  => $contrat->ID,
-							'edit_link'  => admin_url( "post.php?post={$owner_id}&action=edit" ),
+							'edit_link'  => admin_url( "post.php?post={$owner_id}&action=edit" ) .
+							                ( $owner_id == $contrat->ID ? '#2/-référents-spécifiques' : '#2/-référents' ),
 							'other_link' => admin_url( "users.php?amapress_role=referent_producteur" ),
 						);
 				}
-				if ( ! $had_local_referents ) {
-					if ( ! in_array( $this->ID, $contrat->getReferentsIds() ) ) {
-						continue;
-					}
-					$owner_id                                      = in_array( $this->ID, $prod->getReferentsIds() ) ? $prod->ID : $contrat->ID;
-					$this_user_roles[ 'ref_prod_' . $contrat->ID ] =
-						array(
-							'title'      => sprintf( 'Référent %s', $contrat->getTitle() ),
-							'type'       => 'referent_producteur',
-							'lieu'       => null,
-							'object_id'  => $contrat->ID,
-							'edit_link'  => admin_url( "post.php?post={$owner_id}&action=edit" ),
-							'other_link' => admin_url( "users.php?amapress_role=referent_producteur" ),
-						);
+				//if ( ! $had_local_referents ) {
+				if ( ! in_array( $this->ID, $contrat->getReferentsIds() ) ) {
+					continue;
 				}
+				$owner_id                                      = in_array( $this->ID, $prod->getReferentsIds() ) ? $prod->ID : $contrat->ID;
+				$this_user_roles[ 'ref_prod_' . $contrat->ID ] =
+					array(
+						'title'      => sprintf( 'Référent %s', empty( $contrat->getTitle() ) ? $prod->getTitle() : $contrat->getTitle() ),
+						'type'       => 'referent_producteur',
+						'lieu'       => null,
+						'object_id'  => $contrat->ID,
+						'edit_link'  => admin_url( "post.php?post={$owner_id}&action=edit" ) .
+						                ( $owner_id == $contrat->ID ? '#2/-référents-spécifiques' : '#2/-référents' ),
+						'other_link' => admin_url( "users.php?amapress_role=referent_producteur" ),
+					);
+				//}
 			}
 
 			//référent lieu
@@ -167,7 +170,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 				}
 				$this_user_roles[ 'ref_lieu_' . $lieu->ID ] =
 					array(
-						'title'      => sprintf( 'Référent %s', $lieu->getShortName() ),
+						'title'      => sprintf( 'Référent Lieu %s', $lieu->getShortName() ),
 						'type'       => 'referent_lieu',
 						'lieu'       => $lieu_id,
 						'object_id'  => $lieu->ID,
@@ -201,7 +204,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 							'type'       => 'tresorier',
 							'lieu'       => null,
 							'object_id'  => $this->ID,
-							'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ),
+							'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ) . '#role',
 							'other_link' => admin_url( "users.php?role={$r}" ),
 						);
 				} else {
@@ -212,7 +215,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 							'lieu'       => null,
 							'object_id'  => $this->ID,
 							'role'       => $r,
-							'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ),
+							'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ) . '#role',
 							'other_link' => admin_url( "users.php?role={$r}" ),
 						);
 				}
@@ -226,13 +229,12 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 						'type'       => 'intermittent',
 						'lieu'       => null,
 						'object_id'  => $this->ID,
-						'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ),
+						'edit_link'  => admin_url( "user-edit.php?user_id={$this->ID}" ) . '#amapress_user_intermittent',
 						'other_link' => admin_url( "users.php?amapress_contrat=intermittent" ),
 					);
 			}
 			$this->user_roles = $this_user_roles;
 		}
-
 
 		return $this->user_roles;
 	}
@@ -247,11 +249,23 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 	}
 
 	public
+	function getAmapRolesStringLinks() {
+		return implode( ', ', array_unique( array_map(
+			function ( $role ) {
+				if ( ! empty( $role['edit_link'] ) ) {
+					return '<a target="_blank" href="' . esc_attr( $role['edit_link'] ) . '">' . esc_html( $role['title'] ) . '</a>';
+				} else {
+					return esc_html( $role['title'] );
+				}
+			}, $this->getAmapRoles() ) ) );
+	}
+
+	public
 	function getFormattedAdresse() {
 		$cp = $this->getCode_postal();
 		$v  = $this->getVille();
 		if ( ! empty( $v ) ) {
-			return preg_replace( '/(?:\s+-\s+|,\s*)?(\d{5}|2[AB]\d{3})\s+([^,]+)(?:,\s*\1\s+\2)+/i', ', $1 $2',
+			return preg_replace( '/(?:\s+-\s+|,\s*)?(\d\s*\d\s*\d\s*\d\s*\d|2\s*[AB]\s*\d\s*\d\s*\d)\s+([^,]+)(?:,\s*\1\s+\2)+/i', ', $1 $2',
 				sprintf( '%s, %s %s', $this->getAdresse(), $cp, $v ) );
 		} else {
 			return $this->getAdresse();
@@ -263,7 +277,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		$cp = $this->getCode_postal();
 		$v  = $this->getVille();
 		if ( ! empty( $v ) ) {
-			return preg_replace( '/(?:\s+-\s+|,\s*)?(\d{5}|2[AB]\d{3})\s+([^,]+)(?:\<br\/\>\s*\1\s+\2)+/i', ', $1 $2',
+			return preg_replace( '/(?:\s+-\s+|,\s*)?(\d\s*\d\s*\d\s*\d\s*\d|2\s*[AB]\s*\d\s*\d\s*\d)\s+([^,]+)(?:\<br\/\>\s*\1\s+\2)+/i', ', $1 $2',
 				sprintf( '%s<br/>%s %s', $this->getAdresse(), $cp, $v ) );
 		} else {
 			return $this->getAdresse();
@@ -754,7 +768,9 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			$ret[] = trim( $this->custom['email4'] );
 		}
 		$ret = array_filter( $ret, function ( $email ) {
-			return false === strpos( $email, '@nomail.org' );
+			return false === strpos( $email, '@nomail.org' )
+			       && false === strpos( $email, '@exemple.org' )
+			       && false === strpos( $email, '@example.org' );
 		} );
 
 		return array_unique( $ret );

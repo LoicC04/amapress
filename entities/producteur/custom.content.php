@@ -54,15 +54,17 @@ function amapress_get_custom_content_producteur( $content ) {
 
 	amapress_echo_panel_start( 'Coordonnées du producteur', null, 'amap-panel-prod amap-panel-prod-' . $producteur->ID . ' amap-panel-prod-coords' );
 	//AmapressUsers::echoUserById(get_post_meta($producteur_id, 'amapress_producteur_user', true), array('adresse'));
-	echo $producteur->getUser()->getDisplay( array(
-		'show_avatar'     => 'true',
-		'show_email'      => 'true',
-		'show_tel'        => 'true',
-		'show_tel_fixe'   => 'true',
-		'show_tel_mobile' => 'true',
-		'show_adresse'    => 'true',
-		'show_roles'      => 'false',
-	) );
+	if ( $producteur->getUser() ) {
+		echo $producteur->getUser()->getDisplay( array(
+			'show_avatar'     => 'true',
+			'show_email'      => 'true',
+			'show_tel'        => 'true',
+			'show_tel_fixe'   => 'true',
+			'show_tel_mobile' => 'true',
+			'show_adresse'    => 'true',
+			'show_roles'      => 'false',
+		) );
+	}
 	amapress_echo_panel_end();
 
 	amapress_echo_panel_start( 'Référent', null, 'amap-panel-prod amap-panel-prod-' . $producteur->ID . ' amap-panel-prod-referent' );
@@ -84,7 +86,9 @@ function amapress_get_custom_content_producteur( $content ) {
 	amapress_echo_panel_end();
 
 	echo '<h3>Produits</h3>';
-	echo do_shortcode( "[produits producteur={$producteur->ID}]" );
+	echo amapress_produits_shortcode(
+		[ 'producteur' => $producteur->ID ]
+	);
 
 	$content = ob_get_contents();
 	ob_end_clean();

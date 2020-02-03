@@ -193,6 +193,14 @@ a.evt-link img {
     box-shadow: none !important;
 }
 
+a.evt-link {
+    display: inline-block !important;
+    -webkit-box-shadow: none !important;
+    box-shadow: none !important;
+    border-radius: 4px;
+    padding: 4px;
+}
+
 a.evt-link.evt-img {
     box-shadow: none !important;
 }
@@ -228,11 +236,6 @@ a.evt-link.evt-img {
 
 .evt-type > * {
     float: left;
-}
-
-.inscr-list-info * {
-    max-width: 7em;
-    white-space: normal !important;
 }
 
 .visite-inscr-list .inscr-list-info, .visite-inscr-list .inscr-list-info > * {
@@ -796,6 +799,7 @@ a.btn.disabled, fieldset[disabled] a.btn {
     display: inline-block !important;
     width: 20px !important;
     height: 20px !important;
+    line-height: 20px !important;
     font-size: 20px !important;
     font-family: dashicons !important;
     text-decoration: inherit !important;

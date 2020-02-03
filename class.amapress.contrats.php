@@ -18,14 +18,6 @@ class AmapressContrats {
 	public static $initiated = false;
 
 	public static function init() {
-		amapress_register_shortcode( 'adhesions',
-			array( 'AmapressContrats', 'adhesions_shortcode' ),
-			[
-				'desc' => 'Liste des contrats de l\'amapien',
-				'args' => [
-				]
-			] );
-
 		// THE AJAX ADD ACTIONS
 		add_action( 'wp_ajax_update_contrat_status_action', array(
 			'AmapressContrats',
@@ -626,13 +618,14 @@ class AmapressContrats {
 		return self::getReferentProducteursAndLieux( 'all' );
 	}
 
+	const REFS_PROD_TRANSIENT = 'amps_refs_prods';
 
 	public static function getReferentProducteursAndLieux( $user_id = null ) {
 		if ( ! $user_id ) {
 			$user_id = amapress_current_user_id();
 		}
 
-		$key = "amps_refs_prods";
+		$key = self::REFS_PROD_TRANSIENT;
 		$res = get_transient( $key );
 		if ( false === $res ) {
 			Amapress::setFilterForReferent( false );
@@ -653,16 +646,31 @@ class AmapressContrats {
 						$contrat_instance_ids = array( 0 );
 					}
 					foreach ( $lieu_ids as $lieu_id ) {
-						foreach ( $prod->getReferentsIds( $lieu_id ) as $ref_id ) {
-							if ( $ref_id ) {
+						$contrat = AmapressContrat::getBy( $contrat_id );
+						if ( $contrat ) {
+							foreach ( $contrat->getReferentsIds( $lieu_id ) as $ref_id ) {
+								if ( $ref_id ) {
+									$res[] = array(
+										'ref_id'               => $ref_id,
+										'lieu'                 => $lieu_id,
+										'producteur'           => $prod->ID,
+										'contrat_ids'          => [ $contrat_id ],
+										'contrat_instance_ids' => $contrat_instance_ids,
+									);
+								}
+							}
+						} else {
+							foreach ( $prod->getReferentsIds( $lieu_id ) as $ref_id ) {
+								if ( $ref_id ) {
 //                    if (!$ignore_lieu)
-								$res[] = array(
-									'ref_id'               => $ref_id,
-									'lieu'                 => $lieu_id,
-									'producteur'           => $prod->ID,
-									'contrat_ids'          => [ $contrat_id ],
-									'contrat_instance_ids' => $contrat_instance_ids,
-								);
+									$res[] = array(
+										'ref_id'               => $ref_id,
+										'lieu'                 => $lieu_id,
+										'producteur'           => $prod->ID,
+										'contrat_ids'          => [ $contrat_id ],
+										'contrat_instance_ids' => $contrat_instance_ids,
+									);
+								}
 							}
 						}
 					}
@@ -908,7 +916,7 @@ class AmapressContrats {
 			$query = array(
 				'post_type'      => AmapressAdhesion::INTERNAL_POST_TYPE,
 				'posts_per_page' => - 1,
-				'post_status'    => 'any',
+				'post_status'    => [ 'publish', 'draft' ],
 				'meta_query'     => $meta_query
 			);
 

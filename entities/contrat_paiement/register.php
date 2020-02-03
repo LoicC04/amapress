@@ -31,7 +31,7 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 			'_dyn_'   => 'amapress_paiements_views',
 			'exp_csv' => true,
 		),
-		'fields'           => array(
+		'fields'       => array(
 //            'user' => array(
 //                'name' => amapress__('Amapien'),
 //                'type' => 'select-users',
@@ -66,7 +66,7 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 			'date_emission' => array(
 				'name'         => amapress__( 'Date d\'émission' ),
 				'type'         => 'date',
-				'required'     => true,
+				'required'     => false,
 				'desc'         => 'Date d\'émission',
 //                'import_key' => true,
 				'csv_required' => true,
@@ -85,7 +85,7 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 				'searchable'   => true,
 				'show_column'  => false,
 			),
-			'contrat'       => array(
+			'contrat'  => array(
 				'name'   => amapress__( 'Contrat' ),
 				'type'   => 'custom',
 				'hidden' => true,
@@ -115,7 +115,7 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 //					}
 //				),
 			),
-			'lieu'   => array(
+			'lieu'     => array(
 				'name'       => amapress__( 'Lieu' ),
 				'type'       => 'custom',
 				'hidden'     => true,
@@ -145,7 +145,7 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 					}
 				),
 			),
-			'status' => array(
+			'status'   => array(
 				'name'         => amapress__( 'Statut' ),
 				'type'         => 'select',
 				'options'      => array(
@@ -156,43 +156,52 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 				'required'     => true,
 				'desc'         => 'Sélectionner l’option qui convient : Reçu à l’Amap, non reçu à l’Amap, Remis au producteur',
 				'csv_required' => true,
+				'top_filter'   => array(
+					'name'        => 'amapress_status',
+					'placeholder' => 'Tous les statut',
+				),
 			),
-			'type'   => array(
-				'name'     => amapress__( 'Type' ),
-				'type'     => 'select',
-				'options'  => array(
+			'type'     => array(
+				'name'       => amapress__( 'Type' ),
+				'type'       => 'select',
+				'options'    => array(
 					'chq' => 'Chèque',
 					'esp' => 'Espèces',
+					'vir' => 'Virement',
+					'dlv' => 'A la livraison',
 				),
-				'default'  => 'chq',
-				'required' => true,
-				'desc'     => 'Sélectionner le type de règlement',
-//				'show_column'  => false,
+				'default'    => 'chq',
+				'required'   => true,
+				'desc'       => 'Sélectionner le type de règlement',
+				'top_filter' => array(
+					'name'        => 'amapress_pmt_type',
+					'placeholder' => 'Tous les type',
+				),
 			),
-			'amount' => array(
+			'amount'   => array(
 				'name'         => amapress__( 'Montant' ),
 				'type'         => 'float',
 				'unit'         => '€',
 				'required'     => true,
-				'desc'         => 'Montant du chèque/espèces',
+				'desc'         => 'Montant du chèque/espèces/virement',
 				'csv_required' => true,
 			),
-			'numero' => array(
+			'numero'   => array(
 				'name'         => amapress__( 'Numéro du chèque' ),
 				'type'         => 'text',
-				'required'     => true,
-				'desc'         => 'Numéro du chèque ou "Esp." pour des règlements en espèces',
+				'required'     => false,
+				'desc'         => 'Numéro du chèque ou "Esp." pour des règlements en espèces ou "Vir." pour virement',
 				'import_key'   => true,
 				'csv_required' => true,
 				'searchable'   => true,
 			),
-			'banque'        => array(
+			'banque'   => array(
 				'name'       => amapress__( 'Banque' ),
 				'type'       => 'text',
-				'desc'       => 'Banque émettrice ou "Esp." pour des règlements en espèces',
+				'desc'       => 'Banque émettrice ou "Esp." pour des règlements en espèces ou "Vir." pour virement',
 				'searchable' => true,
 			),
-			'emetteur'      => array(
+			'emetteur' => array(
 				'name'       => amapress__( 'Emetteur' ),
 				'type'       => 'text',
 				'required'   => true,
@@ -207,6 +216,21 @@ function amapress_register_entities_contrat_paiement( $entities ) {
 //                'save' => 'amapress_save_contrat_paiements_categories',
 //                'desc' => 'Répartitions',
 //            ),
+		),
+		'row_actions'  => array(
+			'mark_rcv'   => 'Marquer reçu',
+			'unmark_rcv' => 'Marquer Non reçu',
+		),
+		'bulk_actions' => array(
+			'amp_cnt_pmt_mark_recv' => array(
+				'label'    => 'Marquer reçu',
+				'messages' => array(
+					'<0' => 'Une erreur s\'est produit pendant l\'opération',
+					'0'  => 'Une erreur s\'est produit pendant l\'opération',
+					'1'  => 'Un règlement a été marqué comme reçu avec succès',
+					'>1' => '%s règlements ont été marqués comme reçus avec succès',
+				),
+			),
 		),
 	);
 

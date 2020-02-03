@@ -55,6 +55,31 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 //		return wpautop( $this->getCustom( 'amapress_producteur_historique' ) );
 //	}
 
+	/** @return int[] */
+	public static function getAllIdsByUser( $user_id ) {
+		$cache_key = "amapress_prod_getAllIdsByUser_$user_id";
+		$res       = wp_cache_get( $cache_key );
+		if ( false == $res ) {
+			$res = get_posts( array(
+				'fields'         => 'ids',
+				'post_type'      => AmapressProducteur::INTERNAL_POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => - 1,
+				'meta_query'     => array(
+					array(
+						'key'     => 'amapress_producteur_user',
+						'value'   => $user_id,
+						'compare' => '=',
+						'type'    => 'NUMERIC',
+					)
+				)
+			) );
+			wp_cache_set( $cache_key, $res );
+		}
+
+		return $res;
+	}
+
 	public function getAcces() {
 		$this->ensure_init();
 
@@ -87,18 +112,18 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 	}
 
 	/** @return int */
-	public function getReferentId( $lieu_id = null ) {
-		return $this->getReferentNumId( $lieu_id, 1 );
+	public function getReferentId( $lieu_id = null, $for_lieu_only = false ) {
+		return $this->getReferentNumId( $lieu_id, 1, $for_lieu_only );
 	}
 
 	/** @return int */
-	public function getReferent2Id( $lieu_id = null ) {
-		return $this->getReferentNumId( $lieu_id, 2 );
+	public function getReferent2Id( $lieu_id = null, $for_lieu_only = false ) {
+		return $this->getReferentNumId( $lieu_id, 2, $for_lieu_only );
 	}
 
 	/** @return int */
-	public function getReferent3Id( $lieu_id = null ) {
-		return $this->getReferentNumId( $lieu_id, 3 );
+	public function getReferent3Id( $lieu_id = null, $for_lieu_only = false ) {
+		return $this->getReferentNumId( $lieu_id, 3, $for_lieu_only );
 	}
 
 	/** @return int[] */
@@ -113,8 +138,12 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 	}
 
 	/** @return int[] */
-	public function getReferentsIds( $lieu_id = null ) {
-		return array_filter( [
+	public function getReferentsIds( $lieu_id = null, $for_lieu_only = false ) {
+		return array_filter( $for_lieu_only ? [
+			$this->getReferentId( $lieu_id, $for_lieu_only ),
+			$this->getReferent2Id( $lieu_id, $for_lieu_only ),
+			$this->getReferent3Id( $lieu_id, $for_lieu_only )
+		] : [
 			$this->getReferentId( $lieu_id ),
 			$this->getReferent2Id( $lieu_id ),
 			$this->getReferent3Id( $lieu_id ),
@@ -129,8 +158,8 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 	private $referent_ids = [ 1 => [], 2 => [], 3 => [] ];
 
 	/** @return AmapressUser */
-	private function getReferentNum( $lieu_id = null, $num = 1 ) {
-		$id = $this->getReferentNumId( $lieu_id, $num );
+	private function getReferentNum( $lieu_id = null, $num = 1, $for_lieu_only = false ) {
+		$id = $this->getReferentNumId( $lieu_id, $num, $for_lieu_only );
 		if ( empty( $id ) ) {
 			return null;
 		}
@@ -138,10 +167,23 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 		return AmapressUser::getBy( $id );
 	}
 
+	public function removeReferent( $user_id ) {
+		for ( $num = 1; $num <= 3; $num ++ ) {
+			foreach ( array_merge( [ null ], Amapress::get_lieu_ids() ) as $lieu_id ) {
+				$meta_name = 'amapress_producteur_referent' . ( $num > 1 ? $num : '' ) . ( $lieu_id ? '_' . $lieu_id : '' );
+				$v         = $this->getCustom( $meta_name );
+				if ( $v == $user_id ) {
+					$this->deleteCustom( $meta_name );
+				}
+			}
+		}
+		delete_transient( AmapressContrats::REFS_PROD_TRANSIENT );
+	}
+
 	/** @return int */
-	private function getReferentNumId( $lieu_id = null, $num = 1 ) {
+	private function getReferentNumId( $lieu_id = null, $num = 1, $for_lieu_only = false ) {
 		$lieu_name = ( $lieu_id ? $lieu_id : 'defaut' );
-		if ( ! empty( $this->referent_ids[ $num ][ $lieu_name ] ) ) {
+		if ( ! $for_lieu_only && ! empty( $this->referent_ids[ $num ][ $lieu_name ] ) ) {
 			return $this->referent_ids[ $num ][ $lieu_name ];
 		}
 		$this->ensure_init();
@@ -149,6 +191,10 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 		if ( ! empty( $v ) ) {
 			$this->referent_ids[ $num ][ $lieu_name ] = $v;
 		} else {
+			if ( $for_lieu_only ) {
+				return null;
+			}
+
 			if ( $lieu_id ) {
 				$this->referent_ids[ $num ][ $lieu_name ] = $this->getReferentNumId( null, $num );
 			} else {
@@ -202,12 +248,14 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 					'posts_per_page' => - 1,
 					'fields'         => 'ids',
 					'meta_query'     => array(
+						'relation' => 'OR',
 						array(
 							'key'     => 'amapress_produit_producteur',
 							'value'   => $this->ID,
 							'compare' => '=',
 							'type'    => 'NUMERIC',
 						),
+						amapress_prepare_like_in_array( 'amapress_produit_producteur', $this->ID )
 					),
 					'order'          => 'ASC',
 					'orderby'        => 'title'
@@ -221,7 +269,7 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 	public function getNomExploitation() {
 		$v = $this->getCustom( 'amapress_producteur_nom_exploitation' );
 		if ( empty( $v ) ) {
-			$v = $this->getUser()->getDisplayName();
+			$v = $this->getUser() ? $this->getUser()->getDisplayName() : '';
 		}
 
 		return $v;
@@ -230,7 +278,7 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 	public function getAdresseExploitation() {
 		$v = $this->getCustom( 'amapress_producteur_adresse_exploitation' );
 		if ( empty( $v ) ) {
-			$v = $this->getUser()->getFormattedAdresse();
+			$v = $this->getUser() ? $this->getUser()->getFormattedAdresse() : '';
 		}
 
 		return $v;
@@ -247,14 +295,14 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 			return true;
 		}
 
-		return $this->getUser()->isAdresse_localized();
+		return $this->getUser() ? $this->getUser()->isAdresse_localized() : false;
 	}
 
 	public function getAdresseExploitationLongitude() {
 		if ( $this->hasAdresseExploitation() && $this->isAdresseExploitationLocalized() ) {
 			return $this->getCustom( 'amapress_producteur_adresse_exploitation_long' );
 		} else {
-			return $this->getUser()->getUserLongitude();
+			return $this->getUser() ? $this->getUser()->getUserLongitude() : 0;
 		}
 	}
 
@@ -262,7 +310,7 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 		if ( $this->hasAdresseExploitation() && $this->isAdresseExploitationLocalized() ) {
 			return $this->getCustom( 'amapress_producteur_adresse_exploitation_lat' );
 		} else {
-			return $this->getUser()->getUserLatitude();
+			return $this->getUser() ? $this->getUser()->getUserLatitude() : 0;
 		}
 	}
 
@@ -272,7 +320,16 @@ class AmapressProducteur extends TitanEntity implements iAmapress_Event_Lieu {
 			return wpautop( $v );
 		}
 
-		return $this->getUser()->getFormattedAdresseHtml();
+		return $this->getUser() ? $this->getUser()->getFormattedAdresseHtml() : '';
+	}
+
+	public function resolveAddress() {
+		if ( $this->hasAdresseExploitation() ) {
+			return Amapress::updateLocalisation( $this->ID, false,
+				'amapress_producteur_adresse_exploitation', $this->getAdresseExploitation() );
+		}
+
+		return true;
 	}
 }
 

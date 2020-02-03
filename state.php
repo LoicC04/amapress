@@ -10,6 +10,62 @@ add_action( 'template_redirect', function () {
 	}
 } );
 
+function amapress_check_spf() {
+	/* Taken from stop-wp-emails-going-to-spam plugin */
+	$ip = $_SERVER['SERVER_ADDR'];
+	if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 ) ) {
+		$ip4 = true;
+	} else {
+		$ip4 = false;
+	}
+	if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+		$ip6 = true;
+	} else {
+		$ip6 = false;
+	}
+	$domain = Amapress::getSiteDomainName( true );
+
+	$dns = @dns_get_record( $domain, DNS_ALL );
+	$spf = false;
+	if ( $dns ) {
+		foreach ( $dns as $dnstxt ) {
+			if ( 'TXT' == $dnstxt['type'] ) {
+				if ( isset( $dnstxt['txt'] ) ) {
+					if ( 'v=spf' == substr( $dnstxt['txt'], 0, 5 ) ) {
+						$spf = $dnstxt['txt'];
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	ob_start();
+	if ( ! $dns ) {
+		_e( '<p class="notice notice-error">Cannot get DNS records - refresh this page - if you still get this message after a few refreshes you may want to check your domain DNS control panel</p>', 'stop-wp-emails-going-to-spam' );
+	} else {
+		if ( false == $spf ) {
+			printf( __( '<p class="notice notice-error">No SPF record found for %s, the following SPF record is recommended', 'stop-wp-emails-going-to-spam' ), $domain );
+			if ( $ip4 || $ip6 ) {
+				printf( ' v=spf1 +a +mx %s:%s ~all', ( $ip4 ) ? 'ip4' : 'ip6', esc_html( $ip ) );
+			} else {
+				echo 'v=spf1 +a +mx ~all';
+			}
+			echo '</p>';
+		} else {
+			printf( __( 'Current record SPF record for %s: <br><strong>%s</strong><br><br>', 'stop-wp-emails-going-to-spam' ), $domain, $spf );
+//			if ( strpos( $spf, $ip ) ) {
+//				_e( '<p class="notice notice-success">Good!, this contains your server IP address</p>', 'stop-wp-emails-going-to-spam' );
+//			} else {
+//				printf( __( '<p class="notice notice-warning">Recommend you add +%s:%s to your SPF record</p>', 'stop-wp-emails-going-to-spam' ), ( $ip4 ) ? 'ip4' : 'ip6', esc_html( $ip ) );
+//			}
+
+		}
+	}
+
+	return ob_get_clean();
+}
+
 function amapress_get_plugin_install_link( $plugin_slug ) {
 	$action = 'install-plugin';
 
@@ -44,6 +100,28 @@ function amapress_get_plugin_activate_link( $plugin_slug ) {
 			admin_url( 'plugins.php' )
 		),
 		'activate-plugin_' . $plugin_slug
+	);
+}
+
+function amapress_get_plugin_desactivate_link( $plugin_slug ) {
+	$installed_plugins = array_keys( get_plugins() );
+	$installed_plugins = array_combine( array_map( function ( $v ) {
+		$vv = explode( '/', $v );
+
+		return $vv[0];
+	}, $installed_plugins ), array_values( $installed_plugins ) );
+	$plugin_slug       = isset( $installed_plugins[ $plugin_slug ] ) ? $installed_plugins[ $plugin_slug ] : $plugin_slug;
+	$action            = 'deactivate';
+
+	return wp_nonce_url(
+		add_query_arg(
+			array(
+				'action' => $action,
+				'plugin' => $plugin_slug
+			),
+			admin_url( 'plugins.php' )
+		),
+		'deactivate-plugin_' . $plugin_slug
 	);
 }
 
@@ -90,8 +168,19 @@ function amapress_check_plugin_install( $plugin_slug, $plugin_name, $message_if_
 	return amapress_get_check_state(
 		$is_active == 'active' ? 'success' : $not_installed_level,
 		$plugin_name . ( $is_active != 'active' ? ' (' . ( $is_active == 'not-installed' ? 'installer' : 'activer' ) . ')' : '' ),
-		$message_if_install_needed,
+		$message_if_install_needed . ' ' . Amapress::makeLink( 'https://fr.wordpress.org/plugins/' . $plugin_slug, 'En savoir plus', true, true ),
 		$is_active == 'not-installed' ? amapress_get_plugin_install_link( $plugin_slug ) : ( $is_active == 'installed' ? amapress_get_plugin_activate_link( $plugin_slug ) : '' )
+	);
+}
+
+function amapress_check_plugin_not_active( $plugin_slug, $plugin_name, $message_if_active, $active_level = 'warning' ) {
+	$is_active = amapress_is_plugin_active( $plugin_slug );
+
+	return amapress_get_check_state(
+		$is_active == 'active' ? $active_level : 'success',
+		$plugin_name . ( $is_active == 'active' ? ' (désactiver)' : '' ),
+		$message_if_active,
+		$is_active == 'active' ? amapress_get_plugin_desactivate_link( $plugin_slug ) : ''
 	);
 }
 
@@ -113,7 +202,7 @@ function amapress_get_state() {
 //        'Permet un meilleur référencement par les moteurs de recherche pour votre AMAP');
 	$state['01_plugins'][] = amapress_check_plugin_install( 'updraftplus', 'UpdraftPlus WordPress Backup',
 		'<strong>Recommandé</strong> : Sauvegarde du site. Permet de réinstaller en cas de panne, bug, hack. <br/> Voir la <a target="_blank" href="' . admin_url( 'options-general.php?page=updraftplus' ) . '">Configuration de la sauvegarde</a>. Configurer ici pour sauvegarder les données de votre site vers un drive ou stockage externe.',
-		'error' );
+		! defined( 'FREE_PAGES_PERSO' ) && ! defined( 'AMAPRESS_DEMO_MODE' ) ? 'error' : 'info' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'akismet', 'Akismet',
 		'<strong>Recommandé</strong> : Protège le site du SPAM.',
 		'warning' );
@@ -122,7 +211,7 @@ function amapress_get_state() {
 		'warning' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'new-user-approve', 'New User Approve',
 		'<strong>Optionnel</strong> : Installer ce plugin si le paramètre « Création de compte sur le site » (Section 2 – configuration) est activé. Une inscription en ligne nécessitera une validation de l’utilisateur par un administrateur.',
-		Amapress::userCanRegister() ? 'error' : 'warning' );
+		Amapress::userCanRegister() ? 'error' : 'info' );
 //    $state['01_plugins'][] = amapress_check_plugin_install('smtp-mailing-queue', 'SMTP Mailing Queue',
 //        'Installer ce plugin permet d\'envoyer les mails aux adhérents au fur et à mesure pour éviter une blocage SMTP (par ex, lors des imports CSV)');
 	$state['01_plugins'][] = amapress_check_plugin_install( 'tinymce-advanced', 'TinyMCE Advanced',
@@ -131,7 +220,7 @@ function amapress_get_state() {
 	$state['01_plugins'][] = amapress_check_plugin_install( 'google-sitemap-generator', 'Google Sitemap Generator',
 		'<strong>Recommandé</strong> : Utilisation simple, améliore le référencement du site en générant un plan du site et en notifiant les moteurs de recherche des modifications du site. 
 <br/>Après activation rendez-vous dans sa <a target="_blank" href="' . admin_url( 'options-general.php?page=google-sitemap-generator%2Fsitemap.php#sm_includes' ) . '">configuration</a> (Section Contenu du sitemap/Autres types d\'article) et cocher les cases "Inclure les articles de type Produits/Recettes/Producteurs/Lieux de distribution/Productions"',
-		'warning' );
+		defined( 'AMAPRESS_DEMO_MODE' ) ? 'info' : 'warning' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'wordpress-seo', 'Yoast SEO',
 		'<strong>Optionnel</strong> : Utilisation avancée, améliore le référencement du site. Ce plugin ajoute de nombreuse options dans le back-office, à installer par un webmaster.',
 		'info' );
@@ -147,9 +236,6 @@ function amapress_get_state() {
 
 	$state['01_plugins'][] = amapress_check_plugin_install( 'wp-maintenance', 'WP Maintenance',
 		'<strong>Optionnel</strong> : Permet d\'indiquer aux visiteurs que le site de votre AMAP est en construction et d\'éviter l\'affichage de contenu non finalisé.',
-		'info' );
-	$state['01_plugins'][] = amapress_check_plugin_install( 'aryo-activity-log', 'Activity Log',
-		'<strong>Optionnel</strong> : Permet de tracer l\'activité des utilisateurs dans votre AMAP (création, modification, suppression de contenu, pages, articles, utilisateurs...)',
 		'info' );
 	$state['01_plugins'][] = amapress_check_plugin_install( 'error-log-monitor', 'Error Log Monitor',
 		'<strong>Optionnel</strong> : Permet de logger les erreurs PHP/Wordpress et de les envoyer automatiquement au support Amapress pour aider à son développement',
@@ -184,6 +270,9 @@ function amapress_get_state() {
 	$state['01_plugins'][] = amapress_check_plugin_install( 'bbpress', 'bbPress',
 		'<strong>Optionnel</strong> : Permet de gérer un forum (avec toutes ses fonctionnalités) sur le site.',
 		'info' );
+	$state['01_plugins'][] = amapress_check_plugin_not_active( 'aryo-activity-log', 'Activity Log',
+		'<strong>Non recommandé</strong> : ce plugin peut entrainer des lenteurs du Tableau de Bord et du site en général; Permet de tracer l\'activité des utilisateurs dans votre AMAP (création, modification, suppression de contenu, pages, articles, utilisateurs...)',
+		'warning' );
 
 	$state['05_config'] = array();
 
@@ -196,24 +285,26 @@ function amapress_get_state() {
 		);
 	}
 
-	$github_updater = get_option( 'github_updater' );
-	if ( is_multisite() ) {
-		$github_updater = get_site_option( 'github_updater' );
-	}
-	if ( empty( $github_updater ) ) {
-		$state['05_config'][] = amapress_get_check_state(
-			'error',
-			'Le plugin GitHub Updater est requis pour la bonne mise à jour d\'Amapress',
-			'Veuillez utiliser l\'installateur automatique qui est affiché en haut du <a target="_blank" href="' . admin_url( 'index.php' ) . '">tableau de bord</a> ou suivre la <a target="_blank" href="https://github.com/afragen/github-updater/wiki/Installation">procédure d\'installation manuelle</a>',
-			''
-		);
-	} else if ( empty( $github_updater['github_access_token'] ) ) {
-		$state['05_config'][] = amapress_get_check_state(
-			'error',
-			'Un jeton d\'accès GitHub (Personal Access Token) pour le plugin GitHub Updater est requis pour la bonne mise à jour d\'Amapress',
-			'Veuillez créer un Personal Access Token en suivant ce <a target="_blank" href="https://github.com/afragen/github-updater/wiki/Messages#personal-github-access-token">lien</a>',
-			admin_url( 'options-general.php?page=github-updater&tab=github_updater_settings&subtab=github' )
-		);
+	if ( ! defined( 'FREE_PAGES_PERSO' ) ) {
+		$github_updater = get_option( 'github_updater' );
+		if ( is_multisite() ) {
+			$github_updater = get_site_option( 'github_updater' );
+		}
+		if ( empty( $github_updater ) ) {
+			$state['05_config'][] = amapress_get_check_state(
+				'error',
+				'Le plugin GitHub Updater est requis pour la bonne mise à jour d\'Amapress',
+				'Veuillez utiliser l\'installateur automatique qui est affiché en haut du <a target="_blank" href="' . admin_url( 'index.php' ) . '">tableau de bord</a> ou suivre la <a target="_blank" href="https://github.com/afragen/github-updater/wiki/Installation">procédure d\'installation manuelle</a>',
+				''
+			);
+		} elseif ( empty( $github_updater['github_access_token'] ) ) {
+			$state['05_config'][] = amapress_get_check_state(
+				'error',
+				'Un jeton d\'accès GitHub (Personal Access Token) pour le plugin GitHub Updater est requis pour la bonne mise à jour d\'Amapress',
+				'Veuillez créer un Personal Access Token en suivant ce <a target="_blank" href="https://github.com/afragen/github-updater/wiki/Messages#personal-github-access-token">lien</a>',
+				admin_url( 'options-general.php?page=github-updater&tab=github_updater_settings&subtab=github' )
+			);
+		}
 	}
 
 	if ( ! extension_loaded( 'zip' ) ) {
@@ -253,7 +344,7 @@ function amapress_get_state() {
 		'warning' );
 
 	$permalink_structure = get_option( 'permalink_structure' );
-	if ( defined( 'FREE_PAGES_PERSO' ) ) {
+	if ( defined( 'FREE_PAGES_PERSO' ) && FREE_PAGES_PERSO ) {
 		$state['05_config'][] = amapress_get_check_state(
 			empty( $permalink_structure )
 			|| ! in_array( $permalink_structure,
@@ -268,6 +359,12 @@ function amapress_get_state() {
 		);
 	} else {
 		$state['05_config'][] = amapress_get_check_state(
+			'info',
+			'DNS SPF record',
+			amapress_check_spf(),
+			''
+		);
+		$state['05_config'][] = amapress_get_check_state(
 			empty( $permalink_structure )
 			|| ! in_array( $permalink_structure,
 				[
@@ -280,6 +377,25 @@ function amapress_get_state() {
 			admin_url( 'options-permalink.php' )
 		);
 	}
+
+	$has_site_verif_codes = ! empty( Amapress::getOption( '' ) ) && ! empty( Amapress::getOption( '' ) );
+	$state['05_config'][] = amapress_get_check_state(
+		$has_site_verif_codes ? 'success' : 'warning',
+		$has_site_verif_codes ? 'Code de vérification du site (Google/Bing) : OK' : 'Codes de vérification du site (Google/Bing) : non renseignés',
+		'Créer des codes de vérification du site depuis les Webmaster Tools pour <a href="https://www.google.com/webmasters/tools/dashboard?hl=fr" target="_blank">Google</a> et <a href="https://www.bing.com/toolbox/webmaster" target="_blank">Bing</a> permet d\'obtenir un meilleur référencement',
+		admin_url( 'admin.php?page=amapress_options_page&tab=site_reference' )
+	);
+
+	if ( ! function_exists( 'get_filesystem_method' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+	}
+	$transport            = get_filesystem_method();
+	$state['05_config'][] = amapress_get_check_state(
+		'direct' == $transport ? 'success' : 'warning',
+		"Méthode de mise à jour WordPress: $transport",
+		'direct' == $transport ? 'Le mode de mise à jour actuel est direct. Vous pourrez effectuer les mises à jours sans problème.' : 'Le mode de mise à jour actuel n\'est pas direct. Vous pourrez rencontrer des difficultés à effectuer les mises à jours (<a href="https://codex.wordpress.org/fr:Modifier_wp-config.php#Les_Constantes_des_Mises_.C3.80_Jour_WordPress" target="_blank">voir les options de configuration de WordPress</a>).',
+		''
+	);
 
 	$redir_test_url       = site_url( 'shouldredirect' );
 	$state['05_config'][] = amapress_get_check_state(
@@ -458,6 +574,18 @@ function amapress_get_state() {
 			! empty( $google_key ) ? 'success' : 'error',
 			'Clé API Google',
 			'<strong>Requis</strong> : Une clé Google API est nécessaire pour le bon fonctionnement de la géolocalisation ',
+			admin_url( 'admin.php?page=amapress_options_page&tab=amp_google_api_config' )
+		);
+	}
+
+	if ( 'here' == Amapress::getOption( 'geocode_provider' ) ) {
+		$here_map_app_id      = Amapress::getOption( 'here_map_app_id' );
+		$google_key           = Amapress::getOption( 'here_map_app_code' );
+		$state['05_config'][] = amapress_get_check_state(
+			! empty( Amapress::getOption( 'here_map_app_id' ) )
+			&& ! empty( Amapress::getOption( 'here_map_app_code' ) ) ? 'success' : 'error',
+			'APP ID/APP CODE Here Maps',
+			'<strong>Requis</strong> : des identifiants APP ID/APP CODE sont nécessaires pour le bon fonctionnement de la géolocalisation ',
 			admin_url( 'admin.php?page=amapress_options_page&tab=amp_google_api_config' )
 		);
 	}
@@ -642,7 +770,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		count( $lieux ) == 0 ? 'error' : ( ! empty( $not_localized_lieux ) ? 'warning' : 'success' ),
 		'Lieu de distribution',
 		'Créer au moins un lieu de distribution',
-		admin_url( 'post-new.php?post_type=' . AmapressLieu_distribution::INTERNAL_POST_TYPE ),
+		admin_url( 'edit.php?post_type=' . AmapressLieu_distribution::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $dn ) {
 			/** @var AmapressLieu_distribution $dn */
 			$l = admin_url( 'post.php?post=' . $dn->getID() . '&action=edit' );
@@ -683,7 +811,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		empty( $adh_period ) ? 'error' : 'success',
 		'Période d\'adhésion',
 		'Créer une période d\'adhésion pour les cotisations de l\'année en cours',
-		admin_url( 'post-new.php?post_type=' . AmapressAdhesionPeriod::INTERNAL_POST_TYPE ),
+		admin_url( 'edit.php?post_type=' . AmapressAdhesionPeriod::INTERNAL_POST_TYPE ),
 		( ! empty( $adh_period ) ? '<a href="' . esc_attr( $adh_period->getAdminEditLink() ) . '" target=\'_blank\'>' . esc_html( $adh_period->getTitle() ) . '</a>' : 'Aucune période d\'adhésion' )
 	);
 
@@ -693,7 +821,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 			empty( $adh_period2 ) ? 'error' : 'success',
 			'Période d\'adhésion',
 			'Créer une période d\'adhésion pour les cotisations du début des contrats en ligne',
-			admin_url( 'post-new.php?post_type=' . AmapressAdhesionPeriod::INTERNAL_POST_TYPE ),
+			admin_url( 'edit.php?post_type=' . AmapressAdhesionPeriod::INTERNAL_POST_TYPE ),
 			( ! empty( $adh_period2 ) ? '<a href="' . esc_attr( $adh_period2->getAdminEditLink() ) . '" target=\'_blank\'>' . esc_html( $adh_period2->getTitle() ) . '</a>' : 'Aucune période d\'adhésion' )
 		);
 	}
@@ -748,7 +876,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		count( $prod_users ) == 0 ? 'error' : ( count( $all_producteurs ) < count( $prod_users ) ? 'warning' : 'success' ),
 		'Producteurs',
 		'Créer les Producteur correspondant à leur compte utilisateur',
-		admin_url( 'post-new.php?post_type=' . AmapressProducteur::INTERNAL_POST_TYPE ),
+		admin_url( 'edit.php?post_type=' . AmapressProducteur::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $u ) {
 			$dn = AmapressProducteur::getBy( $u );
 			$l  = admin_url( 'post.php?post=' . $dn->getID() . '&action=edit' );
@@ -780,7 +908,10 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 				foreach ( Amapress::get_lieux() as $lieu ) {
 					foreach ( $contrat->getReferentsIds( $lieu->ID ) as $referents_id ) {
 						$user   = AmapressUser::getBy( $referents_id );
-						$refs[] = esc_html( sprintf( count( $dn->getContrats() ) == 1 ? '%1$s (%3$s)' : '%1$s (%2$s/%3$s)', $user->getDisplayName(), $contrat->getTitle(), $lieu->getShortName() ) );
+						$refs[] = sprintf( count( $dn->getContrats() ) == 1 ? '%1$s (%3$s)' : '%1$s (%2$s/%3$s)',
+							Amapress::makeLink( $user->getEditLink(), $user->getDisplayName(), true, true ),
+							Amapress::makeLink( $contrat->getAdminEditLink(), $contrat->getTitle(), true, true ),
+							Amapress::makeLink( $lieu->getAdminEditLink(), $lieu->getShortName(), true, true ) );
 					}
 				}
 			}
@@ -826,7 +957,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		count( $contrat_types ) == 0 ? 'error' : ( ! empty( $not_subscribable_contrat_types ) ? 'warning' : 'success' ),
 		'Présentation des productions',
 		'Créer au moins une production par producteur pour présenter son/ses offre(s)',
-		admin_url( 'post-new.php?post_type=' . AmapressContrat::INTERNAL_POST_TYPE ),
+		admin_url( 'edit.php?post_type=' . AmapressContrat::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $u ) {
 			$dn = AmapressContrat::getBy( $u );
 			$l  = admin_url( 'post.php?post=' . $dn->getID() . '&action=edit' );
@@ -884,10 +1015,10 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		}
 	);
 	$state['15_posts'][]                = amapress_get_check_state(
-		count( $subscribable_contrat_instances ) == 0 ? 'error' : ( count( $subscribable_contrat_instances ) < count( $contrat_types ) ? 'warning' : 'success' ),
+		count( $subscribable_contrat_instances ) == 0 ? 'warning' : ( count( $subscribable_contrat_instances ) < count( $contrat_types ) ? 'warning' : 'success' ),
 		'Modèles de contrats',
 		'Créer au moins un modèle de contrat par contrat pour permettre aux amapiens d\'adhérer',
-		admin_url( 'post-new.php?post_type=' . AmapressContrat_instance::INTERNAL_POST_TYPE ),
+		admin_url( 'edit.php?post_type=' . AmapressContrat_instance::INTERNAL_POST_TYPE ),
 		implode( ', ', array_map( function ( $dn ) {
 			/** @var AmapressContrat_instance $dn */
 			$l      = admin_url( 'post.php?post=' . $dn->getID() . '&action=edit' );
@@ -896,7 +1027,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 
 			return "<a href='{$l}' target='_blank'>{$tit}</a> {$status}";
 		}, $subscribable_contrat_instances ) ) .
-		( ! empty( $not_subscribable_contrat_instances ) ? '<p><strong>Les contrats suivants n\'ont pas de modèles actifs (selon date ouverture/bloture)</strong> : ' .
+		( ! empty( $not_subscribable_contrat_instances ) ? '<p><strong>Les contrats suivants n\'ont pas de modèles actifs (selon date ouverture/clôture)</strong> : ' .
 		                                                   implode( ', ', array_map( function ( $dn ) {
 
 			                                                   $l = admin_url( 'post.php?post=' . $dn->ID . '&action=edit' );
@@ -1162,13 +1293,13 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		}
 	}
 
-	$front_page_edit_href          = $static_front_id ? admin_url( 'post.php?post=' . $static_front_id . '&action=edit' ) : '';
-	$amapien_mes_infos_edit_href   = admin_url( 'post.php?post=' . Amapress::getOption( 'mes-infos-page' ) . '&action=edit' );
-	$amapien_mes_paniers_edit_href = admin_url( 'post.php?post=' . Amapress::getOption( 'mes-paniers-intermittents-page' ) . '&action=edit' );
-	$amapien_les_paniers_edit_href = admin_url( 'post.php?post=' . Amapress::getOption( 'paniers-intermittents-page' ) . '&action=edit' );
-	$new_page_href                 = admin_url( 'post-new.php?post_type=page' );
-	$new_private_page_href         = admin_url( 'post-new.php?post_type=page&amps_lo=1' );
-	$needed_shortcodes             = [
+	$front_page_edit_href                       = $static_front_id ? admin_url( 'post.php?post=' . $static_front_id . '&action=edit' ) : '';
+	$amapien_mes_infos_edit_href                = admin_url( 'post.php?post=' . Amapress::getOption( 'mes-infos-page' ) . '&action=edit' );
+	$amapien_mes_paniers_edit_href              = admin_url( 'post.php?post=' . Amapress::getOption( 'mes-paniers-intermittents-page' ) . '&action=edit' );
+	$amapien_les_paniers_edit_href              = admin_url( 'post.php?post=' . Amapress::getOption( 'paniers-intermittents-page' ) . '&action=edit' );
+	$new_page_href                              = admin_url( 'post-new.php?post_type=page' );
+	$new_private_page_href                      = admin_url( 'post-new.php?post_type=page&amps_lo=1' );
+	$needed_shortcodes                          = [
 		'trombinoscope'                 => [
 			'desc'  => 'Ajouter une page privée avec le shortcode %s pour afficher le trombinoscope des amapiens',
 			'href'  => $new_private_page_href,
@@ -1254,59 +1385,117 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 			'href'  => $new_page_href,
 			'categ' => '1/ Site public',
 		],
-		'front_next_events'             => [
+		'front_next_events'        => [
 			'desc'  => 'Ajouter le shortcode %s à la page d\'Accueil pour afficher le calendrier',
 			'href'  => $front_page_edit_href,
 			'categ' => '2/ Page Accueil - Infos utiles',
 		],
-		'front_produits'                => [
+		'front_produits'           => [
 			'desc'  => 'Ajouter le shortcode %s à la page d\'Accueil pour afficher les contrats',
 			'href'  => $front_page_edit_href,
 			'categ' => '2/ Page Accueil - Infos utiles',
 		],
-		'front_nous_trouver'            => [
+		'front_nous_trouver'       => [
 			'desc'  => 'Ajouter le shortcode %s à la page d\'Accueil pour afficher la carte des lieux de distribution',
 			'href'  => $front_page_edit_href,
 			'categ' => '2/ Page Accueil - Infos utiles',
 		],
-		'front_default_grid'            => [
+		'front_default_grid'       => [
 			'desc'  => 'Ajouter le shortcode %s à la page d\'Accueil pour afficher le calendrier, les contrats et la carte des lieux de distribution',
 			'href'  => $front_page_edit_href,
 			'categ' => '2/ Page Accueil - Infos utiles',
 		],
-		'inscription-en-ligne'          => [
+		'inscription-en-ligne'     => [
 			'desc'  => 'Ajouter le shortcode %s sur une page pour permettre aux amapiens de s\'inscrire en ligne aux contrats',
 			'href'  => $new_page_href,
 			'categ' => '6/ Inscriptions en ligne',
 		],
-		'listes-diffusions'             => [
+		'listes-diffusions'        => [
 			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre aux amapiens ou au collectif de connaitre les listes de diffusions configurées de votre AMAP',
+			'href'  => $new_private_page_href,
+			'categ' => '3/ Info utiles',
+		],
+		'inscription-visite'       => [
+			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre aux amapiens de s\'inscrires aux visites aux producteurs',
+			'href'  => $new_private_page_href,
+			'categ' => '8/ Inscriptions',
+		],
+		'amapress-latest-posts'    => [
+			'desc'  => 'Ajouter le shortcode %s sur une page pour permettre d\'afficher une liste des derniers articles publiés sur le site',
 			'href'  => $new_page_href,
 			'categ' => '3/ Info utiles',
 		],
-		'docspace-responsables'         => [
-			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre au collectif de partager des fichiers entre les membres du collectif',
+		'producteur-map'           => [
+			'desc'  => 'Ajouter le shortcode %s sur une page pour permettre d\'afficher la carte des producteurs',
 			'href'  => $new_page_href,
-			'categ' => '7/ Stockage',
+			'categ' => '3/ Info utiles',
 		],
-		'docspace-amapiens'             => [
-			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre au collectif de partager des fichiers avec les amapiens',
-			'href'  => $new_page_href,
-			'categ' => '7/ Stockage',
+		'resp-distrib-contacts'    => [
+			'desc'  => 'Ajouter le shortcode %s à la page d\'Accueil pour permettre d\'afficher les contacts des responsables de distribution de la semaine',
+			'href'  => $front_page_edit_href,
+			'categ' => '2/ Page Accueil - Infos utiles',
 		],
-		'docspace-public'               => [
-			'desc'  => 'Ajouter le shortcode %s sur une page non protégée pour permettre au collectif de partager des fichiers publiquement',
-			'href'  => $new_page_href,
-			'categ' => '7/ Stockage',
+		'anon-inscription-distrib' => [
+			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre d\'afficher une liste des derniers articles publiés sur le site',
+			'href'  => $new_private_page_href,
+			'categ' => '8/ Inscriptions',
 		],
-		'inscription-visite'            => [
-			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre aux amapiens de s\'inscrires aux visites aux producteurs',
-			'href'  => $new_page_href,
-			'categ' => '7/ Stockage',
+		'inscription-amap-event'   => [
+			'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre d\'afficher la page d\'inscription aux évènements',
+			'href'  => $new_private_page_href,
+			'categ' => '8/ Inscriptions',
 		],
 	];
-	$found_shortcodes              = [];
-	$found_shortcodes_desc         = [];
+	$needed_shortcodes['docspace-responsables'] = [
+		'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre au collectif de partager des fichiers entre les membres du collectif',
+		'href'  => $new_page_href,
+		'categ' => '7/ Stockage',
+	];
+	$subfolders                                 = Amapress::getOption( 'docspace_resps_folders' );
+	if ( ! empty( $subfolders ) ) {
+		$subfolders = trim( str_replace( ' ', '', $subfolders ) );
+		foreach ( explode( ',', $subfolders ) as $subfolder ) {
+			$needed_shortcodes[ 'docspace-responsables-' . $subfolder ] = [
+				'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre au collectif de partager un sous-dossier "' . $subfolder . '" de fichiers entre les membres du collectif',
+				'href'  => $new_page_href,
+				'categ' => '7/ Stockage',
+			];
+		}
+	}
+	$needed_shortcodes['docspace-amapiens'] = [
+		'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre au collectif de partager des fichiers entre les membres du collectif',
+		'href'  => $new_page_href,
+		'categ' => '7/ Stockage',
+	];
+	$subfolders                             = Amapress::getOption( 'docspace_amapiens_folders' );
+	if ( ! empty( $subfolders ) ) {
+		$subfolders = trim( str_replace( ' ', '', $subfolders ) );
+		foreach ( explode( ',', $subfolders ) as $subfolder ) {
+			$needed_shortcodes[ 'docspace-amapiens-' . $subfolder ] = [
+				'desc'  => 'Ajouter le shortcode %s sur une page protégée pour permettre au collectif de partager un sous-dossier "' . $subfolder . '" de  fichiers entre les membres du collectif',
+				'href'  => $new_page_href,
+				'categ' => '7/ Stockage',
+			];
+		}
+	}
+	$needed_shortcodes['docspace-public'] = [
+		'desc'  => 'Ajouter le shortcode %s sur une page non protégée pour permettre au collectif de partager des fichiers publiquement',
+		'href'  => $new_page_href,
+		'categ' => '7/ Stockage',
+	];
+	$subfolders                           = Amapress::getOption( 'docspace_public_folders' );
+	if ( ! empty( $subfolders ) ) {
+		$subfolders = trim( str_replace( ' ', '', $subfolders ) );
+		foreach ( explode( ',', $subfolders ) as $subfolder ) {
+			$needed_shortcodes[ 'docspace-public-' . $subfolder ] = [
+				'desc'  => 'Ajouter le shortcode %s sur une page non protégée pour permettre au collectif de partager un sous-dossier "' . $subfolder . '" de fichiers publiquement',
+				'href'  => $new_page_href,
+				'categ' => '7/ Stockage',
+			];
+		}
+	}
+	$found_shortcodes      = [];
+	$found_shortcodes_desc = [];
 	uasort( $needed_shortcodes, function ( $a, $b ) {
 		return strcmp( $a['categ'], $b['categ'] );
 	} );
@@ -1386,7 +1575,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	$state['26_online_inscr'][] = amapress_get_check_state(
 		count( $without_word_contrats ) > 0 ? 'warning' : 'success',
 		'Modèles de contrats avec contrat DOCX (Word) associé',
-		'Préparer un contrat papier (DOCX) <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_default_contrat_docx' ) . '">générique pour tous les contrats</a> ou par modèle de contrat pour permettre aux amapiens d\'imprimer et signer directement leur contrat lors de leur inscription en ligne. Un modèle générique est télchargeable <a target="_blank" href="' . esc_attr( Amapress::getContratGenericUrl() ) . '">ici</a>.',
+		'Préparer un contrat papier (DOCX) <a target="_blank" href="' . admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_default_contrat_docx' ) . '">générique pour tous les contrats</a> ou par modèle de contrat pour permettre aux amapiens d\'imprimer et signer directement leur contrat lors de leur inscription en ligne. PLusieurs modèles génériques sont téléchargeables <a target="_blank" href="' . esc_attr( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_default_contrat_docx' ) ) . '">ici</a>.',
 		admin_url( 'edit.php?post_type=amps_contrat_inst&amapress_date=active' ),
 		'<strong>Contrats avec Word attaché :</strong> ' . ( count( $online_contrats ) == 0 ? 'aucun' : implode( ', ', array_map( function ( $dn ) {
 			/** @var AmapressContrat_instance $dn */
@@ -1419,15 +1608,64 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		empty( $adh_period ) ? 'error' : ( ! $adh_period->getWordModelId() ? 'warning' : 'success' ),
 		'Période d\'adhésion',
 		'Créer une période d\'adhésion au ' . date_i18n( 'd/m/Y', $first_online_date ) . ' pour les adhésions en ligne et attaché lui un bulletin d\'adhésion en Word',
-		$adh_period ? $adh_period->getAdminEditLink() : admin_url( 'post-new.php?post_type=' . AmapressAdhesionPeriod::INTERNAL_POST_TYPE ),
+		$adh_period ? $adh_period->getAdminEditLink() : admin_url( 'edit.php?post_type=' . AmapressAdhesionPeriod::INTERNAL_POST_TYPE ),
 		( ! empty( $adh_period ) ? '<a href="' . esc_attr( $adh_period->getAdminEditLink() ) . '" target=\'_blank\'>' . esc_html( $adh_period->getTitle() ) . '</a>' : 'Aucune période d\'adhésion' )
+	);
+	$type_paiements             = get_categories( array(
+		'orderby'    => 'name',
+		'order'      => 'ASC',
+		'taxonomy'   => 'amps_paiement_category',
+		'hide_empty' => false,
+	) );
+	$amap_term_id               = Amapress::getOption( 'adhesion_amap_term' );
+	$amap_term                  = null;
+	$reseau_amap_term_id        = Amapress::getOption( 'adhesion_reseau_amap_term' );
+	$reseau_amap_term           = null;
+	foreach ( $type_paiements as $term ) {
+		if ( $term->term_id == $amap_term_id ) {
+			$amap_term = $term;
+		}
+		if ( $term->term_id == $reseau_amap_term_id ) {
+			$reseau_amap_term = $term;
+		}
+	}
+	$state['26_online_inscr'][] = amapress_get_check_state(
+		'info',
+		'Types de cotisation/paiement',
+		'Créer des types de cotisations : adhésion à l\'AMAP, adhésion au réseau des AMAP, panier solidaire, don...',
+		admin_url( 'edit-tags.php?taxonomy=amps_paiement_category' ),
+		implode( ', ', array_map( function ( $t ) {
+			/** @var WP_Term $t */
+			$ret = '';
+			if ( ! empty( $t->description ) ) {
+				$ret = "{$t->name} ({$t->description})";
+			} else {
+				$ret = $t->name;
+			}
+
+			return Amapress::makeLink( admin_url( 'edit-tags.php?taxonomy=amps_paiement_category' ), $ret );
+		}, $type_paiements ) )
+	);
+	$state['26_online_inscr'][] = amapress_get_check_state(
+		$amap_term ? 'success' : 'warning',
+		'Types de cotisation : adhésion à l\'AMAP',
+		'Associer un type de cotisation pour l\'adhésion à l\'AMAP',
+		admin_url( 'admin.php?page=amapress_options_page&tab=amp_paiements_config' ),
+		$adh_period && $amap_term ? 'Pour ' . $adh_period->getTitle() . ', le montant \'' . $amap_term->name . '\' est de ' . Amapress::formatPrice( $adh_period->getMontantAmap() ) . '€' : 'Pas de période d\'adhésion en cours'
+	);
+	$state['26_online_inscr'][] = amapress_get_check_state(
+		$reseau_amap_term ? 'success' : 'warning',
+		'Types de cotisation : adhésion au réseau AMAP',
+		'Associer un type de cotisation pour l\'adhésion au réseau AMAP',
+		admin_url( 'admin.php?page=amapress_options_page&tab=amp_paiements_config' ),
+		$adh_period && $reseau_amap_term ? 'Pour ' . $adh_period->getTitle() . ', le montant \'' . $reseau_amap_term->name . '\' est de ' . Amapress::formatPrice( $adh_period->getMontantReseau() ) . '€' : 'Pas de période d\'adhésion en cours'
 	);
 	$state['26_online_inscr'][] = amapress_get_check_state(
 		isset( $needed_shortcodes['inscription-en-ligne'] ) ? 'warning' : 'success',
 		'Ajouter le shortcode [inscription-en-ligne] pour permettre aux amapiens de s\'inscrire en ligne.',
 		'Ce shortcode nécessite une clé de sécurité afin que seule les personnes à qui vous avez transmis le lien puissent s\'inscrire',
 		isset( $needed_shortcodes['inscription-en-ligne'] ) ? admin_url( 'post-new.php?post_type=page' ) : admin_url( 'post.php?post=' . $found_shortcodes['inscription-en-ligne']->ID . '&action=edit' ),
-		'Par exemple : [inscription-en-ligne key=' . uniqid() . uniqid() . ' email=contact@votre-amap.xxx]'
+		'Par exemple : [inscription-en-ligne key=' . uniqid() . uniqid() . ' email=contact@' . Amapress::getSiteDomainName( true ) . ']'
 	);
 	$assistant_conf_url         = admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' );
 	$state['26_online_inscr'][] = amapress_get_check_state(
@@ -1462,8 +1700,14 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	);
 
 	$state['30_recalls'] = array();
+	$adm_menu            = AmapressEntities::getMenu();
 	foreach ( AmapressEntities::getMenu() as $item ) {
-		if ( isset( $item['type'] ) && $item['type'] == 'panel' && isset( $item['id'] ) ) {
+		if ( ! empty( $item['subpages'] ) ) {
+			$adm_menu = array_merge( $adm_menu, $item['subpages'] );
+		}
+	}
+	foreach ( $adm_menu as $item ) {
+		if ( ! empty( $item['settings']['name'] ) && isset( $item['id'] ) ) {
 			$page_name = isset( $item['settings']['name'] ) ? $item['settings']['name'] . ' - ' : '';
 			$page_id   = $item['id'];
 			if ( ! empty( $item['tabs'] ) ) {
@@ -1540,10 +1784,33 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 		admin_url( 'admin.php?page=amapress_import_page&tab=import_users_tab' )
 	);
 	$state['35_import'][] = amapress_get_check_state(
-		count( $subscribable_contrat_instances ) == 0 ? 'error' : 'do',
+		count( $active_contrat_instances ) == 0 ? 'error' : 'do',
 		'Adhésions',
-		count( $subscribable_contrat_instances ) == 0 ? 'Vous devez créer au moins un modèle de contrat pour importer les adhésions' : 'Importer des inscriptions à partir d\'un fichier Excel.',
+		count( $active_contrat_instances ) == 0 ? 'Vous devez créer au moins un modèle de contrat pour importer les inscriptions' : 'Importer des inscriptions à partir d\'un fichier Excel.',
 		admin_url( 'admin.php?page=amapress_import_page&tab=import_adhesions_tab' )
+	);
+
+	$state['36_mailing']   = array();
+	$state['36_mailing'][] = amapress_get_check_state(
+		'do',
+		'Emails groupés - Gestion interne de listes de diffusions basées sur des comptes emails de l\'hébergement',
+		'Créez des comptes emails sur votre hébergement et configurez les en tant que <a target="_blank" href="https://wiki.amapress.fr/admin/email_groupe">listes de diffusions gérées par le site</a>. Configurez et gérez leurs modérations, leurs membres directement depuis le Tableau de bord.<br/> 
+NB : ne pas récupérer les emails reçus sur ces comptes sans quoi le système de gestion ne les verrait pas.',
+		admin_url( 'admin.php?page=amapress_gestion_mailinggroup_page' ),
+		implode( ', ', array_map( function ( $ml ) {
+			/** @var AmapressMailingGroup $ml */
+			return Amapress::makeLink( $ml->getAdminEditLink(), $ml->getName(), true, true );
+		}, AmapressMailingGroup::getAll() ) )
+	);
+	$state['36_mailing'][] = amapress_get_check_state(
+		'do',
+		'Liste de diffusions - Gestion externe sur un service Sympa (Sud-Ouest2.org, Ouvaton...) ',
+		'Configurez vos différentes listes Sympa, leurs modérations et leurs membres depuis le Tableau de bord',
+		admin_url( 'edit.php?post_type=amps_mailing' ),
+		implode( ', ', array_map( function ( $ml ) {
+			/** @var Amapress_MailingListConfiguration $ml */
+			return Amapress::makeLink( $ml->getAdminEditLink(), $ml->getName(), true, true );
+		}, Amapress_MailingListConfiguration::getAll() ) )
 	);
 
 	$clean_messages = '';
@@ -1569,7 +1836,7 @@ configurer le mot de passe du listmaster et le domaine de liste <a href="' . adm
 	return $state;
 }
 
-function embedded_phpinfo() {
+function amapress_embedded_phpinfo() {
 	ob_start();
 	phpinfo();
 	$phpinfo = ob_get_contents();
@@ -1602,14 +1869,176 @@ function embedded_phpinfo() {
         ";
 }
 
+### Function:Get MYSQL Query Cache Size
+function amapress_get_mysql_query_cache_size() {
+	global $wpdb;
+	$query_cache_size_query = $wpdb->get_row( "SHOW VARIABLES LIKE 'query_cache_size'" );
+
+	return $query_cache_size_query->Value;
+}
+
+### Function: Get MYSQL Version
+function amapress_get_mysql_version() {
+	global $wpdb;
+
+	return $wpdb->get_var( "SELECT VERSION() AS version" );
+}
+
+### Function: Get MYSQL Data Usage
+function amapress_get_mysql_data_usage() {
+	global $wpdb;
+	$data_usage   = 0;
+	$tablesstatus = $wpdb->get_results( "SHOW TABLE STATUS" );
+	foreach ( $tablesstatus as $tablestatus ) {
+		$data_usage += $tablestatus->Data_length;
+	}
+
+	return $data_usage;
+}
+
+### Function: Get MYSQL Index Usage
+function amapress_get_mysql_index_usage() {
+	global $wpdb;
+	$index_usage  = 0;
+	$tablesstatus = $wpdb->get_results( "SHOW TABLE STATUS" );
+	foreach ( $tablesstatus as $tablestatus ) {
+		$index_usage += $tablestatus->Index_length;
+	}
+
+	return $index_usage;
+}
+
+### Function: PHP Memory Limit
+function amapress_get_php_memory_limit() {
+	if ( ini_get( 'memory_limit' ) ) {
+		$memory_limit = ini_get( 'memory_limit' );
+	} else {
+		$memory_limit = __( 'N/A', 'amapress' );
+	}
+
+	return $memory_limit;
+}
+
+### Function: PHP Maximum Execution Time
+function amapress_get_php_max_execution() {
+	if ( ini_get( 'max_execution_time' ) ) {
+		$max_execute = ini_get( 'max_execution_time' );
+	} else {
+		$max_execute = __( 'N/A', 'amapress' );
+	}
+
+	return $max_execute;
+}
+
+### Function: Get PHP Max Post Size
+function amapress_get_php_post_max() {
+	if ( ini_get( 'post_max_size' ) ) {
+		$post_max = ini_get( 'post_max_size' );
+	} else {
+		$post_max = __( 'N/A', 'amapress' );
+	}
+
+	return $post_max;
+}
+
+### Function: Get PHP Max Upload Size
+function amapress_get_php_upload_max() {
+	if ( ini_get( 'upload_max_filesize' ) ) {
+		$upload_max = ini_get( 'upload_max_filesize' );
+	} else {
+		$upload_max = __( 'N/A', 'amapress' );
+	}
+
+	return $upload_max;
+}
+
+### Function: Format Bytes Into TiB/GiB/MiB/KiB/Bytes
+function amapress_format_filesize( $rawSize ) {
+	if ( $rawSize / 1099511627776 > 1 ) {
+		return number_format_i18n( $rawSize / 1099511627776, 1 ) . ' ' . __( 'TB', 'amapress' );
+	} elseif ( $rawSize / 1073741824 > 1 ) {
+		return number_format_i18n( $rawSize / 1073741824, 1 ) . ' ' . __( 'GB', 'amapress' );
+	} elseif ( $rawSize / 1048576 > 1 ) {
+		return number_format_i18n( $rawSize / 1048576, 1 ) . ' ' . __( 'MB', 'amapress' );
+	} elseif ( $rawSize / 1024 > 1 ) {
+		return number_format_i18n( $rawSize / 1024, 1 ) . ' ' . __( 'KB', 'amapress' );
+	} elseif ( $rawSize > 1 ) {
+		return number_format_i18n( $rawSize, 0 ) . ' ' . __( 'B', 'amapress' );
+	} else {
+		return __( 'unknown', 'amapress' );
+	}
+}
+
+### Function: Convert PHP Size Format to Localized
+function amapress_format_php_size( $size ) {
+	if ( ! is_numeric( $size ) ) {
+		if ( strpos( $size, 'M' ) !== false ) {
+			$size = intval( $size ) * 1024 * 1024;
+		} elseif ( strpos( $size, 'K' ) !== false ) {
+			$size = intval( $size ) * 1024;
+		} elseif ( strpos( $size, 'G' ) !== false ) {
+			$size = intval( $size ) * 1024 * 1024 * 1024;
+		}
+	}
+
+	return is_numeric( $size ) ? amapress_format_filesize( $size ) : $size;
+}
+
+function amapress_wp_db_stats() {
+	global $wpdb;
+
+	$posts_count    = $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts" );
+	$postmeta_count = $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->postmeta" );
+	$users_count    = $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->users" );
+	$usermeta_count = $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->usermeta" );
+
+	echo '<h2>Tables rows count</h2>';
+	echo "<p>Table '$wpdb->posts' rows: $posts_count</p>";
+	echo "<p>Table '$wpdb->postmeta' rows: $postmeta_count</p>";
+	echo "<p>Table '$wpdb->users' rows: $posts_count</p>";
+	echo "<p>Table '$wpdb->usermeta' rows: $posts_count</p>";
+
+//	echo '<h2>Posts count by type</h2>';
+//	$results = $wpdb->get_results( "SELECT post_type, COUNT(*) as post_count FROM $wpdb->posts GROUP BY post_type", ARRAY_A );
+//	foreach ( $results as &$r ) {
+//		$post_type = $r['post_type'];
+//		$pt        = get_post_type_object( $post_type );
+//		if ( $pt ) {
+//			$r['post_type'] = "{$pt->label} ($post_type)";
+//		}
+//	}
+//	amapress_echo_datatable( 'posts_count_per_type',
+//		[
+//			[ 'title' => 'Post type', 'data' => 'post_type' ],
+//			[ 'title' => 'Posts count', 'data' => 'post_count' ],
+//		], $results );
+	echo '<h2>Posts meta stats by type</h2>';
+	$results = $wpdb->get_results( "SELECT post_type, COUNT(distinct p.ID) as post_count, 
+COUNT(*) as post_meta_count 
+FROM $wpdb->posts as p INNER JOIN $wpdb->postmeta as pm ON p.ID = pm.post_id GROUP BY p.post_type", ARRAY_A );
+	foreach ( $results as &$r ) {
+		$post_type = $r['post_type'];
+		$pt        = get_post_type_object( $post_type );
+		if ( $pt ) {
+			$r['post_type'] = "{$pt->label} ($post_type)";
+		}
+		$r['post_meta_avg'] = (int) ( $r['post_meta_count'] / $r['post_count'] );
+	}
+	amapress_echo_datatable( 'avg_postmeta_per_type',
+		[
+			[ 'title' => 'Post type', 'data' => 'post_type' ],
+			[ 'title' => 'Posts count', 'data' => 'post_count' ],
+			[ 'title' => 'Postmeta count', 'data' => 'post_meta_count' ],
+			[ 'title' => 'Avg postmeta', 'data' => 'post_meta_avg' ],
+		], $results );
+}
+
 function amapress_echo_and_check_amapress_state_page() {
-//	if (!defined( 'AMAPRESS_DEMO_MODE' ))
-//		define('AMAPRESS_DEMO_MODE', 1);
 	if ( current_user_can( 'update_core' ) ) {
 		if ( isset( $_GET['generate_full_amap'] ) ) {
 			echo '<textarea cols="80" rows="100" style="width: 100%; font-family: monospace">';
 			echo esc_textarea( wp_kses_decode_entities( wp_specialchars_decode( preg_replace( '/\<\/?pre\>/', '',
-				Amapress::generate_full_amap( isset( $_REQUEST['no_anonymize'] ) ) ), ENT_QUOTES ) ) );
+				Amapress::generate_full_amap( ! isset( $_REQUEST['no_anonymize'] ) ) ), ENT_QUOTES ) ) );
 			echo '</textarea>';
 
 			return;
@@ -1634,7 +2063,11 @@ function amapress_echo_and_check_amapress_state_page() {
 		}
 		if ( defined( 'AMAPRESS_DEMO_MODE' ) && isset( $_GET['import_amap'] ) ) {
 			require_once 'demos/AmapDemoBase.php';
-			require_once 'demos/' . $_GET['import_amap'];
+			$demo_file = $_SERVER['DOCUMENT_ROOT'] . '/../demos/' . $_GET['import_amap'];
+			if ( ! file_exists( $demo_file ) ) {
+				$demo_file = AMAPRESS__PLUGIN_DIR . '/demos/' . $_GET['import_amap'];
+			}
+			require_once $demo_file;
 
 			if ( ! defined( 'ALLOW_UNFILTERED_UPLOADS' ) ) {
 				define( 'ALLOW_UNFILTERED_UPLOADS', true );
@@ -1644,7 +2077,7 @@ function amapress_echo_and_check_amapress_state_page() {
 			global $amap_class;
 			$cnt = AmapDemoBase::deleteAutoGeneratedPosts();
 			echo '<p class="notice notice-info">' . $cnt . ' deleted posts</p>';
-			$amap_class->createAMAP();
+			$amap_class->createAMAP( isset( $_GET['shift_weeks'] ) ? intval( $_GET['shift_weeks'] ) : 0 );
 			echo '<p class="notice notice-info">AMAP Created</p>';
 
 			return;
@@ -1665,7 +2098,13 @@ function amapress_echo_and_check_amapress_state_page() {
 		}
 
 		if ( isset( $_GET['phpinfo'] ) ) {
-			embedded_phpinfo();
+			amapress_embedded_phpinfo();
+
+			return;
+		}
+
+		if ( isset( $_GET['wp_db_stats'] ) ) {
+			amapress_wp_db_stats();
 
 			return;
 		}
@@ -1682,6 +2121,7 @@ function amapress_echo_and_check_amapress_state_page() {
 		'26_online_inscr' => 'Inscriptions en ligne',
 		'30_recalls'      => 'Rappels',
 		'35_import'       => 'Import CSV',
+		'36_mailing'      => 'Listes de diffusions',
 		'40_clean'        => 'Nettoyage',
 	);
 	$i      = 1;
@@ -1711,10 +2151,17 @@ function amapress_echo_and_check_amapress_state_page() {
 </form>';
 			echo '<hr/>';
 			echo '<h3>Modèles d\'AMAP</h3>';
-			if ( $handle = opendir( AMAPRESS__PLUGIN_DIR . '/demos' ) ) {
+			$demo_dir = $_SERVER['DOCUMENT_ROOT'] . '/../demos';
+			if ( ! file_exists( $demo_dir ) ) {
+				$demo_dir = AMAPRESS__PLUGIN_DIR . '/demos';
+			}
+			if ( $handle = opendir( $demo_dir ) ) {
 				while ( false !== ( $entry = readdir( $handle ) ) ) {
 					if ( $entry != '.' && $entry != '..' && $entry != 'AmapDemoBase.php' ) {
-						echo '<a target="_blank" href="' . esc_attr( add_query_arg( 'import_amap', $entry, admin_url( 'admin.php?page=amapress_state' ) ) ) . '">' . esc_html( $entry ) . '</a>';
+						echo '<a target="_blank" href="' . esc_attr( add_query_arg(
+								[ 'import_amap' => $entry, 'shift_weeks' => 0 ],
+								admin_url( 'admin.php?page=amapress_state' )
+							) ) . '">' . esc_html( $entry ) . '</a><br/>';
 					}
 				}
 				closedir( $handle );
@@ -1725,9 +2172,10 @@ function amapress_echo_and_check_amapress_state_page() {
 
 		echo '<p><a href="' . esc_attr( amapress_get_github_updater_url() ) . '" target="_blank">Rafraichir le cache Github Updater</a> / <a href="' . esc_attr( admin_url( 'plugins.php' ) ) . '" target="_blank">Voir les extensions installées</a></p>';
 		echo '<p><a href="' . esc_attr( add_query_arg( 'phpinfo', 'T' ) ) . '" target="_blank">Afficher PHP Infos</a></p>';
+		echo '<p><a href="' . esc_attr( add_query_arg( 'wp_db_stats', 'T' ) ) . '" target="_blank">Afficher Stats WP_DB</a></p>';
 	}
 
-	if ( defined( 'FREE_PAGES_PERSO' ) ) {
+	if ( defined( 'FREE_PAGES_PERSO' ) && FREE_PAGES_PERSO ) {
 		echo '<p><strong>Fonctionnement Free Pages Perso: actif</strong></p>';
 	}
 	if ( defined( 'SEND_EMAILS_AS_PLAIN_TEXT' ) ) {
@@ -1735,9 +2183,21 @@ function amapress_echo_and_check_amapress_state_page() {
 	}
 
 	global $wp_version;
-	echo '<p><strong>Version PHP : ' . PHP_VERSION . '</strong></p>';
+	echo '<p><strong>Version PHP : ' . PHP_VERSION . ' (' . PHP_OS . ' / ' . $_SERVER["SERVER_SOFTWARE"] . ')' . '</strong></p>';
 	echo '<p><strong>Version Wordpress : ' . $wp_version . '</strong></p>';
 	echo '<p><strong>Version d\'Amapress : ' . AMAPRESS_VERSION . '</strong></p>';
+	echo '<p><strong>Version MySQL : ' . amapress_get_mysql_version() .
+	     ' (Data ' . amapress_format_filesize( amapress_get_mysql_data_usage() ) .
+	     ' ; Index ' . amapress_format_filesize( amapress_get_mysql_index_usage() ) .
+	     ' ; Cache ' . amapress_format_filesize( amapress_get_mysql_query_cache_size() ) . ')</strong></p>';
+	echo '<p>Hébergement : ' . implode( ' / ', [
+			$_SERVER['SERVER_NAME'],
+			$_SERVER['SERVER_ADDR'] . ':' . $_SERVER['SERVER_PORT'],
+			'Root: ' . $_SERVER['DOCUMENT_ROOT']
+		] ) . '</p>';
+	echo '<p>Limite mémoire/durée exécution : ' . amapress_format_php_size( amapress_get_php_memory_limit() ) . '</p>';
+	echo '<p>Limite durée d\'exécution : ' . amapress_get_php_max_execution() . 's</p>';
+	echo '<p>Limite upload/post : ' . amapress_format_php_size( amapress_get_php_upload_max() ) . '/' . amapress_format_php_size( amapress_get_php_post_max() ) . '</p>';
 
 	echo '<div id="amps-state-accordion">';
 	foreach ( $state as $categ => $checks ) {
