@@ -115,9 +115,13 @@ class Amapress_Calendar {
 		}
 		self::$get_next_events_start_date = $date;
 
+		//optimize loading inside get_next_distributions
+		AmapressContrats::get_active_contrat_instances( null, $date );
+
 		if ( ! $user_id ) {
 			$user_id = amapress_current_user_id();
 		}
+
 		/** @var Amapress_EventBase[] $events */
 		$events = array();
 		$t      = AmapressDistribution::get_next_distributions( $date );
@@ -185,9 +189,6 @@ class Amapress_Calendar {
 				break;
 			case AmapressAssemblee_generale::INTERNAL_POST_TYPE:
 				$events[] = new AmapressAssemblee_generale( $events_id );
-				break;
-			case AmapressCommande::INTERNAL_POST_TYPE:
-				$events[] = new AmapressCommande( $events_id );
 				break;
 			case AmapressIntermittence_panier::INTERNAL_POST_TYPE:
 				$events[] = AmapressIntermittence_panier::getBy( $events_id );

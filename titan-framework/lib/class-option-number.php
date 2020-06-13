@@ -27,6 +27,7 @@ class TitanFrameworkOptionNumber extends TitanFrameworkOption {
 		'step'        => 1,
 		'default'     => 0,
 		'required'    => false,
+		'slider'      => true,
 		'unit'        => '',
 	);
 
@@ -48,7 +49,7 @@ class TitanFrameworkOptionNumber extends TitanFrameworkOption {
 	/**
 	 * Cleans up the serialized value before saving
 	 *
-	 * @param    string $value The serialized value
+	 * @param string $value The serialized value
 	 *
 	 * @return    string The cleaned value
 	 * @since    1.4
@@ -65,7 +66,7 @@ class TitanFrameworkOptionNumber extends TitanFrameworkOption {
 	/**
 	 * Cleans the value for getOption
 	 *
-	 * @param    string $value The raw value of the option
+	 * @param string $value The raw value of the option
 	 *
 	 * @return    mixes The cleaned value
 	 * @since    1.4
@@ -144,7 +145,9 @@ class TitanFrameworkOptionNumber extends TitanFrameworkOption {
 	 */
 	public function display() {
 		$this->echoOptionHeader();
-		echo "<div class='number-slider'></div>";
+		if ( $this->settings['slider'] ) {
+			echo "<div class='number-slider'></div>";
+		}
 		printf( '<input class="%s-text %s" name="%s" placeholder="%s" id="%s" type="number" value="%s" min="%s" max="%s" step="%s" /> %s <p class="description">%s</p>',
 			$this->settings['size'],
 			$this->settings['required'] ? 'required' : '',
@@ -156,32 +159,17 @@ class TitanFrameworkOptionNumber extends TitanFrameworkOption {
 			$this->settings['max'],
 			$this->settings['step'],
 			$this->settings['unit'],
-			$this->settings['desc']
+			$this->getDesc()
 		);
 		$this->echoOptionFooter( false );
 	}
 
-	public function generateMember() {
-		$mn = $this->getMemberName();
-
-		return '
-		public function get' . $mn . '() {
-			$this->ensure_init();
-			return floatval($this->custom[\'' . $this->getID() . '\']);
-		}
-		public function set' . $mn . '($value) {
-			update_post_meta($this->post->ID, \'' . $this->getID() . '\', $value);
-		}
-		';
-	}
-
-
 	/**
 	 * Registers the theme customizer control, for displaying the option
 	 *
-	 * @param    WP_Customize $wp_enqueue_script The customize object
-	 * @param    TitanFrameworkCustomizerSection $section The section where this option will be placed
-	 * @param    int $priority The order of this control in the section
+	 * @param WP_Customize $wp_enqueue_script The customize object
+	 * @param TitanFrameworkCustomizerSection $section The section where this option will be placed
+	 * @param int $priority The order of this control in the section
 	 *
 	 * @return    void
 	 * @since    1.0
@@ -194,6 +182,7 @@ class TitanFrameworkOptionNumber extends TitanFrameworkOption {
 			'description' => $this->settings['desc'],
 			'priority'    => $priority,
 			'required'    => $this->settings['required'],
+			'slider'      => $this->settings['slider'],
 			'size'        => $this->settings['size'],
 			'min'         => $this->settings['min'],
 			'max'         => $this->settings['max'],
@@ -225,6 +214,7 @@ function registerTitanFrameworkOptionNumberControl() {
 		public $step;
 		public $unit;
 		public $required;
+		public $slider;
 
 		private static $firstLoad = true;
 
@@ -238,7 +228,9 @@ function registerTitanFrameworkOptionNumberControl() {
 			?>
             <label class='tf-number'>
                 <span class="customize-control-title"><?php echo esc_html( $this->label ); ?></span>
-                <span class='number-slider'></span>
+	            <?php if ( $this->slider ) { ?>
+                    <span class='number-slider'></span>
+	            <?php } ?>
                 <input class="<?php echo esc_attr( $this->size ) ?>-text <?php echo( $this->required ? 'required' : '' ) ?>"
                        min="<?php echo esc_attr( $this->min ) ?>" max="<?php echo esc_attr( $this->max ) ?>"
                        step="<?php echo esc_attr( $this->step ) ?>" type="number"

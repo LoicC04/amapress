@@ -19,6 +19,7 @@ function amapress_register_entities_lieu_distribution( $entities ) {
 		'menu_icon'               => 'fa-menu fa-map-signs',
 		'default_orderby'         => 'post_title',
 		'default_order'           => 'ASC',
+		'show_admin_bar_new'      => false,
 		'row_actions'             => array(
 			'relocate' => array(
 				'label'     => 'Géolocaliser',
@@ -132,6 +133,7 @@ function amapress_register_entities_lieu_distribution( $entities ) {
 				'type'                   => 'address',
 				'field_name_prefix'      => 'amapress_lieu_distribution',
 				'use_as_field'           => false,
+				'use_enter_gps'          => true,
 				'address_field_name'     => 'amapress_lieu_distribution_adresse',
 				'postal_code_field_name' => 'amapress_lieu_distribution_code_postal',
 				'town_field_name'        => 'amapress_lieu_distribution_ville',

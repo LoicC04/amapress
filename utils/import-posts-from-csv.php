@@ -715,7 +715,13 @@ class Amapress_Import_Posts_CSV {
 						if ( isset( $postdata['ID'] ) ) {
 							$post = get_post( $postdata['ID'] );
 						}
-						if ( ! $post && $posts_update ) {
+						$has_meta_import_keys = false;
+						foreach ( AmapressEntities::getPostTypeFields( amapress_simplify_post_type( $post_type ) ) as $field_k => $field ) {
+							if ( isset( $field['import_key'] ) && $field['import_key'] ) {
+								$has_meta_import_keys = true;
+							}
+						}
+						if ( ! $post && $posts_update && ! $has_meta_import_keys ) {
 							if ( isset( $postdata['post_name'] ) ) {
 								$post = get_page_by_path( $postdata['post_name'], OBJECT, amapress_unsimplify_post_type( $post_type ) );
 							}
@@ -753,6 +759,15 @@ class Amapress_Import_Posts_CSV {
 						$postdata = apply_filters( "amapress_import_apply_default_values_to_posts_data", $postdata, $multi_key, $multi_value, $postmeta, $posttaxo, $post_type, $postmulti );
 						$postmeta = apply_filters( "amapress_import_apply_default_values_to_posts_meta", $postmeta, $multi_key, $multi_value, $postdata, $posttaxo, $post_type, $postmulti );
 						$posttaxo = apply_filters( "amapress_import_apply_default_values_to_posts_taxonomy", $posttaxo, $multi_key, $multi_value, $postdata, $postmeta, $post_type, $postmulti );
+					}
+
+					$postdata = apply_filters( "amapress_import_{$post_type}_check_resolved_post_data_before_update", $postdata, $multi_key, $multi_value, $postmeta, $posttaxo, $post_type, $postmulti );
+					if ( is_wp_error( $postdata ) ) {
+						$errors[ $rkey ][] = $postdata;
+						continue;
+					}
+					if ( empty( $postdata['ID'] ) ) {
+						$update = false;
 					}
 
 					if ( $update ) {

@@ -52,11 +52,19 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 	}
 
 	public function getEndDateAndHour() {
-		return Amapress::make_date_and_hour( $this->getDate(), $this->getHeure_fin() );
+		return Amapress::make_date_and_hour( $this->hasDateFin() ? $this->getDateFin() : $this->getDate(), $this->getHeure_fin() );
 	}
 
 	public function getDate() {
 		return $this->getCustom( 'amapress_amap_event_date' );
+	}
+
+	public function getDateFin() {
+		return $this->getCustom( 'amapress_amap_event_date_fin' );
+	}
+
+	public function hasDateFin() {
+		return $this->getDateFin() > 0;
 	}
 
 	public function getHeure_debut() {
@@ -211,6 +219,10 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
 		}
 
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
+		}
+
 		$participants = $this->getParticipantsIds();
 		if ( in_array( $user_id, $participants ) ) {
 			return 'already_in_list';
@@ -227,6 +239,10 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 	public function desinscrireParticipant( $user_id ) {
 		if ( ! amapress_is_user_logged_in() ) {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
 		}
 
 		$participants = $this->getParticipantsIds();
@@ -260,7 +276,7 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 			$order );
 	}
 
-	/** @return Amapress_EventEntry */
+	/** @return Amapress_EventEntry[] */
 	public function get_related_events( $user_id ) {
 		$ret         = array();
 		$class_names = $this->getCategoriesCSS();
@@ -354,5 +370,13 @@ class AmapressAmap_event extends Amapress_EventBase implements iAmapress_Event_L
 		}
 
 		return 'Reply-To: ' . implode( ',', $emails );
+	}
+
+	public function canSubscribe() {
+		return $this->canSubscribeType( 'event' );
+	}
+
+	public function canUnsubscribe() {
+		return $this->canUnsubscribeType( 'event' );
 	}
 }

@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<ruleset name="WordPress Coding Standards based custom ruleset for your plugin">
+    <description>A modified set of rules, based on the WordPress Coding Standards.</description>
+
+    <!-- What to scan -->
+    <file>.</file>
+    <exclude-pattern>/vendor/</exclude-pattern>
+    <exclude-pattern>/node_modules/</exclude-pattern>
+
+    <!-- How to scan -->
+    <!-- Usage instructions: https://github.com/squizlabs/PHP_CodeSniffer/wiki/Usage -->
+    <!-- Annotated ruleset: https://github.com/squizlabs/PHP_CodeSniffer/wiki/Annotated-ruleset.xml -->
+    <arg value="sp"/> <!-- Show sniff and progress -->
+    <arg name="basepath" value="./"/><!-- Strip the file paths down to the relevant bit -->
+    <arg name="colors"/>
+    <arg name="extensions" value="php"/>
+    <arg name="parallel" value="8"/><!-- Enables parallel processing when available for faster results. -->
+
+    <!-- Rules: WordPress Coding Standards -->
+    <!-- https://github.com/WordPress-Coding-Standards/WordPress-Coding-Standards -->
+    <!-- https://github.com/WordPress-Coding-Standards/WordPress-Coding-Standards/wiki/Customizable-sniff-properties -->
+
+    <!-- Include the WordPress ruleset, with exclusions. -->
+    <rule ref="WordPress">
+        <exclude name="Generic.WhiteSpace.ScopeIndent.IncorrectExact"/>
+        <exclude name="Generic.WhiteSpace.ScopeIndent.Incorrect"/>
+        <exclude name="Generic.Commenting.DocComment.MissingShort"/>
+        <exclude name="PEAR.Functions.FunctionCallSignature.Indent"/>
+        <exclude name="WordPress.Files.FileName"/>
+        <exclude name="WordPress.PHP.StrictComparisons"/>
+        <exclude name="Squiz.PHP.CommentedOutCode.Found"/>
+        <exclude name="WordPress.WhiteSpace.PrecisionAlignment.Found"/>
+        <exclude name="WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid"/>
+        <exclude name="Squiz.Commenting.FunctionComment.Missing"/>
+
+        <exclude name="Generic.Commenting.DocComment.SpacingAfter"/>
+        <exclude name="Generic.Files.LineEndings.InvalidEOLChar"/>
+        <exclude name="Generic.Functions.FunctionCallArgumentSpacing.SpaceBeforeComma"/>
+        <exclude name="PEAR.Functions.FunctionCallSignature"/>
+        <exclude name="Squiz.Commenting"/>
+        <exclude name="Squiz.PHP.DisallowSizeFunctionsInLoops.Found"/>
+        <exclude name="Squiz.WhiteSpace"/>
+        <exclude name="WordPress.Arrays"/>
+        <exclude name="WordPress.Files.FileName"/>
+        <exclude name="WordPress.NamingConventions"/>
+        <exclude name="WordPress.Security.ValidatedSanitizedInput.MissingUnslash"/>
+        <exclude name="WordPress.WP.I18n.NonSingularStringLiteralText"/>
+        <exclude name="WordPress.WhiteSpace"/>
+        <exclude name="Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed"/>
+        <exclude name="Generic.Formatting.MultipleStatementAlignment.NotSameWarning"/>
+        <exclude name="WordPress.PHP.StrictInArray.MissingTrueStrict"/>
+    </rule>
+</ruleset>

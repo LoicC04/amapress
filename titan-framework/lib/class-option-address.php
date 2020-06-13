@@ -18,6 +18,7 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 		'address_field_name'     => null,
 		'postal_code_field_name' => null,
 		'town_field_name'        => null,
+		'use_enter_gps'          => false,
 		'sanitize_callbacks'     => array(),
 	);
 
@@ -139,27 +140,39 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 			$address_content = $_REQUEST[ $this->settings['address_field_name'] ] . ', ' . $_REQUEST[ $this->settings['postal_code_field_name'] ] . ' ' . $_REQUEST[ $this->settings['town_field_name'] ];
 		}
 
-		if ( ! empty( $this->settings['sanitize_callbacks'] ) ) {
-			foreach ( $this->settings['sanitize_callbacks'] as $callback ) {
-				$address_content = call_user_func_array( $callback, array( $address_content, $this ) );
-			}
-		}
-
-		$address = self::lookup_address( $address_content );
-		if ( $address && ! is_wp_error( $address ) ) {
-			call_user_func( $save_fn, $postID, "{$id}_long", $address['longitude'] );
-			call_user_func( $save_fn, $postID, "{$id}_lat", $address['latitude'] );
-			call_user_func( $save_fn, $postID, "{$id}_location_type", $address['location_type'] );
+		$custom_lat = isset( $_REQUEST["$id-custom-lat"] ) ? floatval( $_REQUEST["$id-custom-lat"] ) : 0;
+		$custom_lng = isset( $_REQUEST["$id-custom-lng"] ) ? floatval( $_REQUEST["$id-custom-lng"] ) : 0;
+		if ( ! empty( $custom_lat ) && ! empty( $custom_lng ) ) {
+			call_user_func( $save_fn, $postID, "{$id}_cusgeo", [ $custom_lat, $custom_lng ] );
+			call_user_func( $save_fn, $postID, "{$id}_long", $custom_lng );
+			call_user_func( $save_fn, $postID, "{$id}_lat", $custom_lat );
+			call_user_func( $save_fn, $postID, "{$id}_location_type", 'm' );
 			call_user_func( $delete_fn, $postID, "{$id}_loc_err" );
 		} else {
-			call_user_func( $delete_fn, $postID, "{$id}_long" );
-			call_user_func( $delete_fn, $postID, "{$id}_lat" );
-			call_user_func( $delete_fn, $postID, "{$id}_location_type" );
-			if ( is_wp_error( $address ) ) {
-				/** @var WP_Error $address */
-				call_user_func( $save_fn, $postID, "{$id}_loc_err", $address->get_error_message() );
-			} else {
+			if ( ! empty( $this->settings['sanitize_callbacks'] ) ) {
+				foreach ( $this->settings['sanitize_callbacks'] as $callback ) {
+					$address_content = call_user_func_array( $callback, array( $address_content, $this ) );
+				}
+			}
+
+			$address = self::lookup_address( $address_content );
+			if ( $address && ! is_wp_error( $address ) ) {
+				call_user_func( $delete_fn, $postID, "{$id}_cusgeo" );
+				call_user_func( $save_fn, $postID, "{$id}_long", $address['longitude'] );
+				call_user_func( $save_fn, $postID, "{$id}_lat", $address['latitude'] );
+				call_user_func( $save_fn, $postID, "{$id}_location_type", $address['location_type'] );
 				call_user_func( $delete_fn, $postID, "{$id}_loc_err" );
+			} else {
+				call_user_func( $delete_fn, $postID, "{$id}_cusgeo" );
+				call_user_func( $delete_fn, $postID, "{$id}_long" );
+				call_user_func( $delete_fn, $postID, "{$id}_lat" );
+				call_user_func( $delete_fn, $postID, "{$id}_location_type" );
+				if ( is_wp_error( $address ) ) {
+					/** @var WP_Error $address */
+					call_user_func( $save_fn, $postID, "{$id}_loc_err", $address->get_error_message() );
+				} else {
+					call_user_func( $delete_fn, $postID, "{$id}_loc_err" );
+				}
 			}
 		}
 
@@ -180,18 +193,20 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 				esc_textarea( stripslashes( $this->getValue() ) )
 			);
 		}
-		self::echoLoc();
+		self::echoLoc( null, true );
 		$this->echoOptionFooter( false );
 	}
 
-	private function echoLoc( $postID = null ) {
-		$get_fn = $this->settings['user'] ? 'get_user_meta' : 'get_post_meta';
-		$postID = $this->getPostID( $postID );
-		$id     = ! empty( $this->settings['field_name_prefix'] ) ? $this->settings['field_name_prefix'] : $this->getID();
-		$loc    = call_user_func( $get_fn, $postID, "{$id}_location_type", true );
+	private function echoLoc( $postID = null, $with_help = false, $for_column = false ) {
+		$get_fn     = $this->settings['user'] ? 'get_user_meta' : 'get_post_meta';
+		$postID     = $this->getPostID( $postID );
+		$id         = ! empty( $this->settings['field_name_prefix'] ) ? $this->settings['field_name_prefix'] : $this->getID();
+		$loc        = call_user_func( $get_fn, $postID, "{$id}_location_type", true );
+		$coords_gps = 'inconnues';
 		if ( ! empty( $loc ) ) {
-			$lat = call_user_func( $get_fn, $postID, "{$id}_lat", true );
-			$lng = call_user_func( $get_fn, $postID, "{$id}_long", true );
+			$lat        = call_user_func( $get_fn, $postID, "{$id}_lat", true );
+			$lng        = call_user_func( $get_fn, $postID, "{$id}_long", true );
+			$coords_gps = "lat.=$lat;lng.=$lng";
 			if ( 'google' != self::$geoprovider ) {
 				echo '<p class="' . $id . ' localized-address">Localisé <a target="_blank" href="https://www.openstreetmap.org/?mlat=' . $lat . '&mlon=' . $lng . '#map=17/' . $lat . '/' . $lng . '">Voir sur Open Street Map</a></p>';
 			} else {
@@ -205,8 +220,40 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 			if ( 'google' == self::$geoprovider && empty( self::$google_map_api_key ) ) {
 				echo "<p class='$id unlocalized-address'><strong>Pas de clé Google API configurée</strong> - Adresse non localisée$loc_err</p>";
 			} else {
-				echo "<p class='$id unlocalized-address'>Adresse non localisée$loc_err</p>";
+				if ( $this->settings['use_as_field'] ) {
+					$full_address = $this->getValue( $postID );
+				} elseif ( ! empty( $this->settings['address_field_name'] )
+				           && ! empty( $this->settings['postal_code_field_name'] )
+				           && ! empty( $this->settings['town_field_name'] ) ) {
+					$full_address = call_user_func( $get_fn, $postID, $this->settings['address_field_name'], true ) .
+					                ', ' . call_user_func( $get_fn, $postID, $this->settings['postal_code_field_name'], true ) .
+					                ' ' . call_user_func( $get_fn, $postID, $this->settings['town_field_name'], true );
+				} elseif ( ! empty( $this->settings['address_field_name'] ) ) {
+					$full_address = call_user_func( $get_fn, $postID, $this->settings['address_field_name'], true );
+				}
+				$help = '';
+				if ( $with_help ) {
+					if ( ! empty( $full_address ) ) {
+						$help = '<br/><a target="_blank" href="' . esc_url(
+								'https://www.openstreetmap.org/search?query=' . $full_address
+							) . '">Rechercher l\'adresse sur OpenStreetMap</a> afin d\'en trouver la bonne forme (par exemple, sans précision du batiment, étage, ...)';
+					}
+				}
+				if ( ! empty( $full_address ) ) {
+					echo "<p class='$id unlocalized-address'>Adresse non localisée$loc_err$help</p>";
+				} else {
+					echo "<p class='$id'>Pas d'adresse</p>";
+				}
 			}
+		}
+
+		if ( ! $for_column && $this->settings['use_enter_gps'] ) {
+			$cusgeo = call_user_func( $get_fn, $postID, "{$id}_cusgeo", true );
+			if ( empty( $cusgeo ) ) {
+				$cusgeo = [ 0, 0 ];
+			}
+			echo "<p>Coordonnées GPS actuelles: $coords_gps<br/>
+Saisie manuelle: lat.=<input name='$id-custom-lat' type='number' min='-180' max='180' value='{$cusgeo[0]}' step='any' /> ; lng.=<input name='$id-custom-lng' type='number' min='-180' max='180' value='{$cusgeo[1]}' step='any' /> </p>";
 		}
 	}
 
@@ -217,7 +264,7 @@ class TitanFrameworkOptionAddress extends TitanFrameworkOption {
 				$this->getValue( $post_id )
 			);
 		}
-		self::echoLoc( $post_id );
+		self::echoLoc( $post_id, false, true );
 	}
 
 	public function cleanValueForSaving( $value ) {

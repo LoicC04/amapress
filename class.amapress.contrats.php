@@ -84,13 +84,10 @@ class AmapressContrats {
 		                 //|| count($commands[$contrat_id]['orphan']) > 0
 		                 || count( $paniers[ $contrat_id ] ) > 0;
 
-		return sprintf( 'Distributions : %d manquantes ; %d à associer ; %d à déassocier\n
-                        Paniers : %d manquants\n
-                        Comandes : %d manquants ; %d à annuler',
+		return sprintf( "Distributions : %d manquantes ; %d à associer ; %d à déassocier\n
+                        Paniers : %d manquants",
 			count( $dists[ $contrat_id ]['missing'] ), count( $dists[ $contrat_id ]['associate'] ), count( $dists[ $contrat_id ]['unassociate'] ),
-			count( $paniers[ $contrat_id ] ),
-			0, //count($commands[$contrat_id]['missing']),
-			0 //count($commands[$contrat_id]['orphan'])
+			count( $paniers[ $contrat_id ] )
 		);
 	}
 
@@ -259,12 +256,24 @@ class AmapressContrats {
 		$include_futur = true
 	) {
 		if ( empty( $date ) ) {
-			$date = Amapress::end_of_day( amapress_time() );
+			$date = amapress_time();
 		}
+		$date = Amapress::end_of_day( $date );
 
 		$filter = Amapress::getFilterForReferent();
-		$key    = "amapress_get_active_contrat_instances_ids_{$contrat_instance_id}_{$date}_{$ignore_renouv_delta}_{$filter}";
-		$res    = wp_cache_get( $key );
+		if ( empty( $filter ) ) {
+			$filter = 0;
+		} else {
+			$filter = 1;
+		}
+		if ( empty( $ignore_renouv_delta ) ) {
+			$ignore_renouv_delta = 0;
+		} else {
+			$ignore_renouv_delta = 1;
+		}
+
+		$key = "amapress_get_active_contrat_instances_ids_{$contrat_instance_id}_{$date}_{$ignore_renouv_delta}_{$filter}";
+		$res = wp_cache_get( $key );
 		if ( false === $res ) {
 			$meta_query = array(
 				'relation' => 'AND',
@@ -323,8 +332,10 @@ class AmapressContrats {
 	 */
 	public static function get_active_contrat_instances( $contrat_instance_id = null, $date = null, $ignore_renouv_delta = false, $include_futur = true ) {
 		if ( empty( $date ) ) {
-			$date = Amapress::end_of_day( amapress_time() );
+			$date = amapress_time();
 		}
+		$date = Amapress::end_of_day( $date );
+
 
 		$key = "amapress_get_active_contrat_instances_{$contrat_instance_id}_{$date}_{$ignore_renouv_delta}";
 		$res = wp_cache_get( $key );
@@ -436,7 +447,7 @@ class AmapressContrats {
 			$query = array(
 				'post_type'      => AmapressContrat_instance::INTERNAL_POST_TYPE,
 				'posts_per_page' => - 1,
-				'post_status'    => 'any',
+				'post_status'    => [ 'draft', 'publish', 'trash' ],
 				'fields'         => 'ids',
 				'meta_query'     => array(
 					'relation' => 'AND',
@@ -648,11 +659,19 @@ class AmapressContrats {
 					foreach ( $lieu_ids as $lieu_id ) {
 						$contrat = AmapressContrat::getBy( $contrat_id );
 						if ( $contrat ) {
+							$contrat_lieu_ref_ids = $contrat->getReferentsIds( $lieu_id, true, true );
+							$contrat_ref_ids      = $contrat->getReferentsIds( $lieu_id, false, true );
+							$prod_lieu_ref_ids    = $prod->getReferentsIds( $lieu_id, true );
 							foreach ( $contrat->getReferentsIds( $lieu_id ) as $ref_id ) {
 								if ( $ref_id ) {
 									$res[] = array(
 										'ref_id'               => $ref_id,
 										'lieu'                 => $lieu_id,
+										'level'                =>
+											( in_array( $ref_id, $contrat_lieu_ref_ids ) ? 'contrat_lieu' :
+												( in_array( $ref_id, $contrat_ref_ids ) ? 'contrat' :
+													( in_array( $ref_id, $prod_lieu_ref_ids ) ? 'prod_lieu' :
+														'prod' ) ) ),
 										'producteur'           => $prod->ID,
 										'contrat_ids'          => [ $contrat_id ],
 										'contrat_instance_ids' => $contrat_instance_ids,
@@ -661,11 +680,12 @@ class AmapressContrats {
 							}
 						} else {
 							foreach ( $prod->getReferentsIds( $lieu_id ) as $ref_id ) {
+								$prod_lieu_ref_ids = $prod->getReferentsIds( $lieu_id, true );
 								if ( $ref_id ) {
-//                    if (!$ignore_lieu)
 									$res[] = array(
 										'ref_id'               => $ref_id,
 										'lieu'                 => $lieu_id,
+										'level'                => ( in_array( $ref_id, $prod_lieu_ref_ids ) ? 'prod_lieu' : 'prod' ),
 										'producteur'           => $prod->ID,
 										'contrat_ids'          => [ $contrat_id ],
 										'contrat_instance_ids' => $contrat_instance_ids,
@@ -697,39 +717,81 @@ class AmapressContrats {
 	/**
 	 * @return AmapressContrat_quantite[]
 	 */
-	public static function get_contrat_quantites( $contrat_instance_id ) {
+	public static function get_contrat_quantites( $contrat_instance_id, $date = null, $order_by_groups = true ) {
 		$key = "amapress_get_contrat_quantites_{$contrat_instance_id}";
 		$res = wp_cache_get( $key );
 		if ( false === $res ) {
-			$query = array(
+			$active_contrat_instance_ids = [];
+			foreach ( AmapressContrats::get_active_contrat_instances_ids( null, $date ) as $cid ) {
+				if ( false === wp_cache_get( "amapress_get_contrat_quantites_$cid" ) ) {
+					$active_contrat_instance_ids[] = $cid;
+				}
+			}
+			if ( ! in_array( $contrat_instance_id, $active_contrat_instance_ids ) ) {
+				$active_contrat_instance_ids[] = $contrat_instance_id;
+			}
+			$query   = array(
 				'post_type'      => AmapressContrat_quantite::INTERNAL_POST_TYPE,
 				'post_status'    => array( 'publish', 'draft' ),
 				'posts_per_page' => - 1,
-//            'orderby' => 'meta_value_num',
-//            'order' => 'ASC',
-//            'meta_key' => 'amapress_contrat_quantite_quantite',
+				'orderby'        => 'none',
 				'meta_query'     => array(
 					array(
 						'key'     => 'amapress_contrat_quantite_contrat_instance',
-						'value'   => $contrat_instance_id,
-						'compare' => '=',
+						'value'   => amapress_prepare_in( $active_contrat_instance_ids ),
+						'compare' => 'IN',
 						'type'    => 'NUMERIC'
 					),
 				)
 			);
-			$res   = array_map( function ( $p ) {
+			$all_res = array_map( function ( $p ) {
 				return AmapressContrat_quantite::getBy( $p );
 			}, get_posts( $query ) );
-			usort( $res, function ( $a, $b ) {
-				/** @var AmapressContrat_quantite $a */
-				/** @var AmapressContrat_quantite $b */
-				if ( abs( $a->getQuantite() - $b->getQuantite() ) < 0.01 ) {
-					return $a->ID < $b->ID ? - 1 : 1;
-				} else {
-					return $a->getQuantite() < $b->getQuantite() ? - 1 : 1;
+			foreach (
+				array_group_by( $all_res, function ( $q ) {
+					/** @var AmapressContrat_quantite $q */
+					return $q->getContrat_instanceId();
+				} ) as $cid => $quants
+			) {
+				usort( $quants, function ( $a, $b ) {
+					/** @var AmapressContrat_quantite $a */
+					/** @var AmapressContrat_quantite $b */
+					if ( abs( $a->getQuantite() - $b->getQuantite() ) < 0.01 ) {
+						return $a->ID < $b->ID ? - 1 : 1;
+					} else {
+						return $a->getQuantite() < $b->getQuantite() ? - 1 : 1;
+					}
+				} );
+				wp_cache_set( "amapress_get_contrat_quantites_$cid", $quants );
+			}
+			$res = wp_cache_get( $key );
+		}
+		if ( empty( $res ) ) {
+			$res = [];
+		}
+
+		if ( ! $order_by_groups ) {
+			return $res;
+		}
+
+		$ordered_res = [];
+		foreach ( $res as $quant ) {
+			$grp_class_name = '';
+			$has_group      = preg_match( '/^\s*\[([^\]]+)\]/', $quant->getTitle(), $matches );
+			if ( $has_group ) {
+				if ( isset( $matches[1] ) ) {
+					$grp_class_name = sanitize_html_class( $matches[1] );
 				}
-			} );
-			wp_cache_set( $key, $res );
+			}
+			if ( ! isset( $ordered_res[ $grp_class_name ] ) ) {
+				$ordered_res[ $grp_class_name ] = [];
+			}
+			$ordered_res[ $grp_class_name ][] = $quant;
+		}
+
+		$res = [];
+		foreach ( $ordered_res as $k => $grp ) {
+			$res = array_merge( $res, array_values( $grp ) );
 		}
 
 		return $res;
@@ -846,16 +908,14 @@ class AmapressContrats {
 			$query        = array(
 				'post_type'      => AmapressAdhesion::INTERNAL_POST_TYPE,
 				'posts_per_page' => - 1,
+				'orderby'        => 'none',
 				'meta_query'     => $meta_query
 			);
 
 			$res = array();
 			foreach ( get_posts( $query ) as $p ) {
 				$res[ $p->ID ] = AmapressAdhesion::getBy( $p );
-//				$res[ $p->ID ]->getLieuId();
 			}
-//			var_dump($query);
-//			var_dump($res);
 			wp_cache_set( $key, $res );
 		}
 
@@ -867,7 +927,7 @@ class AmapressContrats {
 	 */
 	public static function get_all_adhesions( $contrat_id = null, $contrat_quantite_id = null, $lieu_id = null ) {
 		$key_ids = is_array( $contrat_id ) ? implode( '-', $contrat_id ) : $contrat_id;
-		$key     = "amapress_get_all_adhesions_{$key_ids}_{$contrat_quantite_id}_{$lieu_id}";
+		$key     = "amapress_get_all_adhesions_{$key_ids}_{$lieu_id}";
 		$res     = wp_cache_get( $key );
 		if ( false === $res ) {
 			$meta_query = array();
@@ -901,18 +961,6 @@ class AmapressContrats {
 					'type'    => 'NUMERIC',
 				);
 			}
-			if ( $contrat_quantite_id ) {
-				$meta_query[] = array(
-					'relation' => 'OR',
-					array(
-						'key'     => 'amapress_adhesion_contrat_quantite',
-						'value'   => $contrat_quantite_id,
-						'compare' => '=',
-						'type'    => 'NUMERIC',
-					),
-					amapress_prepare_like_in_array( 'amapress_adhesion_contrat_quantite', $contrat_quantite_id ),
-				);
-			}
 			$query = array(
 				'post_type'      => AmapressAdhesion::INTERNAL_POST_TYPE,
 				'posts_per_page' => - 1,
@@ -923,7 +971,18 @@ class AmapressContrats {
 			$res = array_map( function ( $p ) {
 				return AmapressAdhesion::getBy( $p );
 			}, get_posts( $query ) );
+			$res = array_filter( $res, function ( $a ) {
+				/** @var AmapressAdhesion $a */
+				return $a->getContrat_instance();
+			} );
 			wp_cache_set( $key, $res );
+		}
+
+		if ( $contrat_quantite_id ) {
+			$res = array_filter( $res, function ( $a ) use ( $contrat_quantite_id ) {
+				/** @var AmapressAdhesion $a */
+				return in_array( $contrat_quantite_id, $a->getContrat_quantites_IDs() );
+			} );
 		}
 
 		return $res;
@@ -940,6 +999,7 @@ class AmapressContrats {
 			$query = array(
 				'posts_per_page' => - 1,
 				'post_type'      => AmapressAdhesion::INTERNAL_POST_TYPE,
+				'orderby'        => 'none',
 				'meta_query'     => array(
 					'relation' => 'AND',
 					array(
@@ -1098,7 +1158,12 @@ class AmapressContrats {
 	private static $related_user_cache = [];
 
 	/* @return int[] */
-	public static function get_related_users( $user_id, $allow_not_logged = false, $date = null ) {
+	public static function get_related_users(
+		$user_id, $allow_not_logged = false,
+		$date = null, $contrat_id = null,
+		$include_cofoyers = true,
+		$include_coadhs = 'auto'
+	) {
 		if ( ! $allow_not_logged && ! amapress_is_user_logged_in() ) {
 			return [];
 		}
@@ -1109,33 +1174,47 @@ class AmapressContrats {
 
 		$date = Amapress::end_of_day( $date );
 
-		$key = "amapress_get_related_users_{$user_id}_{$date}";
+		$key = "amapress_get_related_users_{$user_id}_{$date}_{$contrat_id}_{$include_cofoyers}_{$include_coadhs}";
 		$res = wp_cache_get( $key );
 		if ( false === $res ) {
 			$res  = array( $user_id );
 			$user = AmapressUser::getBy( $user_id );
 			if ( $user ) {
-				if ( $user->getCoAdherent1Id() ) {
-					$res[] = $user->getCoAdherent1Id();
+				if ( true === $include_coadhs || ( 'auto' === $include_coadhs && ! Amapress::hasPartialCoAdhesion() ) ) {
+					if ( $user->getCoAdherent1Id() ) {
+						$res[] = $user->getCoAdherent1Id();
+					}
+					if ( $user->getCoAdherent2Id() ) {
+						$res[] = $user->getCoAdherent2Id();
+					}
+					if ( $user->getCoAdherent3Id() ) {
+						$res[] = $user->getCoAdherent3Id();
+					}
 				}
-				if ( $user->getCoAdherent2Id() ) {
-					$res[] = $user->getCoAdherent2Id();
-				}
-				if ( $user->getCoAdherent3Id() ) {
-					$res[] = $user->getCoAdherent3Id();
+				if ( $include_cofoyers ) {
+					if ( $user->getCoFoyer1Id() ) {
+						$res[] = $user->getCoFoyer1Id();
+					}
+					if ( $user->getCoFoyer2Id() ) {
+						$res[] = $user->getCoFoyer2Id();
+					}
+					if ( $user->getCoFoyer3Id() ) {
+						$res[] = $user->getCoFoyer3Id();
+					}
 				}
 				$res = array_merge( $res, $user->getPrincipalUserIds() );
 			}
 
-			$active_contrat_instances_ids = amapress_prepare_in_sql(
-				AmapressContrats::get_active_contrat_instances_ids( null, $date, true ) );
-			if ( amapress_current_user_id() == $user_id ) {
-				$in = amapress_prepare_in_sql( $res );
+			if ( false !== $include_coadhs ) {
+				$active_contrat_instances_ids = amapress_prepare_in_sql(
+					AmapressContrats::get_active_contrat_instances_ids( $contrat_id, $date, true ) );
+				if ( amapress_current_user_id() == $user_id ) {
+					$in = amapress_prepare_in_sql( $res );
 
-				global $wpdb;
-				$res = array_merge( $res,
-					$wpdb->get_col(
-						"SELECT mt3.meta_value
+					global $wpdb;
+					$res = array_merge( $res,
+						amapress_get_col_cached(
+							"SELECT mt3.meta_value
 FROM $wpdb->postmeta
 LEFT JOIN $wpdb->postmeta AS mt1
 ON ($wpdb->postmeta.post_id = mt1.post_id
@@ -1156,13 +1235,14 @@ OR ( mt2.meta_key = 'amapress_adhesion_date_fin'
 AND CAST(mt2.meta_value AS UNSIGNED) = 0 ) 
 OR ( mt2.meta_key = 'amapress_adhesion_date_fin'
 AND CAST(mt2.meta_value AS UNSIGNED) >= $date ) )"
-					) );
-			} else {
-				if ( empty( self::$related_user_cache[ $date ] ) ) {
-					global $wpdb;
-					self::$related_user_cache[ $date ] = array_group_by(
-						$wpdb->get_results(
-							"SELECT DISTINCT mt3.meta_value as user_id, $wpdb->postmeta.meta_value
+						) );
+				} else {
+					$rel_key = "{$date}_{$contrat_id}";
+					if ( empty( self::$related_user_cache[ $rel_key ] ) ) {
+						global $wpdb;
+						self::$related_user_cache[ $rel_key ] = array_group_by(
+							amapress_get_results_cached(
+								"SELECT DISTINCT mt3.meta_value as user_id, $wpdb->postmeta.meta_value
 FROM $wpdb->postmeta
 LEFT JOIN $wpdb->postmeta AS mt1
 ON ($wpdb->postmeta.post_id = mt1.post_id
@@ -1182,19 +1262,20 @@ OR ( mt2.meta_key = 'amapress_adhesion_date_fin'
 AND CAST(mt2.meta_value AS UNSIGNED) = 0 ) 
 OR ( mt2.meta_key = 'amapress_adhesion_date_fin'
 AND CAST(mt2.meta_value AS UNSIGNED) >= $date ) )"
-						),
-						function ( $o ) {
-							return intval( $o->meta_value );
-						} );
-				}
+							),
+							function ( $o ) {
+								return intval( $o->meta_value );
+							} );
+					}
 
-				if ( isset( self::$related_user_cache[ $date ][ $user_id ] ) ) {
-					foreach ( self::$related_user_cache[ $date ][ $user_id ] as $o ) {
-						if ( ! $o->user_id || in_array( $o->user_id, $res ) ) {
-							continue;
+					if ( isset( self::$related_user_cache[ $rel_key ][ $user_id ] ) ) {
+						foreach ( self::$related_user_cache[ $rel_key ][ $user_id ] as $o ) {
+							if ( ! $o->user_id || in_array( $o->user_id, $res ) ) {
+								continue;
+							}
+
+							$res[] = $o->user_id;
 						}
-
-						$res[] = $o->user_id;
 					}
 				}
 			}

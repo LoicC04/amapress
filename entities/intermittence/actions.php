@@ -8,9 +8,20 @@ function amapress_create_user_if_not_exists(
 	$email_address,
 	$first_name = null, $last_name = null,
 	$address = null, $tel = null,
-	$notify = 'both',
+	$notify = null,
 	$update_existing = true
 ) {
+	if ( empty( $notify ) ) {
+		if ( 'active' == amapress_is_plugin_active( 'new-user-approve' ) ) {
+			$notify = 'none';
+		} else {
+			$notify = 'both';
+		}
+	} elseif ( 'admin' === $notify ) {
+		if ( 'active' == amapress_is_plugin_active( 'new-user-approve' ) ) {
+			$notify = 'none';
+		}
+	}
 	$user = get_user_by( 'email', $email_address );
 	if ( null == $user ) {
 		// Generate the password and create the user
@@ -46,7 +57,9 @@ function amapress_create_user_if_not_exists(
 
 		// Email the user
 //        wp_mail( $email_address, 'Welcome!', 'Your Password: ' . $password );
-		wp_new_user_notification( $user_id, null, $notify );
+		if ( 'none' !== $notify ) {
+			wp_new_user_notification( $user_id, null, $notify );
+		}
 
 		if ( ! empty( $address ) ) {
 			$address = preg_replace( '/(?:\s+-\s+|,\s*)?(\d\s*\d\s*\d\s*\d\s*\d|2\s*[AB]\s*\d\s*\d\s*\d)\s+([^,]+)(?:,\s*\1\s+\2)+/i', ', $1 $2', $address );
@@ -123,7 +136,55 @@ function amapress_create_user_if_not_exists(
 	return $user->ID;
 }
 
-add_action( 'admin_post_nopriv_inscription_intermittent', 'amapress_redirect_login' );
+add_action( 'admin_post_nopriv_inscription_intermittent', 'amapress_admin_action_nopriv_inscription_intermittent' );
+function amapress_admin_action_nopriv_inscription_intermittent() {
+	if ( ! Amapress::toBool( Amapress::getOption( 'intermit_self_inscr' ) ) && ! amapress_can_access_admin() ) {
+		wp_die( 'Les inscriptions à l\'Espace intermittents sont gérées par le collectif' );
+	}
+
+	header( 'Content-Type: text/html; charset=UTF-8' );
+	if ( ! isset( $_REQUEST['email'] ) ) {
+		die( 'Pas d\'email spécifié' );
+	}
+
+	$key     = ! empty( $_POST['key'] ) ? $_POST['key'] : '';
+	$post_id = ! empty( $_POST['post-id'] ) ? intval( $_POST['post-id'] ) : 0;
+	$is_ok   = false;
+	if ( ! empty( $key ) && ! empty( $post_id ) ) {
+		$post = get_post( $post_id );
+		if ( $post ) {
+			if ( false !== strpos( $post->post_content, "key=$key" ) ) {
+				$is_ok = true;
+			}
+		}
+	}
+
+	if ( ! $is_ok ) {
+		echo '<p class="error">Non autorisé</p>';
+		die();
+	}
+
+	$user_firt_name = isset( $_REQUEST['first_name'] ) ? $_REQUEST['first_name'] : '';
+	$user_last_name = isset( $_REQUEST['last_name'] ) ? $_REQUEST['last_name'] : '';
+	$user_phone     = isset( $_REQUEST['phone'] ) ? $_REQUEST['phone'] : '';
+	$user_address   = isset( $_REQUEST['address'] ) ? $_REQUEST['address'] : '';
+	$user_email     = sanitize_email( $_REQUEST['email'] );
+
+	$user = get_user_by( 'email', $user_email );
+	if ( $user ) {
+		echo '<p class="error">L\'adresse email ' . $user_email . ' est déjà utilisée.</p>';
+		die();
+	}
+
+	$user_id = amapress_create_user_if_not_exists( $user_email, $user_firt_name, $user_last_name, $user_address, $user_phone );
+	$user    = AmapressUser::getBy( $user_id );
+	if ( false === $user->inscriptionIntermittence() ) {
+		echo 'Vous êtes déjà inscrit sur la liste des intermittents';
+	} else {
+		echo 'Vous êtes inscrit sur la liste des intermittents';
+	}
+}
+
 add_action( 'admin_post_inscription_intermittent', 'amapress_admin_action_inscription_intermittent' );
 function amapress_admin_action_inscription_intermittent() {
 	if ( ! Amapress::toBool( Amapress::getOption( 'intermit_self_inscr' ) ) && ! amapress_can_access_admin() ) {

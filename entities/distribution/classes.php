@@ -114,6 +114,236 @@ class AmapressDistribution extends Amapress_EventBase {
 	}
 
 	/** @return AmapressUser[] */
+	public function getGardiens( $include_private = false ) {
+		return array_map( function ( $id ) {
+			return AmapressUser::getBy( $id );
+		}, $this->getGardiensIds( $include_private ) );
+	}
+
+	/** @return int[] */
+	public function getGardiensIds( $include_private = false ) {
+
+		$ids = $this->getCustomAsIntArray( 'amapress_distribution_gardiens' );
+		if ( $include_private ) {
+			foreach ( $this->getPaniersGarde() as $v ) {
+				$ids[] = intval( $v );
+			}
+		}
+
+		return array_unique( $ids );
+	}
+
+	public function getPaniersDescription( $amapien_id ) {
+		$quantites = array();
+		foreach ( $this->getContrats() as $contrat_instance ) {
+			$adhesions = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $amapien_id, $contrat_instance->ID, $this->getDate() );
+			/** @var AmapressAdhesion $adhesion */
+			$adhesion = array_shift( $adhesions );
+			if ( ! $adhesion ) {
+				continue;
+			}
+			$quantites[] = $contrat_instance->getModelTitle() .
+			               '(' . $adhesion->getContrat_quantites_AsString( $this->getDate() ) . ')';
+		}
+
+		return implode( ', ', $quantites );
+	}
+
+	public function inscrireGardien(
+		$user_id, $allow_anonymous = false, $allow_not_member = false,
+		$comment = null
+	) {
+		if ( ! $allow_anonymous && ! amapress_is_user_logged_in() ) {
+			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! $allow_not_member && ! amapress_can_access_admin() ) {
+			if ( ! $this->isUserMemberOf( $user_id, true ) ) {
+				wp_die( 'Vous ne faites pas partie de cette distribution.' );
+			}
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
+		}
+
+		$gardiens = $this->getGardiensIds();
+		if ( ! $gardiens ) {
+			$gardiens = array();
+		}
+		if ( in_array( $user_id, $gardiens ) ) {
+			return 'already_in_list';
+		} else {
+			$gardiens[] = $user_id;
+			$this->setCustom( 'amapress_distribution_gardiens', $gardiens );
+			if ( ! empty( $comment ) ) {
+				$this->setCustom( "amapress_distribution_gardien_{$user_id}_comment", $comment );
+			} else {
+				$this->deleteCustom( "amapress_distribution_gardien_{$user_id}_comment" );
+			}
+
+			amapress_mail_current_user_inscr( $this, $user_id, 'distrib-gardien' );
+
+			return 'ok';
+		}
+	}
+
+	public function desinscrireGardien( $user_id, $allow_anonymous = false ) {
+		if ( ! $allow_anonymous && ! amapress_is_user_logged_in() ) {
+			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
+		}
+
+		$gardiens = $this->getGardiensIds();
+		if ( ! $gardiens ) {
+			$gardiens = array();
+		}
+
+		if ( ( $key = array_search( $user_id, $gardiens ) ) !== false ) {
+			if ( ! empty( $this->getGardiensPaniersAmapiensIds( $user_id ) ) ) {
+				return 'has_gardes';
+			}
+			unset( $gardiens[ $key ] );
+
+			$this->deleteCustom( "amapress_distribution_gardien_{$user_id}_comment" );
+			$this->setCustom( 'amapress_distribution_gardiens', $gardiens );
+
+			amapress_mail_current_user_desinscr( $this, $user_id, 'distrib-gardien' );
+
+			return 'ok';
+		} else {
+			return 'not_inscr';
+		}
+	}
+
+	public function getGardienComment( $gardien_id ) {
+		return $this->getCustom( "amapress_distribution_gardien_{$gardien_id}_comment" );
+	}
+
+	public function getPaniersGarde() {
+		return $this->getCustomAsArray( 'amapress_distribution_pan_garde' );
+	}
+
+	public function getPanierGardienId( $amapien_id ) {
+		$gardes = $this->getPaniersGarde();
+		if ( isset( $gardes["u{$amapien_id}"] ) ) {
+			return $gardes["u{$amapien_id}"];
+		}
+
+		return 0;
+	}
+
+	public function getGardiensPaniersAmapiensIds( $gardien_id ) {
+		$amapien_ids = [];
+		foreach ( $this->getPaniersGarde() as $k => $v ) {
+			if ( $v == $gardien_id ) {
+				$amapien_ids[] = intval( substr( $k, 1 ) );
+			}
+		}
+
+		return $amapien_ids;
+	}
+
+	public function faireGarder(
+		$user_id, $gardien_id,
+		$set = true,
+		$allow_anonymous = false, $allow_not_member = false
+	) {
+		if ( ! $allow_anonymous && ! amapress_is_user_logged_in() ) {
+			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! $allow_not_member && ! amapress_can_access_admin() ) {
+			if ( ! $this->isUserMemberOf( $user_id, true ) ) {
+				wp_die( 'Vous ne faites pas partie de cette distribution.' );
+			}
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
+		}
+
+		if ( empty( $user_id ) ) {
+			$user_id = amapress_current_user_id();
+		}
+
+		$gardiens = $this->getPaniersGarde();
+		if ( ! $gardiens ) {
+			$gardiens = array();
+		}
+		$amapien = AmapressUser::getBy( $user_id );
+		if ( $set ) {
+			if ( ! empty( $gardiens["u{$user_id}"] ) ) {
+				return 'already_in_list';
+			} else {
+				$gardiens["u{$user_id}"] = $gardien_id;
+				$this->setCustom( 'amapress_distribution_pan_garde', $gardiens );
+
+				$gardien = AmapressUser::getBy( $gardien_id );
+				amapress_mail_current_user_inscr( $this, $gardien_id, 'distrib-gardien',
+					function ( $content, $user_id, $post ) use ( $amapien, $gardien ) {
+						$content = str_replace( '%%amapien%%', $amapien->getDisplayName(), $content );
+						$content = str_replace( '%%amapien_contacts%%', $amapien->getContacts(), $content );
+						$content = str_replace( '%%gardien%%', $gardien->getDisplayName(), $content );
+						$content = str_replace( '%%gardien_contact%%', $gardien->getContacts(), $content );
+						$content = str_replace( '%%gardien_comment%%', $this->getGardienComment( $gardien->ID ), $content );
+
+						return $content;
+					}, 'distrib-gardieneur', $amapien->getEmail()
+				);
+				amapress_mail_current_user_inscr( $this, $user_id, 'distrib-gardien',
+					function ( $content, $user_id, $post ) use ( $amapien, $gardien ) {
+						$content = str_replace( '%%amapien%%', $amapien->getDisplayName(), $content );
+						$content = str_replace( '%%amapien_contacts%%', $amapien->getContacts(), $content );
+						$content = str_replace( '%%gardien%%', $gardien->getDisplayName(), $content );
+						$content = str_replace( '%%gardien_contact%%', $gardien->getContacts(), $content );
+						$content = str_replace( '%%gardien_comment%%', $this->getGardienComment( $gardien->ID ), $content );
+
+						return $content;
+					}, 'distrib-gardiened', $gardien->getEmail()
+				);
+
+				return 'ok';
+			}
+		} else {
+			if ( ! isset( $gardiens["u{$user_id}"] ) ) {
+				return 'not_inscr';
+			} else {
+				$gardien_id = $gardiens["u{$user_id}"];
+				unset( $gardiens["u{$user_id}"] );
+				$this->setCustom( 'amapress_distribution_pan_garde', $gardiens );
+
+				$gardien = AmapressUser::getBy( $gardien_id );
+				amapress_mail_current_user_desinscr( $this, $gardien_id, 'distrib-gardien',
+					function ( $content, $user_id, $post ) use ( $amapien, $gardien ) {
+						$content = str_replace( '%%amapien%%', $amapien->getDisplayName(), $content );
+						$content = str_replace( '%%amapien_contacts%%', $amapien->getContacts(), $content );
+						$content = str_replace( '%%gardien%%', $gardien->getDisplayName(), $content );
+						$content = str_replace( '%%gardien_contact%%', $gardien->getContacts(), $content );
+						$content = str_replace( '%%gardien_comment%%', $this->getGardienComment( $gardien->ID ), $content );
+
+						return $content;
+					}, 'distrib-gardieneur', $amapien->getEmail()
+				);
+//				amapress_mail_current_user_desinscr( $this, $gardien_id, 'distrib-gardien',
+//					function ( $content, $user_id, $post ) use ( $amapien, $gardien ) {
+//						$content = str_replace( '%%amapien%%', $amapien->getDisplayName(), $content );
+//						$content = str_replace( '%%amapien_contacts%%', $amapien->getContacts(), $content );
+//						$content = str_replace( '%%gardien%%', $gardien->getDisplayName(), $content );
+//						$content = str_replace( '%%gardien_contact%%', $gardien->getContacts(), $content );
+//
+//						return $content;
+//					}, 'distrib-gardiened' );
+
+				return 'ok';
+			}
+		}
+	}
+
+	/** @return AmapressUser[] */
 	public function getResponsables() {
 		return $this->getCustomAsEntityArray( 'amapress_distribution_responsables', 'AmapressUser' );
 	}
@@ -138,17 +368,20 @@ class AmapressDistribution extends Amapress_EventBase {
 		}
 	}
 
-	public function getSMStoResponsables() {
-		$resp_phones = [];
-		foreach ( $this->getResponsables() as $user ) {
-			$resp_phones = array_merge( $resp_phones, array_keys( $user->getPhoneNumbers( true ) ) );
-		}
-		if ( empty( $resp_phones ) ) {
-			return '';
+	/** @return int[] */
+	public function getMainAdherentsIds( $include_coadherents = true ) {
+		$ids = [];
+		foreach ( AmapressContrats::get_active_adhesions( $this->getContratIds(), null, $this->getLieuId(), $this->getDate(), true, false ) as $adh ) {
+			/** @var AmapressAdhesion $adh */
+			if ( ! empty( $adh->getAdherentId() ) ) {
+				$ids[] = $adh->getAdherentId();
+				if ( $include_coadherents ) {
+					$ids = array_merge( $ids, AmapressContrats::get_related_users( $adh->getAdherentId() ) );
+				}
+			}
 		}
 
-		return 'sms:' . urlencode( implode( ',', $resp_phones ) ) . '?body=Distribution du ' .
-		       date_i18n( 'D j F Y' );
+		return array_unique( $ids );
 	}
 
 	public function getMailtoAmapiens() {
@@ -177,35 +410,7 @@ class AmapressDistribution extends Amapress_EventBase {
 
 		$site_email = Amapress::getOption( 'email_from_mail' );
 
-		return 'mailto:' . rawurlencode( $site_email ) . '?bcc=' . rawurlencode( implode( ',', $mails ) ) . '&subject=Distribution du ' .
-		       date_i18n( 'D j F Y' );
-	}
-
-	public function getSMStoAmapiens() {
-		$phones = [];
-		foreach ( AmapressContrats::get_active_adhesions( $this->getContratIds(), null, $this->getLieuId(), $this->getDate(), true, false ) as $adh ) {
-			/** @var AmapressAdhesion $adh */
-			if ( ! empty( $adh ) && ! empty( $adh->getAdherent() ) ) {
-				$phones = array_merge( $phones, $adh->getAdherent()->getPhoneNumbers( true ) );
-			}
-		}
-
-		$query                        = array();
-		$query['contrat_instance_id'] = $this->getContratIds();
-		$query['lieu_id']             = $this->getLieuId();
-		$query['date']                = $this->getDate();
-		$paniers                      = AmapressPaniers::getPanierIntermittents( $query );
-		foreach ( $paniers as $panier ) {
-			if ( ! empty( $panier->getRepreneur() ) ) {
-				$phones = array_merge( $phones, $panier->getRepreneur()->getPhoneNumbers( true ) );
-			}
-		}
-
-		if ( empty( $phones ) ) {
-			return '';
-		}
-
-		return 'sms:' . urlencode( implode( ',', $phones ) ) . '?body=Distribution du ' .
+		return 'mailto:' . rawurlencode( $site_email ) . '?bcc=' . rawurlencode( implode( ',', array_unique( $mails ) ) ) . '&subject=Distribution du ' .
 		       date_i18n( 'D j F Y' );
 	}
 
@@ -226,6 +431,15 @@ class AmapressDistribution extends Amapress_EventBase {
 			/** @var AmapressContrat_instance $c */
 			return ! empty( $c ) && ! empty( $c->getModel() );
 		} );
+	}
+
+	/** @return int[] */
+	public function getContratModelIds() {
+		return array_map(
+			function ( $id ) {
+				return AmapressContrat_instance::getBy( $id )->getModelId();
+			}, $this->getContratIds()
+		);
 	}
 
 	public function getRealDateForContrat( $contrat_id ) {
@@ -295,24 +509,116 @@ class AmapressDistribution extends Amapress_EventBase {
 		return array_unique( $res );
 	}
 
-	public function isUserMemberOf( $user_id, $guess_renew = false ) {
-		$user_contrats_ids = AmapressContrat_instance::getContratInstanceIdsForUser( $user_id,
-			null,
-			$this->getDate(),
-			$guess_renew );
-		$dist_contrat_ids  = array_map( function ( $c ) {
+	public function getSlotInfoForUser( $user_id ) {
+		$res = parent::getSlotInfoForUser( $user_id );
+		if ( empty( $res ) ) {
+			$inter_id = $this->getAdherentRelatedIntermittent( $user_id );
+			if ( $inter_id ) {
+				$res = parent::getSlotInfoForUser( $inter_id );
+			}
+		}
+		if ( empty( $res ) ) {
+			$inter_id = $this->getIntermittentRelatedAdherent( $user_id );
+			if ( $inter_id ) {
+				$res = parent::getSlotInfoForUser( $inter_id );
+			}
+		}
+
+		return $res;
+	}
+
+
+	public function getIntermittentRelatedAdherent( $user_id ) {
+		$query                        = [];
+		$query['contrat_instance_id'] = $this->getContratIds();
+		$query['lieu_id']             = $this->getLieuId();
+		$query['date']                = $this->getDate();
+		$query['repreneur']           = $user_id;
+		$paniers                      = AmapressPaniers::getPanierIntermittents( $query );
+		foreach ( $paniers as $panier ) {
+			if ( $panier->getAdherentId() ) {
+				return $panier->getAdherentId();
+			}
+		}
+
+		return null;
+	}
+
+	public function getAdherentRelatedIntermittent( $user_id ) {
+		$query                        = [];
+		$query['contrat_instance_id'] = $this->getContratIds();
+		$query['lieu_id']             = $this->getLieuId();
+		$query['date']                = $this->getDate();
+		$query['adherent']            = $user_id;
+		$paniers                      = AmapressPaniers::getPanierIntermittents( $query );
+		foreach ( $paniers as $panier ) {
+			if ( $panier->getRepreneurId() ) {
+				return $panier->getRepreneurId();
+			}
+		}
+
+		return null;
+	}
+
+	public function getIntermittentIds() {
+		$query                        = [];
+		$query['contrat_instance_id'] = $this->getContratIds();
+		$query['lieu_id']             = $this->getLieuId();
+		$query['date']                = $this->getDate();
+		$paniers                      = AmapressPaniers::getPanierIntermittents( $query );
+		$res                          = [];
+		foreach ( $paniers as $panier ) {
+			if ( $panier->getRepreneurId() ) {
+				$res[] = $panier->getRepreneurId();
+			}
+		}
+
+		return $res;
+	}
+
+	/**
+	 * @param int $user_id
+	 * @param bool $guess_renew
+	 * @param AmapressAdhesion[]|null $precache_user_adhesions
+	 *
+	 * @return bool
+	 */
+	public function isUserMemberOf( $user_id, $guess_renew = false, $precache_user_adhesions = null ) {
+		if ( null !== $precache_user_adhesions ) {
+			$user_contrats_ids = [];
+			$user_lieu_ids     = [];
+			foreach ( $precache_user_adhesions as $adh ) {
+				if ( ! empty( $adh->getContrat_quantites( $this->getDate() ) ) ) {
+					$user_contrats_ids[] = $adh->getContrat_instanceId();
+					$user_lieu_ids[]     = $adh->getLieuId();
+				}
+			}
+		} else {
+			$user_contrats_ids = AmapressContrat_instance::getContratInstanceIdsForUser( $user_id,
+				null,
+				$this->getDate(),
+				$guess_renew );
+		}
+		$dist_contrat_ids = array_map( function ( $c ) {
 			return $c->ID;
 		}, $this->getContrats() );
 
 		if ( count( array_intersect( $user_contrats_ids, $dist_contrat_ids ) ) > 0 ) {
 			return true;
 		}
+		$inter_adherent_id = $this->getIntermittentRelatedAdherent( $user_id );
+		//if $user_id is an intermittent that exchanged with an adherent, it's ok
+		if ( $inter_adherent_id ) {
+			return true;
+		}
 		if ( ! $guess_renew ) {
 			return false;
 		}
 
-		$user_lieu_ids = AmapressUsers::get_user_lieu_ids( $user_id,
-			$this->getDate() );
+		if ( null === $precache_user_adhesions ) {
+			$user_lieu_ids = AmapressUsers::get_user_lieu_ids( $user_id,
+				$this->getDate() );
+		}
 
 		return in_array( $this->getLieuId(), $user_lieu_ids );
 	}
@@ -331,6 +637,10 @@ class AmapressDistribution extends Amapress_EventBase {
 			}
 		}
 
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
+		}
+
 		$responsables        = $this->getResponsablesIds();
 		$needed_responsables = AmapressDistributions::get_required_responsables( $this->ID );
 		if ( ! $responsables ) {
@@ -346,6 +656,11 @@ class AmapressDistribution extends Amapress_EventBase {
 				$this->ensure_init();
 				foreach ( $this->custom as $k => $v ) {
 					if ( strpos( $k, 'amapress_distribution_resp_' ) === 0 ) {
+						$role_user_id = intval( substr( $k, 27 ) );
+						if ( ! in_array( $role_user_id, $responsables ) ) {
+							$this->deleteCustom( $k );
+							continue;
+						}
 						if ( $v == $role ) {
 							return 'already_taken';
 						}
@@ -361,9 +676,18 @@ class AmapressDistribution extends Amapress_EventBase {
 					if ( ! $role ) {
 						return $cnt;
 					}
-					$cnt = str_replace( '%%resp_role%%', esc_html( $this->getResponsableRoleName( $user_id ) ), $cnt );
 
-					return str_replace( '%%resp_role_desc%%', $this->getResponsableRoleDesc( $user_id ), $cnt );
+					return str_replace(
+						[
+							'%%resp_role%%',
+							'%%resp_role_desc%%',
+							'%%resp_role_contrats%%',
+						],
+						[
+							esc_html( $this->getResponsableRoleName( $user_id ) ),
+							esc_html( $this->getResponsableRoleDesc( $user_id ) ),
+							esc_html( $this->getResponsableRoleContrats( $user_id ) ),
+						], $cnt );
 				} );
 
 			return 'ok';
@@ -373,6 +697,10 @@ class AmapressDistribution extends Amapress_EventBase {
 	public function desinscrireResponsable( $user_id, $allow_anonymous = false ) {
 		if ( ! $allow_anonymous && ! amapress_is_user_logged_in() ) {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
 		}
 
 		$responsables = $this->getResponsablesIds();
@@ -434,7 +762,55 @@ class AmapressDistribution extends Amapress_EventBase {
 
 		return stripslashes( $desc );
 	}
+
+	public function getResponsableRoleContrats( $user_id, $default = '' ) {
+		$role = $this->getResponsableRoleId( $user_id );
+		if ( empty( $role ) ) {
+			return $default;
+		}
+
+		$contrats = Amapress::get_array( Amapress::getOption( "resp_role_{$this->getLieuId()}_$role-contrats" ) );
+		if ( empty( $contrats ) ) {
+			$contrats = Amapress::get_array( Amapress::getOption( "resp_role_$role-name" ) );
+		}
+
+		return implode( ', ', array_map( function ( $contrat_id ) {
+			$contrat = AmapressContrat::getBy( $contrat_id );
+			if ( ! $contrat ) {
+				return '#unk#';
+			}
+
+			return $contrat->getTitle();
+		}, $contrats ) );
+	}
+
 //
+	public static function getUserNextDistributions( $user_id = null, $date = null, $max_distribs = 0 ) {
+		$distribs  = AmapressDistribution::get_next_distributions( $date );
+		$adhesions = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id );
+		$ret       = [];
+		foreach ( $distribs as $distrib ) {
+			$contrats = $distrib->getContratIds();
+			foreach ( $adhesions as $adhesion ) {
+				if ( $adhesion->getLieuId() == $distrib->getLieuId()
+				     && in_array( $adhesion->getContrat_instanceId(), $contrats )
+				) {
+					$quants = $adhesion->getContrat_quantites( $distrib->getDate() );
+					if ( empty( $quants ) ) {
+						continue;
+					}
+
+					$ret[] = $distrib;
+					break;
+				}
+			}
+			if ( $max_distribs && count( $ret ) == $max_distribs ) {
+				break;
+			}
+		}
+
+		return $ret;
+	}
 
 	/**
 	 * @param int $lieu_id
@@ -567,9 +943,9 @@ class AmapressDistribution extends Amapress_EventBase {
 			if ( ! empty( $lieu_substitution ) ) {
 				$lieu = $lieu_substitution;
 			}
-			$dist_date     = $this->getStartDateAndHour();
-			$dist_date_end = $this->getEndDateAndHour();
-			$contrats      = $this->getContrats();
+			$dist_date_start = $this->getStartDateAndHour();
+			$dist_date_end   = $this->getEndDateAndHour();
+			$contrats        = $this->getContrats();
 			foreach ( $contrats as $contrat ) {
 				if ( empty( $contrat ) || empty( $contrat->getModel() ) ) {
 					continue;
@@ -577,7 +953,7 @@ class AmapressDistribution extends Amapress_EventBase {
 
 				$ret[] = new Amapress_EventEntry( array(
 					'ev_id'    => "dist-{$this->ID}",
-					'date'     => $dist_date,
+					'date'     => $dist_date_start,
 					'date_end' => $dist_date_end,
 					'type'     => 'distribution',
 					'category' => 'Distributions',
@@ -591,19 +967,21 @@ class AmapressDistribution extends Amapress_EventBase {
 				) );
 			}
 		} else {
-			$adhesions         = AmapressAdhesion::getUserActiveAdhesions();
+			$relative_date     = Amapress::start_of_year( Amapress::add_a_month( amapress_time(), - 12 ) );
+			$adhesions         = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, $relative_date );
 			$lieu              = $this->getLieu();
 			$lieu_substitution = $this->getLieuSubstitution();
 			if ( ! empty( $lieu_substitution ) ) {
 				$lieu = $lieu_substitution;
 			}
-			$dist_date     = $this->getStartDateAndHour();
-			$dist_date_end = $this->getEndDateAndHour();
-			$resps         = $this->getResponsablesIds();
+			$dist_date       = $this->getDate();
+			$dist_date_start = $this->getStartDateAndHour();
+			$dist_date_end   = $this->getEndDateAndHour();
+			$resps           = $this->getResponsablesIds();
 			if ( in_array( $user_id, $resps ) ) {
 				$ret[] = new Amapress_EventEntry( array(
 					'ev_id'    => "dist-{$this->ID}-resp",
-					'date'     => $dist_date,
+					'date'     => $dist_date_start,
 					'date_end' => $dist_date_end,
 					'class'    => 'agenda-distrib agenda-resp-distrib',
 					'category' => 'Responsable de distribution',
@@ -616,23 +994,53 @@ class AmapressDistribution extends Amapress_EventBase {
 					'href'     => $this->getPermalink()
 				) );
 			}
+			$current_user_slot = $this->getSlotInfoForUser( amapress_current_user_id() );
+			if ( $current_user_slot ) {
+				$ret[] = new Amapress_EventEntry( array(
+					'ev_id'    => "dist-{$this->ID}-creneau",
+					'date'     => $current_user_slot['date'],
+					'date_end' => $current_user_slot['date_end'],
+					'class'    => 'agenda-distrib agenda-creneau-panier',
+					'category' => 'Créneau de récupération',
+					'lieu'     => $lieu,
+					'type'     => 'creneau-panier',
+					'priority' => 45,
+					'label'    => 'Créneau de récupération',
+					'icon'     => 'dashicons dashicons-clock',
+					'alt'      => 'Créneau pour récupérer vos paniers : ' . $current_user_slot['display'],
+					'href'     => $this->getPermalink()
+				) );
+			}
+			$gardiens = $this->getGardiensIds( true );
+			if ( in_array( $user_id, $gardiens ) ) {
+				$ret[] = new Amapress_EventEntry( array(
+					'ev_id'    => "dist-{$this->ID}-gardien",
+					'date'     => $dist_date_start,
+					'date_end' => $dist_date_end,
+					'class'    => 'agenda-distrib agenda-gardien-panier',
+					'category' => 'Gardien de panier',
+					'lieu'     => $lieu,
+					'type'     => 'gardien-panier',
+					'priority' => 45,
+					'label'    => 'Gardien de panier',
+					'icon'     => 'dashicons dashicons-portfolio',
+					'alt'      => 'Vous êtes gardien de panier à ' . $lieu->getShortName(),
+					'href'     => $this->getPermalink()
+				) );
+			}
 			$contrats = $this->getContratIds();
 			foreach ( $adhesions as $adhesion ) {
 				if ( $adhesion->getLieuId() == $this->getLieuId()
 				     && in_array( $adhesion->getContrat_instanceId(), $contrats )
 				) {
-					if ( $adhesion->getContrat_instance()->isPanierVariable() ) {
-						$quants = $adhesion->getVariables_Contrat_quantites( $dist_date );
-					} else {
-						$quants = $adhesion->getContrat_quantites( $dist_date );
-					}
+					$quants = $adhesion->getContrat_quantites( $dist_date );
 					if ( empty( $quants ) ) {
 						continue;
 					}
 					$ret[] = new Amapress_EventEntry( array(
 						'ev_id'    => "dist-{$this->ID}",
 						'id'       => $this->ID,
-						'date'     => $dist_date,
+						'date'     => $dist_date_start,
 						'date_end' => $dist_date_end,
 						'class'    => "agenda-distrib agenda-contrat-{$adhesion->getContrat_instance()->getModelTitle()}",
 						'type'     => 'distribution',
@@ -818,6 +1226,28 @@ class AmapressDistribution extends Amapress_EventBase {
 						return $instructions;
 					}
 				],
+				'contenu_paniers'                  => [
+					'desc' => 'Contenu des paniers',
+					'func' => function ( AmapressDistribution $distrib ) {
+						$ret = '';
+						foreach ( AmapressPaniers::getPaniersForDist( $distrib->getDate() ) as $panier ) {
+							$contrat_instance = $panier->getContrat_instance();
+							if ( $contrat_instance && $contrat_instance->hasPanier_CustomContent() ) {
+								$ret .= '<h3>' . $contrat_instance->getModelTitle() . '</h3>';
+								foreach ( $contrat_instance->getContrat_quantites( $distrib->getDate() ) as $quant ) {
+									$contenu = $panier->getContenu( $quant );
+									if ( empty( $contenu ) ) {
+										$contenu = '<em>Non renseigné</em>';
+									}
+									$ret .= '<h4>' . $quant->getTitle() . '</h4>';
+									$ret .= '<div>' . $contenu . '</div>';
+								}
+							}
+						}
+
+						return $ret;
+					}
+				],
 				'liste_contrats'                   => [
 					'desc' => 'Liste des contrats à cette distribution',
 					'func' => function ( AmapressDistribution $distrib ) {
@@ -991,6 +1421,43 @@ class AmapressDistribution extends Amapress_EventBase {
 						return '<ul>' . implode( '', $responsables ) . '</ul>';
 					}
 				],
+				'liste-gardiens-email-phone'       => [
+					'desc' => 'Liste des gardiens de paniers avec emails et numéros de téléphone',
+					'func' => function ( AmapressDistribution $distrib ) {
+						$gardiens = $distrib->getGardiens();
+						$gardiens = array_map( function ( $p ) {
+							/** @var AmapressUser $p */
+							return '<li>' . sprintf( '<a href="mailto:%s">%s</a> (%s)', implode( ',', $p->getAllEmails() ), esc_html( $p->getDisplayName() ), $p->getTelTo( 'both', false, false, ', ' ) ) . '</li>';
+						}, $gardiens );
+
+						return '<ul>' . implode( '', $gardiens ) . '</ul>';
+					}
+				],
+				'liste-gardiens-email-phone-bcc'   => [
+					'desc' => 'Liste des gardiens de paniers avec emails et numéros de téléphone',
+					'func' => function ( AmapressDistribution $distrib ) {
+						$gardiens   = $distrib->getGardiens();
+						$site_email = Amapress::getOption( 'email_from_mail' );
+						$gardiens   = array_map( function ( $p ) use ( $site_email ) {
+							/** @var AmapressUser $p */
+							return '<li>' . sprintf( '<a href="mailto:%s?bcc=%s">%s</a> (%s)', $site_email, implode( ',', $p->getAllEmails() ), esc_html( $p->getDisplayName() ), $p->getTelTo( 'both', false, false, ', ' ) ) . '</li>';
+						}, $gardiens );
+
+						return '<ul>' . implode( '', $gardiens ) . '</ul>';
+					}
+				],
+				'liste-gardiens-phone'             => [
+					'desc' => 'Liste des gardiens de paniers avec numéros de téléphone',
+					'func' => function ( AmapressDistribution $distrib ) {
+						$gardiens = $distrib->getGardiens();
+						$gardiens = array_map( function ( $p ) {
+							/** @var AmapressUser $p */
+							return '<li>' . sprintf( '%s (%s)', esc_html( $p->getDisplayName() ), $p->getTelTo( 'both', false, false, ', ' ) ) . '</li>';
+						}, $gardiens );
+
+						return '<ul>' . implode( '', $gardiens ) . '</ul>';
+					}
+				],
 				'liste-paniers-lien'               => [
 					'desc' => 'Liste des paniers (avec lien) à cette distribution',
 					'func' => function ( AmapressDistribution $distrib ) {
@@ -1060,31 +1527,32 @@ class AmapressDistribution extends Amapress_EventBase {
 
 	/** @return AmapressDistribution[] */
 	public
-	static function getNextDistribsUserResponsable(
-		$date = null, $weeks = 1, $user_id = null
+	static function getNextDistribs(
+		$date = null, $weeks = 1, $min_weeks = 0
 	) {
-		$is_resp_amap = amapress_can_access_admin();
-
 		if ( ! $date ) {
 			$date = amapress_time();
 		}
 		$next_week_date = Amapress::add_a_week( amapress_time(), $weeks - 1 );
-		$next_distribs  = AmapressDistribution::get_distributions( Amapress::start_of_week( Amapress::end_of_week( $date ) ), Amapress::end_of_week( $next_week_date ) );
+		$dists          = AmapressDistribution::get_distributions( Amapress::start_of_week( Amapress::end_of_week( $date ) ), Amapress::end_of_week( $next_week_date ) );
 
-		if ( ! $user_id ) {
-			$user_id = amapress_current_user_id();
-		}
+		$num_weeks = count( array_unique( array_map( function ( $d ) {
+			/** @var AmapressDistribution $d */
+			return Amapress::start_of_week( $d->getDate() );
+		}, $dists ) ) );
 
-		$ret = [];
-		foreach ( $next_distribs as $dist ) {
-			if ( ! $is_resp_amap && ! in_array( $user_id, $dist->getResponsablesIds() ) ) {
-				continue;
+		if ( $num_weeks < $min_weeks ) {
+			$next_dists = AmapressDistribution::get_next_distributions( Amapress::start_of_day( Amapress::add_days( Amapress::end_of_week( $next_week_date ), 1 ) ) );
+			while ( ! empty( $next_dists ) && $num_weeks < $min_weeks ) {
+				$dists[]   = array_shift( $next_dists );
+				$num_weeks = count( array_unique( array_map( function ( $d ) {
+					/** @var AmapressDistribution $d */
+					return Amapress::start_of_week( $d->getDate() );
+				}, $dists ) ) );
 			}
-
-			$ret[] = $dist;
 		}
 
-		return $ret;
+		return $dists;
 	}
 
 	/** @return AmapressIntermittence_panier[] */
@@ -1124,14 +1592,14 @@ class AmapressDistribution extends Amapress_EventBase {
 		}
 	}
 
-	public static function getRespRespDistribEmails( $lieu_id ) {
-		return AmapressUser::getEmailsForAmapRole( intval( Amapress::getOption( 'resp-distrib-amap-role' ), $lieu_id ) );
+	public static function getRespRespDistribEmails( $lieu_id, $event_type = 'distrib' ) {
+		return AmapressUser::getEmailsForAmapRole( intval( Amapress::getOption( "resp-$event_type-amap-role" ), $lieu_id ) );
 	}
 
-	public static function getResponsablesRespDistribReplyto( $lieu_id ) {
-		$emails = self::getRespRespDistribEmails( $lieu_id );
+	public static function getResponsablesRespDistribReplyto( $lieu_id, $event_type = 'distrib' ) {
+		$emails = self::getRespRespDistribEmails( $lieu_id, $event_type );
 		if ( empty( $emails ) ) {
-			$emails = self::getRespRespDistribEmails( null );
+			$emails = self::getRespRespDistribEmails( null, $event_type );
 		}
 		if ( empty( $emails ) ) {
 			return [];
@@ -1140,7 +1608,34 @@ class AmapressDistribution extends Amapress_EventBase {
 		return 'Reply-To: ' . implode( ',', $emails );
 	}
 
-	public function getResponsablesResponsablesDistributionsReplyto() {
-		return self::getResponsablesRespDistribReplyto( $this->getLieuId() );
+	public function getResponsablesResponsablesDistributionsReplyto( $event_type = 'distrib' ) {
+		return self::getResponsablesRespDistribReplyto( $this->getLieuId(), $event_type );
+	}
+
+	public function isMemberOf( $user_id ) {
+		return $this->isUserMemberOf( $user_id, true );
+	}
+
+	public function getMailEventType() {
+		return 'distrib';
+	}
+
+	public function getMembersIds() {
+		return array_merge(
+			$this->getMainAdherentsIds( false ),
+			$this->getIntermittentIds()
+		);
+	}
+
+	public function canSubscribe() {
+		return $this->canSubscribeType( 'distrib' );
+	}
+
+	public function canUnsubscribe() {
+		return $this->canUnsubscribeType( 'distrib' );
+	}
+
+	public function canCease() {
+		return $this->canSubscribeType( 'intermit' );
 	}
 }

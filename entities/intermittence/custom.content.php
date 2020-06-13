@@ -192,12 +192,17 @@ function amapress_get_paniers_intermittents_table(
 		);
 	}
 
-	$ahs_by_date = array_group_by( $adhs,
-		function ( $a ) {
+	$allow_partial_exchange = Amapress::getOption( 'allow_partial_exchange' );
+	$ahs_by_date            = array_group_by( $adhs,
+		function ( $a ) use ( $allow_partial_exchange ) {
+			if ( $allow_partial_exchange ) {
+				return $a->ID;
+			}
+
 			/** @var AmapressIntermittence_panier $a */
 			return "{$a->getDate()}-{$a->getAdherent()->ID}-{$a->getRealLieu()->ID}";
 		} );
-	$data        = array();
+	$data                   = array();
 	foreach ( $ahs_by_date as $adh ) {
 		/** @var AmapressIntermittence_panier[] $adh */
 		$ad          = $adh[0];
@@ -214,12 +219,23 @@ function amapress_get_paniers_intermittents_table(
 		if ( $ad->getRepreneur() != null ) {
 			$repreneur = $ad->getRepreneur()->getDisplay( $show_options );
 		}
+		if ( empty( $repreneur ) ) {
+			$askers = [];
+			foreach ( $ad->getAsk() as $user_id => $user_info ) {
+				$user = AmapressUser::getBy( $user_id );
+				if ( empty( $user ) ) {
+					continue;
+				}
+				$askers[] = $user->getDisplay( $show_options );
+			}
+			$repreneur .= '<strong>Non validé</strong><br/>' . implode( '', $askers );
+		}
 		$paniers   = array();
 		$quantites = array();
 		$prices    = array();
 		foreach ( $adh as $a ) {
 			foreach ( $a->getContrat_instances() as $contrat_instance ) {
-				$adhesions = AmapressAdhesion::getUserActiveAdhesions( $a->getAdherent()->ID, $contrat_instance->ID );
+				$adhesions = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $a->getAdherent()->ID, $contrat_instance->ID );
 				if ( empty( $adhesions ) ) {
 					continue;
 				}

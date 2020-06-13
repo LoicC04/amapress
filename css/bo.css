@@ -7,12 +7,20 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
+.dashicons {
+    text-decoration: none !important;
+}
+
 #tagsdiv-amps_paiement_category {
     display: none;
 }
 
 .titan-framework-panel-wrap .tf-form-table {
     table-layout: auto;
+}
+
+.gestion-contrats_page_contrats_quantites_stats .titan-framework-panel-wrap .tf-form-table {
+    table-layout: fixed;
 }
 
 .amapress-check a {
@@ -213,7 +221,7 @@
     border-top: 1pt solid #000;
 }
 
-span.description {
+.form-table span.description {
     color: #aaa;
 }
 
@@ -278,4 +286,12 @@ span.description {
 .widefat.elm-ignored-messages {
     table-layout: fixed;
     width: 100%;
+}
+
+.import-errors {
+    white-space: pre-wrap;
+}
+
+.wp-sweep-admin-php .sweep-all {
+    display: none;
 }

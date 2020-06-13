@@ -29,7 +29,9 @@ function amapress_get_users_for_message( $users_query, $users_query_fields, $wit
 		);
 	} else if ( strpos( $users_query, 'user:' ) === 0 ) {
 		$users_query = substr( $users_query, 5 );
-		if ( $users_query == 'me' ) {
+		if ( 'include=' === $users_query || 'include=0' === $users_query ) {
+			$users = [];
+		} elseif ( $users_query == 'me' ) {
 			$users = array( amapress_get_user_by_id_or_archived( amapress_current_user_id() ) );
 		} else {
 			$query = new WP_User_Query( $users_query );
@@ -37,7 +39,7 @@ function amapress_get_users_for_message( $users_query, $users_query_fields, $wit
 		}
 	} else {
 		$query = new WP_Query();
-		$query->parse_query( $users_query . '&posts_per_page=-1' );
+		$query->parse_query( $users_query . '&posts_per_page=-1&post_status=publish' );
 		foreach ( $query->get_posts() as $post ) {
 			foreach ( $users_query_fields as $query_field ) {
 				$o = Amapress::get_post_meta_array( $post->ID, $query_field );
@@ -213,8 +215,8 @@ function amapress_send_message(
 		$headers[] = 'Content-Type: text/html; charset=UTF-8';
 		switch ( isset( $opt['send_mode'] ) ? $opt['send_mode'] : '' ) {
 			case "indiv":
-				$headers[] = "From: $from_dn <$from_email>";
-				$headers[] = "Reply-to: $from_dn <$reply_to_mail>";
+				$headers[] = "From: \"$from_dn\" <$from_email>";
+				$headers[] = "Reply-to: \"$from_dn\" <$reply_to_mail>";
 				/** @var AmapressUser $name */
 				foreach ( $emails_indiv as $email => $name ) {
 					$name_string = $name->getDisplayName();
@@ -229,8 +231,8 @@ function amapress_send_message(
 			case 'cc':
 			case "to":
 				$to        = implode( ',', $emails );
-				$headers[] = "From: $from_dn <$from_email>";
-				$headers[] = "Reply-to: $from_dn <$reply_to_mail>";
+				$headers[] = "From: \"$from_dn\" <$from_email>";
+				$headers[] = "Reply-to: \"$from_dn\" <$reply_to_mail>";
 				if ( $current_user ) {
 					$headers[] = 'Cc: ' . $current_user->getUser()->user_email;
 				}
@@ -252,12 +254,12 @@ function amapress_send_message(
 //				break;
 			case "bcc":
 			default:
-				$to = "{$opt['target_name']} <$from_email>";
+				$to = "\"{$opt['target_name']}\" <$from_email>";
 				if ( $current_user ) {
 					$emails[] = $current_user->getEmail();
 				}
-				$headers[] = "From: $from_dn <$from_email>";
-				$headers[] = "Reply-to: $from_dn <$reply_to_mail>";
+				$headers[] = "From: \"$from_dn\" <$from_email>";
+				$headers[] = "Reply-to: \"$from_dn\" <$reply_to_mail>";
 				$headers[] = 'Bcc: ' . implode( ',', $emails );
 				$subject   = amapress_replace_mail_placeholders( $subject, $current_user, $entity );
 				$content   = amapress_replace_mail_placeholders( $content, $current_user, $entity );
@@ -292,7 +294,7 @@ function amapress_handle_send_message() {
 
 	$subject     = $_REQUEST['amapress_msg_subject'];
 	$content     = $_REQUEST['amapress_msg_content'];
-	$content_sms = $_REQUEST['amapress_msg_content_for_sms'];
+	$content_sms = isset( $_REQUEST['amapress_msg_content_for_sms'] ) ? $_REQUEST['amapress_msg_content_for_sms'] : '';
 
 	amapress_send_message_and_record( $subject, $content, $content_sms, $opt );
 //    'target_name' => array(
@@ -387,17 +389,7 @@ function amapress_add_message_target( &$arr, $query_string, $title, $target_type
 }
 
 function amapress_message_get_targets() {
-	$res = array();
-
-//    $producteurs = get_posts(
-//        array(
-//            'post_type' => 'amps_producteur',
-//            'posts_per_page' => -1,
-//            'order' => 'post_title',
-//            'orderby' => 'ASC'
-//        ));
-//    foreach ($producteurs as $prod) {
-//    }
+	amapress_precache_all_users();
 
 	$ret = array();
 	amapress_add_message_target( $ret, "user:me", "Moi - Test", 'me' );
@@ -519,32 +511,9 @@ function amapress_message_get_targets() {
 	$res['Evènements'] = $ret;
 
 	$ret = array();
-	//commandes
-	$cnt   = array();
-	$query = new WP_Query( 'post_type=amps_commande&amapress_date=next&orderby=meta_key&meta_key=amapress_commande_date_distrib&order=ASC' );
-	foreach ( $query->get_posts() as $commande ) {
-		$cmd_id  = $commande->ID;
-		$lieu_id = intval( get_post_meta( $cmd_id, 'amapress_commande_lieu', true ) );
-		if ( ! isset( $cnt[ $lieu_id ] ) ) {
-			$cnt[ $lieu_id ] = 5;
-		}
-		if ( $cnt[ $lieu_id ] == 0 ) {
-			continue;
-		}
-
-		$contrat_id = intval( get_post_meta( $cmd_id, 'amapress_commande_contrat_instance', true ) );
-
-		amapress_add_message_target( $ret, "post_type=amps_adhesion&amapress_contrat_inst=$contrat_id&amapress_date=active|amapress_adhesion_adherent,amapress_adhesion_adherent2,amapress_adhesion_adherent3,amapress_adhesion_adherent4|amapress_post=$cmd_id|amapress_commande_date_distrib", "Les amapiens inscrit à {$commande->post_title}", "commande" );
-
-		$cnt[ $lieu_id ] -= 1;
-	}
-	$res['Commandes'] = $ret;
-
-	$ret = array();
 	//avec adhésion
 	amapress_add_message_target( $ret, "post_type=amps_adhesion&amapress_date=active|amapress_adhesion_adherent,amapress_adhesion_adherent2,amapress_adhesion_adherent3,amapress_adhesion_adherent4", "Les amapiens avec contrats", "with-contrats" );
 	//intermittants
-//    amapress_add_message_target($ret, "post_type=amps_inter_adhe&amapress_date=active|amapress_adhesion_intermittence_user", "Les intermittents", "intermittent");
 	amapress_add_message_target( $ret, "user:amapress_contrat=intermittent", "Les intermittents", "intermittent" );
 	//sans adhésion
 	amapress_add_message_target( $ret, "no_adhesion", "Les amapiens sans contrat", "sans-adhesion" );

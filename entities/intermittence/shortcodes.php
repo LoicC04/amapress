@@ -5,6 +5,85 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
+function amapress_intermittence_anon_inscription_shortcode( $atts, $content = null, $tag = '' ) {
+	$atts = shortcode_atts( array(
+		'key'      => '',
+		'shorturl' => '',
+	), $atts );
+
+	$ret = '';
+	$key = $atts['key'];
+	if ( amapress_can_access_admin() ) {
+		$sample_key = uniqid() . uniqid();
+		$url        = add_query_arg( 'key', $key, get_permalink() );
+		if ( empty( $_REQUEST['key'] ) ) {
+			if ( empty( $key ) ) {
+				$ret .= amapress_get_panel_start( 'Configuration' );
+				$ret .= '<div style="color:red">Ajoutez la clé suivante à votre shortcode : ' . $sample_key . '<br/>De la forme : [' . $tag . ' key=' . $sample_key . ']</div>';
+			} else {
+				$ret .= '<div class="alert alert-info">Pour donner accès à cette page d\'inscription à la liste des intermittents, veuillez envoyer aux nouveaux intermittents le lien suivant : 
+<pre>' . $url . '</pre>
+Pour y accéder cliquez <a href="' . $url . '">ici</a>.<br />
+Vous pouvez également utiliser un service de réduction d\'URL tel que <a href="https://bit.ly">bit.ly</a> pour obtenir une URL plus courte à partir du lien ci-dessus.<br/>
+' . ( ! empty( $atts['shorturl'] ) ? 'Lien court sauvegardé : <code>' . $atts['shorturl'] . '</code><br />' : '' ) . '
+Vous pouvez également utiliser l\'un des QRCode suivants : 
+<div>' . amapress_print_qrcode( $url ) . amapress_print_qrcode( $url, 3 ) . amapress_print_qrcode( $url, 2 ) . '</div><br/>
+<strong>Attention : les lien ci-dessus, QR code et bit.ly NE doivent PAS être visible publiquement sur le site. Ce lien permet d\'accéder à la page d\'inscription à la liste des intermittents sans être connecté sur le site et l\'exposer sur internet pourrait permettre à une personne malvaillante de polluer le site.</strong></div>';
+				$ret .= amapress_get_panel_end();
+			}
+		} else {
+			$ret .= '<div class="alert alert-info"><a href="' . esc_attr( get_permalink() ) . '">Afficher les instructions d\'accès à cette page.</a></div>';
+		}
+	}
+	if ( empty( $key ) || empty( $_REQUEST['key'] ) || $_REQUEST['key'] != $key ) {
+		if ( empty( $key ) && amapress_can_access_admin() ) {
+			$ret .= 'Une fois le shortcode configuré : seuls les personnes dirigées depuis l\'url contenant cette clé pourront s\'inscrire sans mot de passe utilisateur.';
+			$ret .= $content;
+
+			return $ret;
+		} elseif ( ! amapress_is_user_logged_in() ) {
+			$ret .= '<div class="alert alert-danger">Vous êtes dans un espace sécurisé. Accès interdit</div>';
+			$ret .= $content;
+
+			return $ret;
+		}
+	}
+
+	$current_post = get_post();
+
+	$admin_post_url = admin_url( 'admin-post.php' );
+	if ( Amapress::toBool( Amapress::getOption( 'intermit_self_inscr' ) ) ) {
+		$ret .= '<form action="' . $admin_post_url . '?action=inscription_intermittent" method="post">
+  <input type="hidden" name="key" value="' . esc_attr( $key ) . '" />
+  <input type="hidden" name="post-id" value="' . esc_attr( $current_post ? $current_post->ID : 0 ) . '" />
+  <div class="form-group">
+    <label for="email"><strong>*Email:</strong></label>
+    <input type="email" class="form-control required" id="email" name="email">
+  </div>
+  <div class="form-group">
+    <label for="first_name">Prénom:</label>
+    <input type="text" class="form-control required" id="first_name" name="first_name">
+  </div>
+  <div class="form-group">
+    <label for="last_name">Nom:</label>
+    <input type="text" class="form-control required" id="last_name" name="last_name">
+  </div>
+  <div class="form-group">
+    <label for="phone"><em>Téléphone</em>:</label>
+    <input type="text" class="form-control" id="phone" name="phone">
+  </div>
+  <div class="form-group">
+    <label for="address"><em>Adresse</em>:</label>
+    <input type="text" class="form-control" id="address" name="address">
+  </div>
+  <button type="submit" class="btn btn-default" onclick="return confirm(\'Confirmez-vous votre inscription ?\')">S\'inscrire</button>
+</form>';
+	} else {
+		$ret .= '<p class="intermittence inscr-collectif">L\'inscription à l\'Espace intermittents est gérée par le collectif</p>';
+	}
+
+	return $ret;
+}
 
 function amapress_intermittence_inscription_shortcode( $atts ) {
 	if ( ! amapress_is_user_logged_in() ) {
@@ -202,46 +281,51 @@ function amapress_echanger_panier_shortcode( $atts ) {
 		$user_id = Amapress::resolve_user_id( $atts['user'] );
 	}
 
-	$ret = '';
-	if ( $for_other_users && $is_resp_distrib ) {
-		$users = array( '' => '--Sélectionner un amapien--' );
-		/** @var WP_User $user */
-		foreach ( get_users() as $user ) {
-			$users[ $user->ID ] = sprintf( '%s (%s)', $user->display_name, $user->user_email );
+	if ( amapress_can_access_admin() ) {
+		if ( ! $for_other_users && isset( $_GET['admin_mode'] ) ) {
+			$for_other_users = true;
 		}
-		$user_select = '<form class="echanger-panier-other-user">
-<select name="user" class="autocomplete required">' . tf_parse_select_options( $users, null, false ) . '</select>
-<button type="button" class="btn btn-default panier-echanger-other-button">Afficher l\'échange de paniers</button>
-</form>';
-		$ret         .= $user_select;
+		if ( ! $for_other_users ) {
+			echo '<p>' . Amapress::makeButtonLink( remove_query_arg( 'user_id', add_query_arg( 'admin_mode', 'T' ) ),
+					'Passer en mode Admin' ) . '</p>';
+		}
 	}
 
-	$adhesions             = AmapressAdhesion::getUserActiveAdhesions( $user_id );
+	$ret = '';
+	if ( $for_other_users && $is_resp_distrib ) {
+		if ( ! empty( $_REQUEST['user_id'] ) ) {
+			$user_id = intval( $_REQUEST['user_id'] );
+			echo '<p>' . Amapress::makeButtonLink( remove_query_arg( 'user_id', add_query_arg( 'admin_mode', 'T' ) ),
+					'Choisir un autre amapien' ) . '</p>';
+			$amapien = AmapressUser::getBy( $user_id );
+			if ( $amapien ) {
+				echo '<h3>Paniers de ' . esc_html( $amapien->getDisplayName() ) . '</h3>';
+			}
+		} else {
+			$users = array( '' => '--Sélectionner un amapien--' );
+			/** @var WP_User $user */
+			foreach ( get_users( 'amapress_contrat=active' ) as $user ) {
+				$users[ $user->ID ] = sprintf( '%s (%s)', $user->display_name, $user->user_email );
+			}
+			$user_select = '<form class="echanger-panier-other-user">
+<select name="user_id" class="autocomplete required">' . tf_parse_select_options( $users, null, false ) . '</select>
+<input type="hidden" name="admin_mode" value="T" />
+<button type="submit" class="btn btn-default panier-echanger-other-button">Afficher l\'échange de paniers</button>
+</form>';
+			$ret         .= $user_select;
+		}
+	}
+
+	$adhesions             = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id );
 	$adhesions_contrat_ids = array_map( function ( $a ) {
 		/** @var AmapressAdhesion $a */
 		return $a->getContrat_instanceId();
 	}, $adhesions );
-//    $contrat_instances = AmapressContrats::get_active_contrat_instances();
-	$from_date = amapress_time();
-//    if ($atts['show_past']) {
-//        foreach ($contrat_instances as $contrat_instance) {
-//            if ($contrat_instance->getDate_debut() < $from_date)
-//                $from_date = $contrat_instance->getDate_debut();
-//        }
-//    }
-//    $is_current_user_resp_amap = amapress_current_user_can('responsable_amap') || amapress_current_user_can('administrator') || amapress_current_user_can('manage_distributions');
+	$from_date             = amapress_time();
 
-//    $lieux = Amapress::get_lieux();
-//    $lieux_needed_resps = array();
-//    foreach ($lieux as $lieu) {
-//        $lieux_needed_resps[$lieu->ID] = 0;
-//    }
 	$all_dists = AmapressDistribution::get_next_distributions( $from_date );
-//    if ($is_current_user_resp_amap) {
-//        $dists = $all_dists;
-//    } else {
-	$lieu_ids = AmapressUsers::get_user_lieu_ids( amapress_current_user_id() );
-	$dists    = array();
+	$lieu_ids  = AmapressUsers::get_user_lieu_ids( $user_id );
+	$dists     = array();
 	/** @var AmapressDistribution $dist */
 	foreach ( $all_dists as $dist ) {
 		$dist_contrat_ids = $dist->getContratIds();
@@ -251,13 +335,6 @@ function amapress_echanger_panier_shortcode( $atts ) {
 			}
 		}
 	}
-//    $user_lieux = array();
-//    foreach ($dists as $dist) {
-//        $lieu_id = $dist->getLieuId();
-//        if ($dist->getLieuSubstitutionId() > 0)
-//            $lieu_id = $dist->getLieuSubstitutionId();
-//        if (!in_array($lieu_id, $user_lieux)) $user_lieux[] = $lieu_id;
-//    }
 
 	$ret .= '<div>';
 	$ret .= '<table class="table echange-paniers-list" width="100%">';
@@ -265,11 +342,6 @@ function amapress_echanger_panier_shortcode( $atts ) {
 	$ret .= '<tr>';
 	$ret .= '<th width="30%">Date</th>';
 	$ret .= '<th></th>';
-//    /** @var AmapressLieu_distribution $user_lieu */
-//    foreach ($user_lieux as $lieu_id) {
-//        $user_lieu = AmapressLieu_distribution::getBy($lieu_id);
-//        $ret .= '<th>' . esc_html($user_lieu->getShortName()) . '</th>';
-//    }
 	$ret .= '</tr>';
 	$ret .= '</thead>';
 
@@ -294,7 +366,11 @@ function amapress_echanger_panier_shortcode( $atts ) {
 			}
 		}
 		sort( $contrat_names );
-		$ceder_title   = count( $contrat_names ) > 1 ? 'Céder mes ' . count( $contrat_names ) . ' paniers' : 'Céder mon panier';
+		if ( $user_id != amapress_current_user_id() ) {
+			$ceder_title = count( $contrat_names ) > 1 ? 'Céder ses ' . count( $contrat_names ) . ' paniers' : 'Céder son panier';
+		} else {
+			$ceder_title = count( $contrat_names ) > 1 ? 'Céder mes ' . count( $contrat_names ) . ' paniers' : 'Céder mon panier';
+		}
 		$contrat_names = implode( ', ', $contrat_names );
 		$ret           .= '<th scope="row" width="30%">';
 		$ret           .= '<p class="inscr-list-date">' . esc_html( date_i18n( 'D j M Y', $date ) ) . '</p>';
@@ -305,44 +381,83 @@ function amapress_echanger_panier_shortcode( $atts ) {
 		}
 
 		$manage_my_exchanges_link = '';
-		$manage_my_exchanges_href = Amapress::get_page_with_shortcode_href( 'amapien-paniers-intermittents', 'amps_manage_paniers_inter' );
-		if ( ! empty( $manage_my_exchanges_href ) ) {
-			$manage_my_exchanges_link = '<p><a href="' . esc_attr( $manage_my_exchanges_href ) . '">Gérer l\'échange</a></p>';
+		if ( $user_id == amapress_current_user_id() ) {
+			$manage_my_exchanges_href = Amapress::get_page_with_shortcode_href( 'amapien-paniers-intermittents', 'amps_manage_paniers_inter' );
+			if ( ! empty( $manage_my_exchanges_href ) ) {
+				$manage_my_exchanges_link = '<p><a href="' . esc_attr( $manage_my_exchanges_href ) . '">Gérer l\'échange</a></p>';
+			}
 		}
 
+		$users = array( '' => '--Sélectionner un amapien--' );
+		if ( $for_other_users ) {
+			amapress_precache_all_users();
+			/** @var WP_User $user */
+			foreach ( get_users() as $user ) {
+				if ( $user->ID != $user_id ) {
+					$users[ $user->ID ] = sprintf( '%s (%s)', $user->display_name, $user->user_email );
+				}
+			}
+		}
 
 		foreach ( $date_dists as $dist ) {
 			if ( ! in_array( $dist->getLieuId(), $lieu_ids ) ) {
 				continue;
 			}
 
-//                $can_unsubscribe = Amapress::start_of_week($date) <= Amapress::start_of_week(amapress_time());
-			$can_subscribe = Amapress::start_of_day( $date ) >= Amapress::start_of_day( amapress_time() );
+			$can_subscribe = $dist->canCease();
 
 			$is_intermittent = 'exchangeable';
 			foreach ( AmapressPaniers::getPaniersForDist( $date ) as $panier ) {
-				$status = AmapressPaniers::isIntermittent( $panier->ID, $dist->getLieuId() );
-//                    var_dump($status);
+				$status = AmapressPaniers::isIntermittent( $panier->ID, $dist->getLieuId(), $user_id );
 				if ( ! empty( $status ) ) {
 					$is_intermittent = $status;
 				}
 			}
 
+			$user_paniers_count = count( array_intersect( $adhesions_contrat_ids, $dist->getContratIds() ) );
 
 			$ret .= '<td>';
 			switch ( $is_intermittent ) {
 				case 'exchangeable':
 					if ( $can_subscribe ) {
 						$id  = "info_{$dist->ID}";
-						$ret .= '<div class="echange-panier-info amapress-ajax-parent"><h4 class="echange-panier-info-title">Informations</h4><textarea id="' . $id . '" style="box-sizing: border-box"></textarea><br/>';
+						$ret .= '<div class="echange-panier-info amapress-ajax-parent"><h4 class="echange-panier-info-title">Informations</h4>';
+						$ret .= '<textarea id="' . $id . '" style="box-sizing: border-box"></textarea><br/>';
 						$ret .= '<button  type="button" class="btn btn-default amapress-ajax-button echange-panier" 
-						data-confirm="Etes-vous sûr de vouloir céder votre panier ?" data-action="echanger_panier" data-dist="' . $dist->ID . '" data-message="val:#' . $id . '" data-user="' . $user_id . '">' . $ceder_title . '</button></div>';
+						data-confirm="Etes-vous sûr de vouloir céder ce panier ?" data-action="echanger_panier" 
+						data-dist="' . $dist->ID . '" data-message="val:#' . $id . '" data-user="' . $user_id . '">' . $ceder_title . '</button>';
+						if ( ! $for_other_users && Amapress::getOption( 'allow_partial_exchange' )
+						     && $user_paniers_count > 1 ) {
+							$ret .= '&#xA0;';
+							$ret .= Amapress::makeButtonLink(
+								$dist->getPermalink() . '#inter_partial_exchanges',
+								'Faire un échange partiel <span class="dashicons dashicons-external"></span>',
+								false, true, 'btn btn-default'
+							);
+						}
+						if ( Amapress::getOption( 'enable-gardiens-paniers' ) ) {
+							$ret .= '&#xA0;';
+							$ret .= Amapress::makeButtonLink(
+								$dist->getPermalink() . '#panel_gardiens_paniers',
+								'Trouver un gardien de paniers <span class="dashicons dashicons-external"></span>', false, true );
+						}
+						if ( $for_other_users && amapress_can_access_admin() ) {
+
+							$target_select_id = 'target_user_id' . $dist->ID;
+							$ret              .= '<hr/>';
+							$ret              .= '<select id="' . $target_select_id . '" class="autocomplete required">' . tf_parse_select_options( $users, null, false ) . '</select>';
+							$ret              .= '<button  type="button" class="btn btn-default amapress-ajax-button echange-panier" 
+						data-confirm="Etes-vous sûr de vouloir céder ce panier à l\'amapien sélectionné ?" data-action="echanger_panier" 
+						data-dist="' . $dist->ID . '" data-target="val:#' . $target_select_id . '" 
+						data-message="val:#' . $id . '" data-user="' . $user_id . '">' . $ceder_title . ' pour le repreneur sélectionné</button>';
+						}
+						$ret .= '</div>';
 					} else {
 						$ret .= '<span class="echange-closed">Cessions de paniers closes</span>';
 					}
 					break;
 				case AmapressIntermittence_panier::EXCHANGE_VALIDATE_WAIT:
-					$ret .= '<span class="repreneurè-waiting">Repreneur(s) en attente de validation</span>';
+					$ret .= '<span class="repreneur-waiting">Repreneur(s) en attente de validation</span>';
 					$ret .= $manage_my_exchanges_link;
 					break;
 				case 'to_exchange':
