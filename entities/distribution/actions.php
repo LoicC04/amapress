@@ -30,11 +30,6 @@ function amapress_do_query_action_distribution_desinscr_resp() {
 	}
 }
 
-add_action( 'amapress_do_query_action_distribution_panier_garder', 'amapress_do_query_action_distribution_panier_garder' );
-function amapress_do_query_action_distribution_panier_garder() {
-	//TODO
-}
-
 add_filter( 'amapress_get_custom_title_distribution_liste-emargement', 'amapress_get_custom_title_distribution_liste_emargement' );
 function amapress_get_custom_title_distribution_liste_emargement( $content ) {
 	if ( ! amapress_is_user_logged_in() ) {
@@ -112,6 +107,10 @@ function amapress_get_custom_content_distribution_liste_emargement( $content ) {
 function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 	$dist = AmapressDistribution::getBy( $dist_id );
 
+	add_filter( 'autoptimize_filter_imgopt_should_lazyload', function ( $should_do ) {
+		return false;
+	} );
+
 	$date             = $dist->getDate();
 	$dist_contrat_ids = $dist->getContratIds();
 	$active_contrats  = AmapressContrats::get_active_contrat_instances( null, $date, false, false );
@@ -145,7 +144,15 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 		}, $all_contrat_instances
 	);
 	$dist_lieu_id             = $dist->getLieuId();
-
+	$dist_slots_conf          = $dist->getSlotsConf();
+	$dist_slots_options       = [];
+	foreach ( $dist_slots_conf as $k => $conf ) {
+		if ( $conf['max'] <= 0 ) {
+			$dist_slots_options[ $k ] = $conf['display'];
+		} else {
+			$dist_slots_options[ $k ] = sprintf( '%s (%d/%d)', $conf['display'], intval( $conf['current'] ), intval( $conf['max'] ) );
+		}
+	}
 	$show_address = Amapress::getOption( 'liste-emargement-show-address' );
 	if ( isset( $_GET['show_address'] ) ) {
 		$show_address = Amapress::toBool( $_GET['show_address'] );
@@ -184,6 +191,15 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 		),
 
 	);
+	if ( ! empty( $dist_slots_conf ) ) {
+		$columns[] = array(
+			'title' => 'Créneau',
+			'data'  => array(
+				'_'    => 'slot',
+				'sort' => 'slot_sort',
+			)
+		);
+	}
 	if ( $show_address ) {
 		$columns[] = array(
 			'title' => 'Adresse',
@@ -213,7 +229,7 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 	}
 
 	foreach ( $all_contrat_instances as $contrat ) {
-		$tit = '<span style="word-break: break-all; white-space: normal;">' . esc_html( $contrat->getModelTitle() ) . '</span>';
+		$tit = '<span class="smart-word-break">' . esc_html( $contrat->getModelTitle() ) . '</span>';
 		if ( ! in_array( $contrat->ID, $dist_contrat_ids ) ) {
 			$tit = '<span class="not-this-dist">' . $tit . '</span>';
 		}
@@ -233,18 +249,23 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 		);
 	}
 
-	$all_adhs  = AmapressContrats::get_active_adhesions( $all_contrat_instance_ids,
+	$allow_partial_coadh = Amapress::hasPartialCoAdhesion();
+	$all_adhs            = AmapressContrats::get_active_adhesions( $all_contrat_instance_ids,
 		null, $dist_lieu_id, $date, true, false );
-	$liste     = array();
-	$adhesions = array_group_by(
+	$liste               = array();
+	$adhesions           = array_group_by(
 		$all_adhs,
-		function ( $adh ) use ( $date ) {
+		function ( $adh ) use ( $date, $allow_partial_coadh ) {
 			/** @var AmapressAdhesion $adh */
 			if ( ! $adh->getAdherentId() ) {
 				return '';
 			}
-			$user     = $adh->getAdherent()->getUser();
-			$user_ids = array_unique( AmapressContrats::get_related_users( $user->ID, false, $date ) );
+			$user = $adh->getAdherent()->getUser();
+			if ( $allow_partial_coadh ) {
+				$user_ids = array_unique( AmapressContrats::get_related_users( $user->ID, false, $date, $adh->getContrat_instanceId() ) );
+			} else {
+				$user_ids = array_unique( AmapressContrats::get_related_users( $user->ID, false, $date ) );
+			}
 
 			return implode( '_', $user_ids );
 		} );
@@ -275,6 +296,36 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 			return amapress_get_user_by_id_or_archived( intval( $user_id ) );
 		}, $user_ids );
 
+		if ( ! empty( $dist_slots_conf ) ) {
+			$slots     = [];
+			$slot_sort = Amapress::end_of_week( $dist->getDate() );
+			foreach ( $user_ids as $user_id ) {
+				$slot = $dist->getSlotInfoForUser( $user_id );
+				if ( $slot ) {
+					$slots[ strval( $slot['date'] ) ] = $slot;
+					if ( $slot['date'] < $slot_sort ) {
+						$slot_sort = $slot['date'];
+					}
+				}
+			}
+			$line['slot_sort'] = date_i18n( 'Y-m-d-H-i', $slot_sort );
+			$slot_display      = implode( ',', array_map( function ( $s ) {
+				return $s['display'];
+			}, $slots ) );
+			if ( amapress_can_access_admin() && ! $for_pdf && ! isset( $_GET['for_export'] ) ) {
+				$affect_slot_id = 'affect-slot-' . $user_ids[0];
+				$affect_slot    = "<select id='$affect_slot_id'>";
+				$affect_slot    .= tf_parse_select_options( $dist_slots_options, $slot_sort, false );
+				$affect_slot    .= '</select>';
+				$affect_slot    .= '<button  type="button" class="btn btn-default amapress-ajax-button" 
+					data-action="distrib_inscrire_slot" data-confirm="Etes-vous sûr d\'attribuer ce créneau à cet amapien ?"
+					data-dist="' . $dist_id . '" data-slot="val:#' . $affect_slot_id . '" data-user="' . $user_ids[0] . '">Attribuer</button>';
+
+				$slot_display .= '<br/>' . $affect_slot;
+			}
+			$line['slot'] = $slot_display;
+		}
+
 		$line['first_name'] = implode( ' / ', array_map( function ( $user ) {
 				return $user->first_name;
 			}, $users ) ) . $panier_intermittent;
@@ -284,8 +335,8 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 				$val = Amapress::makeLink( admin_url( 'user-edit.php?user_id=' . $user->ID ), $val, true, true );
 			}
 			$adh = AmapressUser::getBy( $user );
-			if ( ! empty( $adh->getCoAdherents() ) ) {
-				$val .= ' / ' . esc_html( $adh->getCoAdherents() );
+			if ( ! empty( $adh->getAdditionalCoAdherents() ) ) {
+				$val .= ' / ' . esc_html( $adh->getAdditionalCoAdherents() );
 			}
 
 			return $val;
@@ -299,7 +350,7 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 			$phones = array_unique( array_map( function ( $user ) use ( $for_pdf ) {
 				$adh = AmapressUser::getBy( $user );
 
-				return $adh->getTelTo( true, false, $for_pdf ) . ( ! empty( $adh->getCoAdherentsInfos() ) ? ' / ' . esc_html( $adh->getCoAdherentsInfos() ) : '' );
+				return $adh->getTelTo( true, false, $for_pdf ) . ( ! empty( $adh->getAdditionalCoAdherentsInfos() ) ? ' / ' . esc_html( $adh->getAdditionalCoAdherentsInfos() ) : '' );
 			}, $users ) );
 			$phones = array_filter( $phones, function ( $s ) {
 				return ! empty( trim( $s ) );
@@ -375,7 +426,15 @@ function getListeEmargement( $dist_id, $show_all_contrats, $for_pdf = false ) {
 		$liste[] = $line;
 	}
 
-	usort( $liste, function ( $a, $b ) {
+	usort( $liste, function ( $a, $b ) use ( $dist_slots_conf ) {
+		if ( ! empty( $dist_slots_conf ) ) {
+			if ( $a['slot_sort'] < $b['slot_sort'] ) {
+				return - 1;
+			} elseif ( $a['slot_sort'] > $b['slot_sort'] ) {
+				return 1;
+			}
+		}
+
 		return strcasecmp( wp_strip_all_tags( $a['last_name'] ), wp_strip_all_tags( $b['last_name'] ) );
 	} );
 
@@ -469,28 +528,28 @@ line-height: 1.1;
 		} else {
 			echo '<a href="' . esc_attr( add_query_arg( 'all', '' ) ) . '" class="btn btn-default btn-print">Afficher tous les contrats</a>';
 		}
+		if ( ! empty( $dist_slots_conf ) ) {
+			if ( ! isset( $_GET['for_export'] ) ) {
+				echo '<a href="' . esc_attr( add_query_arg( 'for_export', '' ) ) . '" class="btn btn-default btn-print">Vue pour export XLSX si créneaux de distribution</a>';
+			} else {
+				echo '<a href="' . esc_attr( remove_query_arg( 'for_export' ) ) . '" class="btn btn-default btn-print">Revenir à la vue normale</a>';
+			}
+		}
 		echo '<a href="' . esc_attr( $pdf_url ) . '" class="btn btn-default btn-print">Imprimer en PDF</a>';
+		echo '<a href="' . esc_attr( $dist->getPermalink() ) . '" class="btn btn-default">Revenir à la distribution</a>';
+
 		echo '<br/>';
 		if ( current_user_can( 'edit_distribution' ) ) {
-			echo '<a href="' . esc_attr( $dist->getAdminEditLink() ) . '" class="btn btn-default">Editer la distribution</a>';
-			echo '<a href="' . esc_attr( admin_url( 'admin.php?page=amapress_emargement_options_page' ) ) . '" class="btn btn-default">Editer les paramètres de la liste de distribution</a>';
+			echo '<a href="' . esc_attr( $dist->getAdminEditLink() ) . '#amapress_distribution_nb_resp_supp" class="btn btn-default">Ajouter des responsables supplémentaires</a>';
+			echo '<a href="' . esc_attr( $dist->getAdminEditLink() ) . '" class="btn btn-default">Editer la distribution (infos, horaires, créneaux...)</a>';
+			echo '<br/>';
+			echo '<a href="' . esc_attr( admin_url( 'admin.php?page=amapress_distribs_conf_opt_page&tab=amp_emargement_options_tab' ) ) . '" class="btn btn-default">Editer les paramètres de la liste de distribution</a>';
 		}
 		$mailto = $dist->getMailtoResponsables();
 		if ( ! empty( $mailto ) ) {
 			echo '<a href="' . $mailto . '" class="btn btn-default">Email aux responsables</a>';
 		}
-		$smsto = $dist->getSMStoResponsables();
-		if ( ! empty( $smsto ) ) {
-			echo '<a href="' . $mailto . '" class="btn btn-default">SMS aux responsables</a>';
-		}
-		$mailto = $dist->getMailtoAmapiens();
-		if ( ! empty( $mailto ) ) {
-			echo '<a href="' . $mailto . '" class="btn btn-default">Email aux amapiens</a>';
-		}
-		$smsto = $dist->getSMStoAmapiens();
-		if ( ! empty( $smsto ) ) {
-			echo '<a href="' . $mailto . '" class="btn btn-default">SMS aux amapiens</a>';
-		}
+		echo '<a target="_blank" href="' . admin_url( 'admin.php?page=amapress_messages_page' ) . '" class="btn btn-default">Email aux amapiens</a>';
 		if ( current_user_can( 'edit_lieu_distribution' ) ) {
 			echo '<a href="' . esc_attr( $dist->getLieu()->getAdminEditLink() ) . '" class="btn btn-default">Editer les infos du lieu</a>';
 		}
@@ -526,9 +585,11 @@ line-height: 1.1;
 				'no_script'    => $for_pdf,
 				'aaSorting'    => [ [ 0, 'asc' ] ]
 			),
-			array(
-				Amapress::DATATABLES_EXPORT_EXCEL
-			) );
+			( empty( $dist_slots_conf ) || isset( $_GET['for_export'] ) ) ?
+				array(
+					Amapress::DATATABLES_EXPORT_EXCEL
+				) : array()
+		);
 	}
 
 	$had_paniers_variables = false;
@@ -614,7 +675,7 @@ line-height: 1.1;
 				'show_sms'        => 'false',
 				'show_tel'        => 'false',
 				'show_tel_fixe'   => 'false',
-				'show_tel_mobile' => 'false',
+				'show_tel_mobile' => $show_phone,
 				'show_adresse'    => 'false',
 				'show_roles'      => 'false',
 			),
@@ -629,6 +690,66 @@ line-height: 1.1;
 				'etat'      => true,
 				'for_print' => true,
 			) );
+	}
+
+
+	if ( Amapress::getOption( 'enable-gardiens-paniers' ) ) { // && ! empty( $dist->getPaniersGarde() ) ) {
+		if ( ! $for_pdf ) {
+			echo '<br/>';
+		}
+		echo '<h3>* Garde(s) de panier(s)</h3>';
+		$col_gardiens  = array(
+			array(
+				'title' => 'Gardien',
+				'data'  => 'gardien'
+			),
+			array(
+				'title' => 'Amapien',
+				'data'  => 'amapien'
+			),
+			array(
+				'title' => 'Paniers',
+				'data'  => 'paniers'
+			),
+		);
+		$data_gardiens = [];
+		foreach ( $dist->getGardiensIds( true ) as $gardien_id ) {
+			$gardien         = AmapressUser::getBy( $gardien_id );
+			$gardien_comment = $dist->getGardienComment( $gardien_id );
+			if ( ! empty( $gardien_comment ) ) {
+				$gardien_comment = '<br /><em>' . esc_html( $gardien_comment ) . '</em>';
+			}
+			$gardes_amapiens = $dist->getGardiensPaniersAmapiensIds( $gardien_id );
+			foreach ( $gardes_amapiens as $amapien_id ) {
+				$amapien         = AmapressUser::getBy( $amapien_id );
+				$data_gardiens[] = [
+					'gardien' => $gardien->getSortableDisplayName() . '(' . $gardien->getTelTo( true, false, false, ',' ) . ')'
+					             . $gardien_comment,
+					'amapien' => $amapien->getSortableDisplayName() . '(' . $amapien->getTelTo( true, false, false, ',' ) . ')',
+					'paniers' => $dist->getPaniersDescription( $amapien_id ),
+				];
+				$gardien_comment = '';
+			}
+			if ( empty( $gardes_amapiens ) && ! empty( $gardien_comment ) ) {
+				$data_gardiens[] = [
+					'gardien' => $gardien->getSortableDisplayName() . '(' . $gardien->getTelTo( true, false, false, ',' ) . ')'
+					             . $gardien_comment,
+					'amapien' => '',
+					'paniers' => '',
+				];
+			}
+		}
+		amapress_echo_datatable( 'gardes-paniers',
+			$col_gardiens, $data_gardiens,
+			array(
+				'paging'       => false,
+				'searching'    => false,
+				'nowrap'       => false,
+				'responsive'   => false,
+				'init_as_html' => true,
+				'no_script'    => $for_pdf,
+			)
+		);
 	}
 
 	if ( Amapress::toBool( Amapress::getOption( 'liste-emargement-show-lieu-instructions' ) ) ) {
@@ -681,5 +802,107 @@ add_action( 'amapress_do_query_action_distribution_liste-emargement-excel', func
 		'</div>',
 		strtolower( sanitize_file_name( 'liste-emargement-' . $dist->getTitle() . '.xlsx' ) ),
 		'Liste d\'émargement - ' . $dist->getTitle() );
+	die();
+} );
+
+
+add_action( 'wp_ajax_desinscrire_garde', function () {
+	$dist_id    = intval( $_POST['dist'] );
+	$gardien_id = intval( $_POST['gardien'] );
+	$user_id    = ! empty( $_POST['user'] ) ? intval( $_POST['user'] ) : amapress_current_user_id();
+	$is_current = ( amapress_current_user_id() == $user_id );
+	if ( ! $is_current && ! ( ! AmapressDistributions::isCurrentUserResponsable( $dist_id ) || amapress_can_access_admin() ) ) {
+		echo '<p class="error">Non autorisé</p>';
+		die();
+	}
+
+
+	$dist = AmapressDistribution::getBy( $dist_id );
+	switch ( $dist->faireGarder( $user_id, $gardien_id, false, false,
+		isset( $_REQUEST['not_member'] ) ? Amapress::toBool( $_REQUEST['not_member'] ) : false ) ) {
+		case 'not_inscr':
+			echo '<p class="error">Non gardé</p>';
+			break;
+		case 'ok':
+			echo '<p class="success">Désaffectation du gardien de paniers prise en compte</p>';
+			break;
+	}
+	die();
+} );
+add_action( 'wp_ajax_inscrire_garde', function () {
+	$dist_id    = intval( $_POST['dist'] );
+	$gardien_id = intval( $_POST['gardien'] );
+	$user_id    = ! empty( $_POST['user'] ) ? intval( $_POST['user'] ) : amapress_current_user_id();
+	$is_current = amapress_current_user_id() == $user_id;
+	if ( ! $is_current && ! ( AmapressDistributions::isCurrentUserResponsable( $dist_id )
+	                          || amapress_can_access_admin()
+	                          || AmapressDistributions::isCurrentUserResponsableThisWeek()
+	                          || AmapressDistributions::isCurrentUserResponsableNextWeek()
+		) ) {
+		echo '<p class="error">Non autorisé</p>';
+		die();
+	}
+
+	$dist = AmapressDistribution::getBy( $dist_id );
+	switch ( $dist->faireGarder( $user_id, $gardien_id, true, false,
+		isset( $_REQUEST['not_member'] ) ? Amapress::toBool( $_REQUEST['not_member'] ) : false ) ) {
+		case 'already_in_list':
+			echo '<p class="error">Panier(s) déjà gardé(s)</p>';
+			break;
+		case 'ok':
+			echo '<p class="success">Garde de panier(s) prise en compte</p>';
+			break;
+	}
+	die();
+} );
+
+add_action( 'wp_ajax_distrib_desinscrire_slot', function () {
+	$dist_id    = intval( $_POST['dist'] );
+	$slot       = strval( $_POST['slot'] );
+	$user_id    = ! empty( $_POST['user'] ) ? intval( $_POST['user'] ) : amapress_current_user_id();
+	$is_current = ( amapress_current_user_id() == $user_id );
+	if ( ! $is_current && ! ( ! AmapressDistributions::isCurrentUserResponsable( $dist_id ) || amapress_can_access_admin() ) ) {
+		echo '<p class="error">Non autorisé</p>';
+		die();
+	}
+
+
+	$dist = AmapressDistribution::getBy( $dist_id );
+	switch ( $dist->manageSlot( $user_id, $slot, false ) ) {
+		case 'not_inscr':
+			echo '<p class="error">Vous n\'aviez pas choisi de créneau</p>';
+			break;
+		case 'ok':
+			echo '<p class="success">Désaffectation du créneau prise en compte</p>';
+			break;
+	}
+	die();
+} );
+add_action( 'wp_ajax_distrib_inscrire_slot', function () {
+	$dist_id    = intval( $_POST['dist'] );
+	$slot       = strval( $_POST['slot'] );
+	$user_id    = ! empty( $_POST['user'] ) ? intval( $_POST['user'] ) : amapress_current_user_id();
+	$is_current = amapress_current_user_id() == $user_id;
+	if ( ! $is_current && ! ( AmapressDistributions::isCurrentUserResponsable( $dist_id )
+	                          || amapress_can_access_admin()
+	                          || AmapressDistributions::isCurrentUserResponsableThisWeek()
+	                          || AmapressDistributions::isCurrentUserResponsableNextWeek()
+		) ) {
+		echo '<p class="error">Non autorisé</p>';
+		die();
+	}
+
+	$dist = AmapressDistribution::getBy( $dist_id );
+	switch ( $dist->manageSlot( $user_id, $slot, true ) ) {
+		case 'already_in_list':
+			echo '<p class="error">Vous avez déjà choisi un créneau</p>';
+			break;
+		case 'full':
+			echo '<p class="error">Ce créneau est complet</p>';
+			break;
+		case 'ok':
+			echo '<p class="success">Choix du créneau pris en compte</p>';
+			break;
+	}
 	die();
 } );

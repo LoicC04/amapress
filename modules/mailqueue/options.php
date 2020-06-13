@@ -10,19 +10,12 @@ function amapress_mailing_queue_menu_options() {
 		'id'       => 'amapress_mailqueue_options_page',
 		'type'     => 'panel',
 		'settings' => array(
-			'name'       => 'Queue &amp; SMTP',
-			'position'   => '25.16',
+			'name'       => 'File d\'attente &amp; SMTP',
 			'capability' => 'manage_options',
-			'icon'       => 'dashicons-admin-tools',
-		),
-		'options'  => array(
-//			array(
-//				'type' => 'note',
-//				'desc' => 'ici vous pouvez gérer...'
-//			),
+			'menu_icon'  => 'dashicons-migrate',
 		),
 		'tabs'     => array(
-			'Options de la file des emails sortants' => array(
+			'Options de la file des emails sortants'                     => array(
 				'id'      => 'amapress_mailqueue_options',
 				'desc'    => '',
 				'options' => array(
@@ -37,21 +30,29 @@ function amapress_mailing_queue_menu_options() {
 						'name'    => 'Emails par interval',
 						'type'    => 'number',
 						'desc'    => 'Nombre d\'emails envoyés à chaque interval d\'exécution de la file d\'envoi des emails sortants',
-						'default' => '2',
+						'default' => AMAPRESS_MAIL_QUEUE_DEFAULT_LIMIT,
 					),
 					array(
 						'id'      => 'mail_queue_interval',
 						'name'    => 'Interval',
 						'type'    => 'number',
 						'desc'    => 'Interval d\'exécution de la file d\'envoi des emails sortants',
-						'default' => '30',
+						'default' => AMAPRESS_MAIL_QUEUE_DEFAULT_INTERVAL,
 					),
+					array(
+						'id'      => 'avoid_send_wp_from',
+						'name'    => 'Envoi au site',
+						'type'    => 'checkbox',
+						'desc'    => 'Eviter d\'envoyer les emails avec destinataires en Cc/Bcc à l\'adresse email du site (' . amapress_mail_from( amapress_get_default_wordpress_from_email() ) . ')',
+						'default' => true,
+					),
+					//
 					array(
 						'type' => 'save',
 					),
 				)
 			),
-			'SMTP externe'                           => array(
+			'SMTP externe'                                               => array(
 				'id'      => 'amapress_mailqueue_stmp',
 				'desc'    => '',
 				'options' => array(
@@ -100,10 +101,12 @@ function amapress_mailing_queue_menu_options() {
 						'type' => 'text',
 					),
 					array(
-						'id'   => 'mail_queue_smtp_port',
-						'name' => 'SMTP Port',
-						'desc' => 'Default ports : SMTP 25; SMTP SSL 465; SMTP TLS 587',
-						'type' => 'number',
+						'id'     => 'mail_queue_smtp_port',
+						'name'   => 'SMTP Port',
+						'desc'   => 'Default ports : SMTP 25; SMTP SSL 465; SMTP TLS 587',
+						'type'   => 'number',
+						'max'    => 65535,
+						'slider' => false,
 					),
 					array(
 						'id'   => 'mail_queue_smtp_timeout',
@@ -133,7 +136,8 @@ function amapress_mailing_queue_menu_options() {
 					),
 				)
 			),
-			'Emails sortants en attente'             => array(
+			'Emails sortants en attente <span class="badge">' .
+			amapress_mailing_queue_waiting_mail_list_count() . '</span>' => array(
 				'id'      => 'amapress_mailqueue_waiting_mails',
 				'desc'    => '',
 				'options' => array(
@@ -145,7 +149,8 @@ function amapress_mailing_queue_menu_options() {
 					),
 				),
 			),
-			'Emails sortants en erreur'              => array(
+			'Emails sortants en erreur <span class="badge">' .
+			amapress_mailing_queue_errored_mail_list_count() . '</span>' => array(
 				'id'      => 'amapress_mailqueue_errored_mails',
 				'desc'    => '',
 				'options' => array(
@@ -157,7 +162,7 @@ function amapress_mailing_queue_menu_options() {
 					),
 				),
 			),
-			'Log des emails sortants'                => array(
+			'Log des emails sortants'                                    => array(
 				'id'      => 'amapress_mailqueue_mail_logs',
 				'desc'    => '',
 				'options' => array(
@@ -183,21 +188,43 @@ function amapress_mailing_queue_menu_options() {
 	);
 }
 
-function amapress_mailing_queue_waiting_mail_list() {
-	return amapress_mailing_queue_mail_list( 'waiting-mails', 'waiting' );
+function amapress_mailing_queue_waiting_mail_list( $mlgrp_id = '' ) {
+	return amapress_mailing_queue_mail_list( 'waiting-mails', $mlgrp_id, 'waiting' );
 }
 
-function amapress_mailing_queue_errored_mail_list() {
-	return amapress_mailing_queue_mail_list( 'errored-mails', 'errored' );
+function amapress_mailing_queue_waiting_mail_list_count( $mlgrp_id = '' ) {
+	require_once( AMAPRESS__PLUGIN_DIR . 'modules/mailqueue/AmapressSMTPMailingQueue.php' );
+
+	return count( glob( AmapressSMTPMailingQueue::getUploadDir( $mlgrp_id, 'waiting' ) . '*.json' ) );
 }
 
-function amapress_mailing_queue_logged_mail_list() {
-	return amapress_mailing_queue_mail_list( 'logged-mails', 'logged', [
+function amapress_mailing_queue_errored_mail_list_count( $mlgrp_id = '' ) {
+	require_once( AMAPRESS__PLUGIN_DIR . 'modules/mailqueue/AmapressSMTPMailingQueue.php' );
+
+	return count( glob( AmapressSMTPMailingQueue::getUploadDir( $mlgrp_id, 'errored' ) . '*.json' ) );
+}
+
+function amapress_mailing_queue_errored_mail_list( $mlgrp_id = '' ) {
+	$href = add_query_arg(
+		array(
+			'action'   => 'amapress_retry_queue_send_all_msg',
+			'mlgrp_id' => $mlgrp_id,
+		),
+		admin_url( 'admin.php' )
+	);
+	$ret  = '<p><a class="button button-secondary" href="' . esc_attr( $href ) . '" onclick="return confirm(\'Confirmez-vous la nouvelle tentative d\\\'envoi des emails en erreur ?\')">Renvoyer tous les emails en erreur</a></p>';
+	$ret  .= amapress_mailing_queue_mail_list( 'errored-mails', $mlgrp_id, 'errored' );
+
+	return $ret;
+}
+
+function amapress_mailing_queue_logged_mail_list( $mlgrp_id = '' ) {
+	return amapress_mailing_queue_mail_list( 'logged-mails', $mlgrp_id, 'logged', [
 		'order' => [ 0, 'desc' ],
 	] );
 }
 
-function amapress_mailing_queue_mail_list( $id, $type, $options = [] ) {
+function amapress_mailing_queue_mail_list( $id, $mlgrp_id, $type, $options = [] ) {
 	//compact('to', 'subject', 'message', 'headers', 'attachments', 'time', 'errors')
 	$columns   = array();
 	$columns[] = array(
@@ -238,7 +265,7 @@ function amapress_mailing_queue_mail_list( $id, $type, $options = [] ) {
 //            'data' => '',
 //        ),
 //);
-	$emails = AmapressSMTPMailingQueue::loadDataFromFiles( true, $type );
+	$emails = AmapressSMTPMailingQueue::loadDataFromFiles( $mlgrp_id, true, $type );
 	$data   = array();
 	foreach ( $emails as $email ) {
 		$headers = implode( '<br/>', array_map( function ( $h ) {
@@ -260,15 +287,31 @@ function amapress_mailing_queue_mail_list( $id, $type, $options = [] ) {
 			array(
 				'action'   => 'amapress_delete_queue_msg',
 				'type'     => $type,
+				'mlgrp_id' => $mlgrp_id,
 				'msg_file' => $email['basename'],
 			),
 			admin_url( 'admin.php' )
 		);
 		$link_delete_msg = '<br/><a href="' . esc_attr( $href ) . '" onclick="return confirm(\'Confirmez-vous la suppression de cet email ?\')">Supprimer</a>';
 
+		if ( isset( $email['message'] ) && is_array( $email['message'] ) && isset( $email['message']['ml_grp_msg_id'] ) ) {
+			$href            = add_query_arg(
+				array(
+					'action'        => 'amapress_delete_queue_msg',
+					'type'          => $type,
+					'msg_file'      => $email['basename'],
+					'mlgrp_id'      => $mlgrp_id,
+					'ml_grp_msg_id' => $email['message']['ml_grp_msg_id'],
+				),
+				admin_url( 'admin.php' )
+			);
+			$link_delete_msg .= '<br/><a href="' . esc_attr( $href ) . '" onclick="return confirm(\'Confirmez-vous la suppression ?\')">Supprimer pour tous les destinataires</a>';
+		}
+
 		$href           = add_query_arg(
 			array(
 				'action'   => 'amapress_retry_queue_send_msg',
+				'mlgrp_id' => $mlgrp_id,
 				'msg_file' => $email['basename'],
 			),
 			admin_url( 'admin.php' )
@@ -311,9 +354,15 @@ function admin_action_amapress_delete_queue_msg() {
 		wp_die( 'Accès non autorisé' );
 	}
 
-	$type     = $_REQUEST['type'];
-	$msg_file = $_REQUEST['msg_file'];
-	AmapressSMTPMailingQueue::deleteFile( $type, $msg_file );
+	$type          = $_REQUEST['type'];
+	$msg_file      = $_REQUEST['msg_file'];
+	$mlgrp_id      = isset( $_REQUEST['mlgrp_id'] ) ? $_REQUEST['mlgrp_id'] : '';
+	$ml_grp_msg_id = isset( $_REQUEST['ml_grp_msg_id'] ) ? $_REQUEST['ml_grp_msg_id'] : '';
+	if ( ! empty( $ml_grp_msg_id ) ) {
+		AmapressSMTPMailingQueue::deleteMessageByGroup( $mlgrp_id, $ml_grp_msg_id, $type );
+	} else {
+		AmapressSMTPMailingQueue::deleteFile( $mlgrp_id, $type, $msg_file );
+	}
 	if ( empty( $_SERVER['HTTP_REFERER'] ) ) {
 		echo "Email $msg_file supprimé avec succès";
 	} else {
@@ -329,7 +378,8 @@ function admin_action_amapress_retry_queue_send_msg() {
 	}
 
 	$msg_file = $_REQUEST['msg_file'];
-	$res      = AmapressSMTPMailingQueue::retrySendMessage( $msg_file );
+	$mlgrp_id = isset( $_REQUEST['mlgrp_id'] ) ? $_REQUEST['mlgrp_id'] : '';
+	$res      = AmapressSMTPMailingQueue::retrySendMessage( $mlgrp_id, $msg_file );
 	if ( empty( $_SERVER['HTTP_REFERER'] ) ) {
 		if ( $res ) {
 			echo "Email $msg_file renvoyé avec succès";
@@ -341,6 +391,23 @@ function admin_action_amapress_retry_queue_send_msg() {
 	}
 	exit();
 }
+
+add_action( 'admin_action_amapress_retry_queue_send_all_msg', 'admin_action_amapress_retry_queue_send_all_msg' );
+function admin_action_amapress_retry_queue_send_all_msg() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Accès non autorisé' );
+	}
+
+	$mlgrp_id = isset( $_REQUEST['mlgrp_id'] ) ? $_REQUEST['mlgrp_id'] : '';
+	AmapressSMTPMailingQueue::retrySendAllErroredMessages( $mlgrp_id );
+	if ( empty( $_SERVER['HTTP_REFERER'] ) ) {
+		echo 'Emails en erreur remis pour envoi avec succès';
+	} else {
+		wp_redirect( $_SERVER['HTTP_REFERER'] );
+	}
+	exit();
+}
+
 
 add_action( 'admin_action_amapress_test_mail_config', 'amapress_test_mail_config' );
 function amapress_test_mail_config() {

@@ -28,12 +28,17 @@ function amapress_register_entities_mailing_groups( $entities ) {
 					} else {
 						echo amapress_get_admin_notice( 'Erreur de configuration : l\'extension IMAP n\'est pas installée, les emails groupés sont désactivés.', 'error', false );
 					}
-					if ( ! empty( $ml->getSmtpHost() ) ) {
-						if ( $ml->testSMTP() ) {
-							echo amapress_get_admin_notice( 'Configuration SMTP OK', 'success', false );
+					if ( $ml->isExternalSmtp() ) {
+						$res = $ml->testSMTP();
+						if ( true !== $res ) {
+							echo amapress_get_admin_notice( 'Erreur de configuration, connexion au SMTP ' . $ml->getSmtpHost() . ' impossible : ' . $res, 'error', false );
 						} else {
-							echo amapress_get_admin_notice( 'Erreur de configuration : connexion au SMTP ' . $ml->getSmtpHost() . ' impossible', 'error', false );
+							echo amapress_get_admin_notice( 'Configuration SMTP OK', 'success', false );
 						}
+					} elseif ( $ml->shouldUseSmtp() ) {
+						echo amapress_get_admin_notice(
+							sprintf( 'Cette Email Groupé contient %d membres, le SMTP du compte IMAP devrait être configuré pour les envois.', $ml->getMembersCount() ),
+							'warning', false );
 					}
 				}
 			}
@@ -42,12 +47,15 @@ function amapress_register_entities_mailing_groups( $entities ) {
 //			'add_new'      => 'Configurer une liste de diffusion existante',
 //			'add_new_item' => 'Configurer une liste de diffusion existante',
 //		),
+		'views'            => array(
+			'remove' => array( 'mine' )
+		),
 		'default_orderby'  => 'post_title',
 		'default_order'    => 'ASC',
 		'slug'             => amapress__( 'mailinggroups' ),
 		'menu_icon'        => 'dashicons-email-alt',
 		'fields'           => array(
-			'name'                   => array(
+			'name'         => array(
 				'group'    => 'Description',
 				'name'     => amapress__( 'Email' ),
 				'type'     => 'text',
@@ -55,12 +63,39 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'required' => true,
 				'is_email' => true,
 			),
-			'desc'                   => array(
+			'desc'         => array(
 				'group' => 'Description',
 				'name'  => amapress__( 'Description' ),
 				'type'  => 'text',
 			),
-			'host'                   => array(
+			'subject_pref' => array(
+				'group'       => 'Description',
+				'name'        => amapress__( 'Préfixe Sujet' ),
+				'type'        => 'text',
+				'show_column' => false,
+				'desc'        => 'Préfixe à ajouter au sujet des emails relayés'
+			),
+			'reply_to'     => array(
+				'group'       => 'Description',
+				'name'        => amapress__( 'Réponse à' ),
+				'type'        => 'select',
+				'desc'        => 'Choisir à qui répondent les destinataires de la liste',
+				'options'     => [
+					'sender' => 'Emetteur',
+					'list'   => 'Liste',
+				],
+				'required'    => true,
+				'show_column' => false,
+			),
+			'keep_sender'  => array(
+				'group'       => 'Description',
+				'name'        => amapress__( 'Emetteur' ),
+				'type'        => 'checkbox',
+				'default'     => true,
+				'show_column' => false,
+				'desc'        => 'Préserver (si possible) l\'émetteur original du mail lors de la diffusion. Décoché : envoi de la part de la liste'
+			),
+			'host'         => array(
 				'group'       => 'Serveur',
 				'name'        => amapress__( 'Serveur' ),
 				'desc'        => 'Adresse du serveur IMAP/POP3<br/>Par exemple, pour OVH, le serveur IMAP/POP3 est ssl0.ovh.net',
@@ -68,16 +103,18 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'required'    => true,
 				'show_column' => false,
 			),
-			'port'                   => array(
+			'port'         => array(
 				'group'       => 'Serveur',
 				'name'        => amapress__( 'Port' ),
 				'desc'        => 'Port d\'accès au serveur IMAP/POP3<br/>Ports par défaut : IMAP 143; IMAP SSL 993; POP3 110 ; POP3 SSL 995',
 				'type'        => 'number',
 				'default'     => 993,
+				'max'         => 65535,
+				'slider'      => false,
 				'required'    => true,
 				'show_column' => false,
 			),
-			'username'               => array(
+			'username'     => array(
 				'group'        => 'Serveur',
 				'name'         => amapress__( 'Utilisateur' ),
 				'desc'         => 'Nom d\'utilisateur<br/>Par ex, chez OVH, l\'adresse email complète',
@@ -145,8 +182,11 @@ function amapress_register_entities_mailing_groups( $entities ) {
 			),
 			'smtp_port'              => array(
 				'name'        => 'Port',
-				'group'       => 'Serveur sortant<br/>Ports par défaut : SMTP 25; SMTP SSL 465; SMTP TLS 587',
+				'group'       => 'Serveur sortant',
 				'type'        => 'number',
+				'desc'        => 'Ports par défaut : SMTP 25; SMTP SSL 465; SMTP TLS 587',
+				'max'         => 65535,
+				'slider'      => false,
 				'show_column' => false,
 			),
 			'smtp_encryption'        => array(
@@ -194,12 +234,13 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'is_password'  => true,
 				'show_column'  => false,
 			),
-			'subject_pref'           => array(
-				'group'       => 'Description',
-				'name'        => amapress__( 'Préfixe Sujet' ),
-				'type'        => 'text',
+			'smtp_max_per_hour'      => array(
+				'name'        => 'Emails par heure',
+				'group'       => 'Serveur sortant',
+				'type'        => 'number',
+				'desc'        => 'Nombre maximum d\'envoi de mail par heure autorisé',
+				'max'         => 10000,
 				'show_column' => false,
-				'desc'        => 'Préfixe à ajouter au sujet des emails relayés'
 			),
 			'moderation'             => array(
 				'group'    => 'Modération',
@@ -232,6 +273,14 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'tags'         => true,
 				'show_column'  => true,
 			),
+			'inc_moderators'         => array(
+				'group'       => 'Modérateurs',
+				'name'        => amapress__( 'Membres ?' ),
+				'type'        => 'checkbox',
+				'default'     => false,
+				'show_column' => false,
+				'desc'        => 'Inclure les modérateurs dans les membres'
+			),
 			'free_queries'           => array(
 				'group'       => 'Non modérés',
 				'name'        => amapress__( 'Groupes sans modération' ),
@@ -248,6 +297,14 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'multiple'     => true,
 				'tags'         => true,
 				'show_column'  => false,
+			),
+			'inc_free'               => array(
+				'group'       => 'Non modérés',
+				'name'        => amapress__( 'Membres ?' ),
+				'type'        => 'checkbox',
+				'default'     => false,
+				'show_column' => false,
+				'desc'        => 'Inclure les sans modération dans les membres'
 			),
 			'waiting'                => array(
 				'group'   => 'Modération',
@@ -276,6 +333,13 @@ function amapress_register_entities_mailing_groups( $entities ) {
 //				'required'    => true,
 				'show_column' => false,
 			),
+			'inc_adh_requests'       => array(
+				'group'       => 'Membres',
+				'name'        => amapress__( 'Inclure les demandes d\'adhésion' ),
+				'type'        => 'checkbox',
+				'desc'        => 'Inclure les demandes d\'adhésion non confirmées (Liste d\'attente)',
+				'show_column' => false,
+			),
 			'other_users'            => array(
 				'group'        => 'Membres',
 				'name'         => amapress__( 'Amapiens hors groupe' ),
@@ -294,17 +358,23 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'show_column' => false,
 				'searchable'  => true,
 			),
-			'reply_to'               => array(
-				'group'       => 'Membres',
-				'name'        => amapress__( 'Reply to' ),
-				'type'        => 'select',
-				'desc'        => 'Choisir à qui répondent les destinataires de la liste',
-				'options'     => [
-					'sender' => 'Emetteur',
-					'list'   => 'Liste',
-				],
-				'required'    => true,
+			'excl_queries'           => array(
+				'group'       => 'Membres exclus',
+				'name'        => amapress__( 'Groupes exclus' ),
+				'type'        => 'multicheck',
+				'desc'        => 'Cocher le ou les groupes à exclure.',
+				'options'     => 'amapress_get_mailinglist_queries',
 				'show_column' => false,
+			),
+			'excl_other_users'       => array(
+				'group'        => 'Membres exclus',
+				'name'         => amapress__( 'Amapiens exclus' ),
+				'type'         => 'select-users',
+				'autocomplete' => true,
+				'multiple'     => true,
+				'tags'         => true,
+				'desc'         => 'Sélectionner un ou plusieurs amapien(s) à exclure.',
+				'show_column'  => false,
 			),
 		),
 	);
@@ -318,9 +388,12 @@ function amapress_get_mailing_group_members_count( $mailing_group_id ) {
 		return '';
 	}
 
-	$members_url = $ml->getAdminMembersLink();
-
-	return "<a target='_blank' href='$members_url'>{$ml->getMembersCount()}</a>";
+	return Amapress::makeLink(
+		$ml->getAdminMembersLink(),
+		sprintf( '%d membre(s) / %d email(s)',
+			count( $ml->getMembersIds() ),
+			$ml->getMembersCount()
+		), true, true );
 }
 
 function amapress_get_mailing_group_waiting( $mailing_group_id ) {
@@ -380,6 +453,10 @@ function amapress_get_mailing_group_archive_list( $mailing_group_id, $type ) {
 				'sort' => 'content',
 			)
 		),
+		array(
+			'title' => '',
+			'data'  => 'dl_eml'
+		),
 	);
 	$data    = array();
 	foreach ( $ml->getMailArchives() as $m ) {
@@ -397,6 +474,10 @@ function amapress_get_mailing_group_archive_list( $mailing_group_id, $type ) {
 			'type'      => $m['type'] == 'accepted' ? 'Distribué' : 'Rejetté',
 			'moderator' => ( $moderator_user ? $moderator_user->getDisplayName() : '' ) .
 			               isset( $m['mod_date'] ) ? ' le ' . date_i18n( 'd/m/Y H:i:s', $m['mod_date'] ) : '',
+			'dl_eml'    => amapress_get_mailgroup_action_form(
+				'Télécharger le message', 'amapress_mailgroup_download_eml', $ml->ID, $m['id'], [
+				'type' => $type
+			] ),
 		);
 	}
 
@@ -456,6 +537,10 @@ function amapress_get_mailing_group_waiting_list( $mailing_group_id ) {
 			'title' => '',
 			'data'  => 'resend_mods'
 		),
+		array(
+			'title' => '',
+			'data'  => 'dl_eml'
+		),
 	);
 	$data    = array();
 	foreach ( $ml->getMailWaitingModeration() as $m ) {
@@ -468,19 +553,24 @@ function amapress_get_mailing_group_waiting_list( $mailing_group_id ) {
 			'distribute'   => amapress_get_mailgroup_action_form( 'Distribuer', 'amapress_mailgroup_distribute', $ml->ID, $m['id'] ),
 			'reject_quiet' => amapress_get_mailgroup_action_form( 'Rejetter sans prévenir', 'amapress_mailgroup_reject_quiet', $ml->ID, $m['id'] ),
 			'reject'       => amapress_get_mailgroup_action_form( 'Rejetter', 'amapress_mailgroup_reject', $ml->ID, $m['id'] ),
+			'dl_eml'       => amapress_get_mailgroup_action_form(
+				'Télécharger le message', 'amapress_mailgroup_download_eml', $ml->ID, $m['id'], [
+				'type' => 'waiting'
+			] ),
 		);
 	}
 
 	return amapress_get_datatable( 'waiting-mails', $columns, $data );
 }
 
-function amapress_get_mailgroup_action_form( $button_text, $action, $mailgroup_id, $msg_id ) {
+function amapress_get_mailgroup_action_form( $button_text, $action, $mailgroup_id, $msg_id, $others = [] ) {
 	$href = add_query_arg(
-		array(
-			'action'       => $action,
-			'mailgroup_id' => $mailgroup_id,
-			'msg_id'       => $msg_id,
-		),
+		array_merge(
+			array(
+				'action'       => $action,
+				'mailgroup_id' => $mailgroup_id,
+				'msg_id'       => $msg_id,
+			), $others ),
 		admin_url( 'admin.php' )
 	);
 
@@ -563,13 +653,26 @@ function admin_action_amapress_mailgroup_resend_mods() {
 	exit();
 }
 
+add_action( 'admin_action_amapress_mailgroup_download_eml', 'admin_action_amapress_mailgroup_download_eml' );
+function admin_action_amapress_mailgroup_download_eml() {
+	if ( empty( $_REQUEST['mailgroup_id'] ) || empty( $_REQUEST['msg_id'] ) ) {
+		wp_die( 'Invalid request' );
+	}
+	$mailing_group_id = $_REQUEST['mailgroup_id'];
+	$msg_id           = $_REQUEST['msg_id'];
+	$type             = $_REQUEST['type'];
+	$ml               = AmapressMailingGroup::getBy( $mailing_group_id );
+	if ( $ml ) {
+		$ml->downloadEml( $msg_id, $type );
+	} else {
+		wp_die( 'Mailing group not found' );
+	}
+	exit();
+}
+
+
 function amapress_fetch_mailinggroups() {
-	foreach (
-		get_posts( [
-			'post_type' => AmapressMailingGroup::INTERNAL_POST_TYPE
-		] ) as $post
-	) {
-		$ml = AmapressMailingGroup::getBy( $post );
+	foreach ( AmapressMailingGroup::getAll() as $ml ) {
 		$ml->fetchMails();
 	}
 }
@@ -584,7 +687,7 @@ add_action( 'init', function () {
 	if ( extension_loaded( 'imap' ) ) {
 		add_filter( 'cron_schedules', function ( $schedules ) {
 			$mail_queue_interval    = Amapress::getOption( 'mailgroup_interval' );
-			$interval               = ! empty( $mail_queue_interval ) ? intval( $mail_queue_interval ) : 30;
+			$interval               = ! empty( $mail_queue_interval ) ? intval( $mail_queue_interval ) : AMAPRESS_MAIL_QUEUE_DEFAULT_INTERVAL;
 			$schedules['amps_mlgf'] = [
 				'interval' => $interval,
 				'display'  => __( 'Interval for fetching mailing groups', 'amapress' )
@@ -624,16 +727,29 @@ add_action( 'init', function () {
 		} );
 
 
+		amapress_register_shortcode( 'moderation-mlgrp-count', function () {
+			$cnt = AmapressMailingGroup::getAllWaitingForModerationCount();
+
+			return "<span class='update-plugins count-$cnt' style='background-color:white;color:black;margin-left:5px;'><span class='plugin-count'>$cnt</span></span>";
+		} );
 		amapress_register_shortcode( 'waiting-mlgrp-count', function () {
-			$cnt = 0;
-			foreach ( AmapressMailingGroup::getAll() as $ml ) {
-				$cnt += $ml->getMailWaitingModerationCount();
-			}
+			$cnt = AmapressMailingGroup::getAllWaitingCount();
+
+			return "<span class='update-plugins count-$cnt' style='background-color:white;color:black;margin-left:5px;'><span class='plugin-count'>$cnt</span></span>";
+		} );
+		amapress_register_shortcode( 'errored-mlgrp-count', function () {
+			$cnt = AmapressMailingGroup::getAllErroredCount();
 
 			return "<span class='update-plugins count-$cnt' style='background-color:white;color:black;margin-left:5px;'><span class='plugin-count'>$cnt</span></span>";
 		} );
 	} else {
+		amapress_register_shortcode( 'moderation-mlgrp-count', function () {
+			return '';
+		} );
 		amapress_register_shortcode( 'waiting-mlgrp-count', function () {
+			return '';
+		} );
+		amapress_register_shortcode( 'errored-mlgrp-count', function () {
 			return '';
 		} );
 	}

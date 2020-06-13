@@ -70,36 +70,6 @@ function amapress_distribution_title_formatter( $post_title, WP_Post $post ) {
 	return $ret;
 }
 
-add_filter( 'amapress_commande_title_formatter', 'amapress_commande_title_formatter', 10, 2 );
-function amapress_commande_title_formatter( $post_title, WP_Post $post ) {
-	$post_id = $post->ID;
-
-	$date          = get_post_meta( $post_id, 'amapress_commande_date_distrib', true );
-	$lieu          = get_post( get_post_meta( $post_id, 'amapress_commande_lieu', true ) );
-	$contrat_model = get_post( get_post_meta( get_post_meta( $post_id, 'amapress_commande_contrat_instance', true ), 'amapress_contrat_instance_model', true ) );
-
-	return sprintf( 'Distribution ponctuelle de %s du %s à %s',
-		$contrat_model->post_title,
-		date_i18n( 'd/m/Y', intval( $date ) ),
-		$lieu->post_title );
-}
-
-add_filter( 'amapress_user_commande_title_formatter', 'amapress_user_commande_title_formatter', 10, 2 );
-function amapress_user_commande_title_formatter( $post_title, WP_Post $post ) {
-	$post_id     = $post->ID;
-	$commande_id = get_post_meta( $post_id, 'amapress_user_commande_commande', true );
-
-	$date          = get_post_meta( $commande_id, 'amapress_distribution_date', true );
-	$lieu          = get_post( get_post_meta( $commande_id, 'amapress_distribution_lieu', true ) );
-	$contrat_model = get_post( get_post_meta( get_post_meta( $commande_id, 'amapress_commande_contrat_instance', true ), 'amapress_contrat_instance_model', true ) );
-
-	return sprintf( 'Commande n°%d de %s du %s à %s',
-		$post_id,
-		$contrat_model->post_title,
-		date_i18n( 'd/m/Y', intval( $date ) ),
-		$lieu->post_title );
-}
-
 add_filter( 'amapress_assemblee_generale_title_formatter', 'amapress_assemblee_generale_title_formatter', 10, 2 );
 function amapress_assemblee_generale_title_formatter( $post_title, WP_Post $post ) {
 	$post_id = $post->ID;
@@ -350,11 +320,8 @@ function amapress_update_title_contrat( WP_Post $post ) {
 
 add_action( 'edit_form_after_title', 'amapress_edit_post_title_handler' );
 function amapress_edit_post_title_handler( WP_Post $post ) {
-	if ( ! post_type_supports( $post->post_type, 'title' ) ) {
+	if ( ! post_type_supports( $post->post_type, 'title' ) && ! empty( $post->post_title ) ) {
 		$post_type = get_post_type_object( $post->post_type );
-		if ( empty( $post->post_title ) ) {
-			return;
-		}
 		?>
         <div id="titlediv">
             <div id="titlewrap">

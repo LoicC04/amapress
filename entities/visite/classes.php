@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
-class AmapressVisite extends Amapress_EventBase {
+class AmapressVisite extends Amapress_EventBase implements iAmapress_Event_Lieu {
 	const INTERNAL_POST_TYPE = 'amps_visite';
 	const POST_TYPE = 'visite';
 
@@ -46,8 +46,53 @@ class AmapressVisite extends Amapress_EventBase {
 		return $this->getCustomAsEntity( 'amapress_visite_producteur', 'AmapressProducteur' );
 	}
 
+	public function getLieu_externe_nom() {
+		return $this->getCustom( 'amapress_visite_lieu_externe_nom' );
+	}
+
+	public function getLieu_externe_adresse() {
+		return $this->getCustom( 'amapress_visite_lieu_externe_adresse' );
+	}
+
+	public function getLieu_externe_acces() {
+		return stripslashes( $this->getCustom( 'amapress_visite_lieu_externe_acces' ) );
+	}
+
+	public function isLieu_externe_AdresseLocalized() {
+		$v = $this->getCustom( 'amapress_visite_lieu_externe_adresse_location_type' );
+
+		return ! empty( $v );
+	}
+
+	public function getLieu_externe_AdresseLongitude() {
+		return $this->getCustom( 'amapress_visite_lieu_externe_adresse_long' );
+	}
+
+	public function getLieu_externe_AdresseLatitude() {
+		return $this->getCustom( 'amapress_visite_lieu_externe_adresse_lat' );
+	}
+
+	public function getStatusDisplay() {
+		$this->ensure_init();
+		switch ( $this->getStatus() ) {
+
+			case 'to_confirm':
+				return 'A confirmer';
+			case 'confirmed':
+				return 'Confirmée';
+			case 'cancelled':
+				return 'Annulée';
+			default:
+				return $this->getStatus();
+		}
+	}
+
+	public function getStatus() {
+		return $this->getCustom( 'amapress_visite_status', 'confirmed' );
+	}
+
 	public function getAu_programme() {
-		return wpautop( stripslashes( $this->custom['amapress_visite_au_programme'] ) );
+		return wpautop( stripslashes( $this->getCustom( 'amapress_visite_au_programme' ) ) );
 	}
 
 	/** @return AmapressUser[] */
@@ -60,9 +105,13 @@ class AmapressVisite extends Amapress_EventBase {
 		return $this->getCustomAsIntArray( 'amapress_visite_participants' );
 	}
 
-	public function inscrireParticipant( $user_id ) {
+	public function inscrireParticipant( $user_id, $send_mail = true ) {
 		if ( ! amapress_is_user_logged_in() ) {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
 		}
 
 		$participants = $this->getParticipantIds();
@@ -72,15 +121,21 @@ class AmapressVisite extends Amapress_EventBase {
 			$participants[] = $user_id;
 			$this->setCustom( 'amapress_visite_participants', $participants );
 
-			amapress_mail_current_user_inscr( $this, $user_id, 'visite' );
+			if ( $send_mail ) {
+				amapress_mail_current_user_inscr( $this, $user_id, 'visite' );
+			}
 
 			return 'ok';
 		}
 	}
 
-	public function desinscrireParticipant( $user_id ) {
+	public function desinscrireParticipant( $user_id, $send_mail = true ) {
 		if ( ! amapress_is_user_logged_in() ) {
 			wp_die( 'Vous devez avoir un compte pour effectuer cette opération.' );
+		}
+
+		if ( ! amapress_can_access_admin() && Amapress::end_of_day( $this->getEndDateAndHour() ) < amapress_time() ) {
+			wp_die( 'Clos et passé' );
 		}
 
 		$participants = $this->getParticipantIds();
@@ -89,7 +144,9 @@ class AmapressVisite extends Amapress_EventBase {
 			unset( $participants[ $key ] );
 			$this->setCustom( 'amapress_visite_participants', $participants );
 
-			amapress_mail_current_user_desinscr( $this, $user_id, 'visite' );
+			if ( $send_mail ) {
+				amapress_mail_current_user_desinscr( $this, $user_id, 'visite' );
+			}
 
 			return 'ok';
 		} else {
@@ -147,20 +204,38 @@ class AmapressVisite extends Amapress_EventBase {
 			$date_end   = $this->getEndDateAndHour();
 			$producteur = $this->getProducteur();
 			if ( in_array( $user_id, $resps ) ) {
-				$ret[] = new Amapress_EventEntry( array(
-					'ev_id'    => "visite-{$this->ID}-resp",
-					'date'     => $date,
-					'date_end' => $date_end,
-					'class'    => "agenda-visite agenda-inscrit-visite visit_prod_" . $producteur->ID,
-					'type'     => 'visite',
-					'category' => 'Visites',
-					'priority' => 90,
-					'lieu'     => $producteur,
-					'label'    => 'Visite ' . $producteur->getTitle(),
-					'icon'     => 'flaticon-sprout',
-					'alt'      => 'Vous êtes inscript pour la visite à la ferme du ' . date_i18n( 'd/m/Y', $date ),
-					'href'     => $this->getPermalink()
-				) );
+				$current_user_slot = $this->getSlotInfoForUser( amapress_current_user_id() );
+				if ( $current_user_slot ) {
+					$ret[] = new Amapress_EventEntry( array(
+						'ev_id'    => "visite-{$this->ID}-resp",
+						'date'     => $current_user_slot['date'],
+						'date_end' => $current_user_slot['date_end'],
+						'class'    => "agenda-visite agenda-inscrit-visite visit_prod_" . $producteur->ID,
+						'type'     => 'visite',
+						'category' => 'Visites',
+						'priority' => 90,
+						'lieu'     => $this,
+						'label'    => 'Visite ' . $producteur->getTitle(),
+						'icon'     => 'flaticon-sprout',
+						'alt'      => 'Vous êtes inscript pour la visite à la ferme du ' . date_i18n( 'd/m/Y', $date ),
+						'href'     => $this->getPermalink()
+					) );
+				} else {
+					$ret[] = new Amapress_EventEntry( array(
+						'ev_id'    => "visite-{$this->ID}-resp",
+						'date'     => $date,
+						'date_end' => $date_end,
+						'class'    => "agenda-visite agenda-inscrit-visite visit_prod_" . $producteur->ID,
+						'type'     => 'visite',
+						'category' => 'Visites',
+						'priority' => 90,
+						'lieu'     => $this,
+						'label'    => 'Visite ' . $producteur->getTitle(),
+						'icon'     => 'flaticon-sprout',
+						'alt'      => 'Vous êtes inscript pour la visite à la ferme du ' . date_i18n( 'd/m/Y', $date ),
+						'href'     => $this->getPermalink()
+					) );
+				}
 			} else {
 				$ret[] = new Amapress_EventEntry( array(
 					'ev_id'    => "visite-{$this->ID}",
@@ -170,7 +245,7 @@ class AmapressVisite extends Amapress_EventBase {
 					'type'     => 'visite',
 					'category' => 'Visites',
 					'priority' => 95,
-					'lieu'     => $producteur,
+					'lieu'     => $this,
 					'label'    => 'Visite ' . $producteur->getTitle(),
 					'icon'     => 'flaticon-sprout',
 					'alt'      => 'Une visite est prévue à la ferme le ' . date_i18n( 'd/m/Y', $date ),
@@ -199,5 +274,43 @@ class AmapressVisite extends Amapress_EventBase {
 		}
 
 		return 'Reply-To: ' . implode( ',', $emails );
+	}
+
+	public function manageSlot( $user_id, $slot, $set = true ) {
+		if ( $set ) {
+			$this->inscrireParticipant( $user_id, false );
+		} else {
+			$this->desinscrireParticipant( $user_id, false );
+		}
+
+		return parent::manageSlot( $user_id, $slot, $set );
+	}
+
+	public function getMembersIds() {
+		return $this->getParticipantIds();
+	}
+
+	public function canSubscribe() {
+		return $this->canSubscribeType( 'visite' );
+	}
+
+	public function canUnsubscribe() {
+		return $this->canUnsubscribeType( 'visite' );
+	}
+
+	public function getLieuId() {
+		return $this->ID;
+	}
+
+	public function getLieuPermalink() {
+		return $this->getPermalink();
+	}
+
+	public function getLieuTitle() {
+		if ( ! empty( $this->getLieu_externe_nom() ) ) {
+			return $this->getLieu_externe_nom();
+		} else {
+			return $this->getProducteur()->getNomExploitation();
+		}
 	}
 }

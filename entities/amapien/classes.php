@@ -339,6 +339,13 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 	}
 
 	public
+	function isHiddenFromTrombi() {
+		$this->ensure_init();
+
+		return ! empty( $this->custom['amapress_user_hidaddr'] );
+	}
+
+	public
 	function getTelephone() {
 		$this->ensure_init();
 		if ( empty( $this->custom['amapress_user_telephone'] ) ) {
@@ -397,8 +404,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return implode( $separator, $ret );
 	}
 
-	public
-	function getTelephone2() {
+	public function getTelephone2() {
 		$this->ensure_init();
 		if ( empty( $this->custom['amapress_user_telephone2'] ) ) {
 			return '';
@@ -407,22 +413,19 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $this->custom['amapress_user_telephone2'];
 	}
 
-	public
-	function getCoAdherents() {
+	public function getAdditionalCoAdherents() {
 		$this->ensure_init();
 
 		return isset( $this->custom['amapress_user_co-adherents'] ) ? $this->custom['amapress_user_co-adherents'] : '';
 	}
 
-	public
-	function getCoAdherentsInfos() {
+	public function getAdditionalCoAdherentsInfos() {
 		$this->ensure_init();
 
 		return isset( $this->custom['amapress_user_co-adherents-infos'] ) ? trim( $this->custom['amapress_user_co-adherents-infos'] ) : '';
 	}
 
-	public
-	function getMoyenDisplay() {
+	public function getMoyenDisplay() {
 		$this->ensure_init();
 		$m = isset( $this->custom['amapress_user_moyen'] ) ? $this->custom['amapress_user_moyen'] : null;
 		switch ( $m ) {
@@ -436,20 +439,17 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		}
 	}
 
-	public
-	function getMoyen() {
+	public function getMoyen() {
 		$this->ensure_init();
 
 		return isset( $this->custom['amapress_user_moyen'] ) ? $this->custom['amapress_user_moyen'] : 'mail';
 	}
 
-	public
-	function getDisplayNameWithAdminEditLink() {
+	public function getDisplayNameWithAdminEditLink() {
 		return Amapress::makeLink( $this->getEditLink(), $this->getDisplayName(), true, true );
 	}
 
-	public
-	function getDisplayName() {
+	public function getDisplayName() {
 		$this->ensure_init();
 		$dn = $this->getUser()->display_name;
 		if ( ! empty( $this->getUser()->last_name ) ) {
@@ -462,8 +462,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $dn;
 	}
 
-	public
-	function getSortableDisplayName() {
+	public function getSortableDisplayName() {
 		$this->ensure_init();
 		if ( ! empty( $this->getUser()->last_name ) ) {
 			$dn = sprintf( '%s %s', $this->getUser()->last_name, $this->getUser()->first_name );
@@ -475,14 +474,12 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $dn;
 	}
 
-	public
-	function resolveAddress() {
+	public function resolveAddress() {
 		return AmapressUsers::resolveUserAddress( $this->getID(),
 			$this->getFormattedAdresse() );
 	}
 
-	public
-	function getCoAdherent1Id() {
+	public function getCoAdherent1Id() {
 		$this->ensure_init();
 
 		$v = intval( isset( $this->custom['amapress_user_co-adherent-1'] ) ? $this->custom['amapress_user_co-adherent-1'] : null );
@@ -493,8 +490,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $v;
 	}
 
-	public
-	function getCoAdherent2Id() {
+	public function getCoAdherent2Id() {
 		$this->ensure_init();
 
 		$v = intval( isset( $this->custom['amapress_user_co-adherent-2'] ) ? $this->custom['amapress_user_co-adherent-2'] : null );
@@ -505,8 +501,7 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $v;
 	}
 
-	public
-	function getCoAdherent3Id() {
+	public function getCoAdherent3Id() {
 		$this->ensure_init();
 
 		$v = intval( isset( $this->custom['amapress_user_co-adherent-3'] ) ? $this->custom['amapress_user_co-adherent-3'] : null );
@@ -517,8 +512,40 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $v;
 	}
 
-	public
-	function getFirstCoAdherent() {
+	public function getCoFoyer1Id() {
+		$this->ensure_init();
+
+		$v = intval( isset( $this->custom['amapress_user_co-foyer-1'] ) ? $this->custom['amapress_user_co-foyer-1'] : null );
+		if ( empty( $v ) ) {
+			return null;
+		}
+
+		return $v;
+	}
+
+	public function getCoFoyer2Id() {
+		$this->ensure_init();
+
+		$v = intval( isset( $this->custom['amapress_user_co-foyer-2'] ) ? $this->custom['amapress_user_co-foyer-2'] : null );
+		if ( empty( $v ) ) {
+			return null;
+		}
+
+		return $v;
+	}
+
+	public function getCoFoyer3Id() {
+		$this->ensure_init();
+
+		$v = intval( isset( $this->custom['amapress_user_co-foyer-3'] ) ? $this->custom['amapress_user_co-foyer-3'] : null );
+		if ( empty( $v ) ) {
+			return null;
+		}
+
+		return $v;
+	}
+
+	public function getFirstCoAdherent() {
 		$co_adh = $this->getCoAdherent1();
 		if ( ! $co_adh ) {
 			$co_adh = $this->getCoAdherent2();
@@ -526,16 +553,23 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		if ( ! $co_adh ) {
 			$co_adh = $this->getCoAdherent3();
 		}
+		if ( ! $co_adh ) {
+			$co_adh = $this->getCoFoyer1();
+		}
+		if ( ! $co_adh ) {
+			$co_adh = $this->getCoFoyer2();
+		}
+		if ( ! $co_adh ) {
+			$co_adh = $this->getCoFoyer3();
+		}
 
 		return $co_adh;
 	}
 
 
-	private
-		$adherent1 = null;
+	private $adherent1 = null;
 
-	public
-	function getCoAdherent1() {
+	public function getCoAdherent1() {
 		if ( $this->adherent1 == null ) {
 			$this->adherent1 = AmapressUser::getBy( $this->getCoAdherent1Id() );
 		}
@@ -543,11 +577,9 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $this->adherent1;
 	}
 
-	private
-		$adherent2 = null;
+	private $adherent2 = null;
 
-	public
-	function getCoAdherent2() {
+	public function getCoAdherent2() {
 		if ( $this->adherent2 == null ) {
 			$this->adherent2 = AmapressUser::getBy( $this->getCoAdherent2Id() );
 		}
@@ -555,16 +587,44 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		return $this->adherent2;
 	}
 
-	private
-		$adherent3 = null;
+	private $adherent3 = null;
 
-	public
-	function getCoAdherent3() {
+	public function getCoAdherent3() {
 		if ( $this->adherent3 == null ) {
 			$this->adherent3 = AmapressUser::getBy( $this->getCoAdherent3Id() );
 		}
 
 		return $this->adherent3;
+	}
+
+	private $foyer1 = null;
+
+	public function getCoFoyer1() {
+		if ( $this->foyer1 == null ) {
+			$this->foyer1 = AmapressUser::getBy( $this->getCoFoyer1Id() );
+		}
+
+		return $this->foyer1;
+	}
+
+	private $foyer2 = null;
+
+	public function getCoFoyer2() {
+		if ( $this->foyer2 == null ) {
+			$this->foyer2 = AmapressUser::getBy( $this->getCoFoyer2Id() );
+		}
+
+		return $this->foyer2;
+	}
+
+	private $foyer3 = null;
+
+	public function getCoFoyer3() {
+		if ( $this->foyer3 == null ) {
+			$this->foyer3 = AmapressUser::getBy( $this->getCoFoyer3Id() );
+		}
+
+		return $this->foyer3;
 	}
 
 	private $principal_user_ids = null;
@@ -575,35 +635,37 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 		if ( null === self::$coadherents ) {
 			global $wpdb;
 			self::$coadherents = array_group_by(
-				$wpdb->get_results(
+				amapress_get_results_cached(
 					"SELECT DISTINCT $wpdb->usermeta.meta_value, $wpdb->usermeta.user_id
 FROM $wpdb->usermeta
-WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_user_co-adherent-2', 'amapress_user_co-adherent-3')" ),
+WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_user_co-adherent-2', 'amapress_user_co-adherent-3', 'amapress_user_co-foyer-1', 'amapress_user_co-foyer-2', 'amapress_user_co-foyer-3')" ),
 				function ( $o ) {
 					return intval( $o->meta_value );
 				} );
 		}
 	}
 
-	public function addCoadherent( $coadhrent_id, $notify_email = null ) {
+	public function addCoadherent( $coadhrent_id, $notify_email = null, $cofoyer = false ) {
 		$this->ensure_init();
 
 		if ( empty( $coadhrent_id ) ) {
 			return false;
 		}
 
-		foreach ( [ '1', '2', '3' ] as $id ) {
-			if ( ! empty( $this->custom[ 'amapress_user_co-adherent-' . $id ] ) ) {
-				if ( $this->custom[ 'amapress_user_co-adherent-' . $id ] == $coadhrent_id ) {
+		$key = $cofoyer ? 'amapress_user_co-foyer-' : 'amapress_user_co-adherent-';
+
+		foreach ( [ '1', '2', '3', '4', '5' ] as $id ) {
+			if ( ! empty( $this->custom[ $key . $id ] ) ) {
+				if ( $this->custom[ $key . $id ] == $coadhrent_id ) {
 					return true;
 				}
 			}
 		}
 
-		foreach ( [ '1', '2', '3' ] as $id ) {
-			if ( empty( $this->custom[ 'amapress_user_co-adherent-' . $id ] ) ) {
-				$this->custom[ 'amapress_user_co-adherent-' . $id ] = $coadhrent_id;
-				update_user_meta( $this->ID, 'amapress_user_co-adherent-' . $id, $coadhrent_id );
+		foreach ( [ '1', '2', '3', '4', '5' ] as $id ) {
+			if ( empty( $this->custom[ $key . $id ] ) ) {
+				$this->custom[ $key . $id ] = $coadhrent_id;
+				update_user_meta( $this->ID, $key . $id, $coadhrent_id );
 				self::$coadherents = null;
 				$this->adh_type    = null;
 
@@ -626,18 +688,20 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		return false;
 	}
 
-	public function removeCoadherent( $coadhrent_id, $notify_email = null ) {
+	public function removeCoadherent( $coadhrent_id, $notify_email = null, $cofoyer = false ) {
 		$this->ensure_init();
 
 		if ( empty( $coadhrent_id ) ) {
 			return false;
 		}
 
-		foreach ( [ '1', '2', '3' ] as $id ) {
-			if ( ! empty( $this->custom[ 'amapress_user_co-adherent-' . $id ] ) ) {
-				if ( $this->custom[ 'amapress_user_co-adherent-' . $id ] == $coadhrent_id ) {
-					$this->custom[ 'amapress_user_co-adherent-' . $id ] = $coadhrent_id;
-					delete_user_meta( $this->ID, 'amapress_user_co-adherent-' . $id );
+		$key = $cofoyer ? 'amapress_user_co-foyer-' : 'amapress_user_co-adherent-';
+
+		foreach ( [ '1', '2', '3', '4', '5' ] as $id ) {
+			if ( ! empty( $this->custom[ $key . $id ] ) ) {
+				if ( $this->custom[ $key . $id ] == $coadhrent_id ) {
+					unset( $this->custom[ $key . $id ] );
+					delete_user_meta( $this->ID, $key . $id );
 					self::$coadherents = null;
 					$this->adh_type    = null;
 
@@ -679,16 +743,22 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		return $this->principal_user_ids;
 	}
 
-	public
-	function getEmail() {
-		return $this->getUser()->user_email;
+	public function getEmail( $index = 1 ) {
+		if ( 1 === $index ) {
+			return $this->getUser()->user_email;
+		} else {
+			if ( ! empty( $this->custom["email$index"] ) ) {
+				return trim( $this->custom["email$index"] );
+			} else {
+				return '';
+			}
+		}
 	}
 
-	public
-	function getDisplay(
+	public function getDisplay(
 		$args = array()
 	) {
-		$args = wp_parse_args( $args, array(
+		$args       = wp_parse_args( $args, array(
 			'show_avatar'     => 'default',
 			'show_email'      => 'default',
 			'show_tel'        => 'default',
@@ -698,24 +768,26 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			'show_adresse'    => 'default',
 			'show_roles'      => 'default',
 		) );
-		$ret  = '';
-		$ret  .= '<div class="user-profile-info">';
-		$ret  .= ( amapress_check_info_visibility( $args['show_avatar'], 'avatar', $this ) == true ?
-			$this->wrapIfNotEmpty( '<div class="user-photo">', $this->getAvatar(), '</div>' ) :
+		$show_roles = amapress_check_info_visibility( $args['show_roles'], 'roles', $this );
+		$roles      = $this->getAmapRolesString();
+		$ret        = '';
+		$ret        .= '<div class="user-profile-info">';
+		$ret        .= ( amapress_check_info_visibility( $args['show_avatar'], 'avatar', $this ) == true ?
+			$this->wrapIfNotEmpty( '<div class="user-photo" title="' . esc_attr( $roles ) . '">', $this->getAvatar(), '</div>' ) :
 			'' );
 		if ( amapress_can_access_admin() ) {
-			$ret .= '<div class="user-name"><a href="' . admin_url( 'user-edit.php?user_id=' . $this->ID ) . '">' . esc_html( $this->getDisplayName() ) . '</a></div>';
+			$ret .= '<div class="user-name" title="' . esc_attr( $roles ) . '"><a href="' . admin_url( 'user-edit.php?user_id=' . $this->ID ) . '">' . esc_html( $this->getDisplayName() ) . '</a></div>';
 		} else {
-			$ret .= '<div class="user-name">' . esc_html( $this->getDisplayName() ) . '</div>';
+			$ret .= '<div class="user-name" title="' . esc_attr( $roles ) . '">' . esc_html( $this->getDisplayName() ) . '</div>';
 		}
 		$ret             .= ( amapress_check_info_visibility( $args['show_email'], 'email', $this ) == true ?
-			$this->wrapIfNotEmpty( '<div class="user-email"><a href="mailto:', esc_attr( $this->getEmail() ) . '">', esc_html( $this->getEmail() ) . '</a></div>' ) :
+			$this->wrapIfNotEmpty( '<div class="user-email"><a href="mailto:' . esc_attr( $this->getEmail() ) . '">', esc_html( $this->getEmail() ), '</a></div>' ) :
 			'' );
-		$roles           = $this->getAmapRolesString();
-		$ret             .= ( amapress_check_info_visibility( $args['show_roles'], 'roles', $this ) && ! empty( $roles ) ?
-			$this->wrapIfNotEmpty( '<div class="user-roles">', esc_html( $roles ), '</div>' ) :
+		$ret             .= ( $show_roles && ! empty( $roles ) ?
+			$this->wrapIfNotEmpty( '<div class="user-roles" title="' . esc_attr( $roles ) . '">', esc_html( $roles ), '</div>' ) :
 			'' );
-		$ret             .= ( amapress_check_info_visibility( $args['show_tel'], 'tel', $this ) || amapress_check_info_visibility( $args['show_tel_fixe'], 'tel_fixe', $this ) ?
+		$show_tel_fix    = amapress_check_info_visibility( $args['show_tel'], 'tel', $this ) || amapress_check_info_visibility( $args['show_tel_fixe'], 'tel_fixe', $this );
+		$ret             .= ( $show_tel_fix ?
 			$this->wrapIfNotEmpty( '<div class="user-tel-fixe">Fix: ', $this->getTelTo( false ), '</div>' ) :
 			'' );
 		$show_tel_mobile = amapress_check_info_visibility( $args['show_tel'], 'tel', $this ) || amapress_check_info_visibility( $args['show_tel_mobile'], 'tel_mobile', $this );
@@ -736,8 +808,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		return $ret;
 	}
 
-	private
-	function wrapIfNotEmpty(
+	private function wrapIfNotEmpty(
 		$start_tags, $html, $end_tags
 	) {
 		if ( empty( $html ) ) {
@@ -747,15 +818,13 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		return $start_tags . $html . $end_tags;
 	}
 
-	public
-	function getDisplayRight(
+	public function getDisplayRight(
 		$name
 	) {
 		return isset( $this->custom["allow_show_$name"] ) ? $this->custom["allow_show_$name"] : null;
 	}
 
-	public
-	function getAllEmails() {
+	public function getAllEmails() {
 		$ret   = array();
 		$ret[] = $this->getUser()->user_email;
 		if ( ! empty( $this->custom['email2'] ) ) {
@@ -768,9 +837,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			$ret[] = trim( $this->custom['email4'] );
 		}
 		$ret = array_filter( $ret, function ( $email ) {
-			return false === strpos( $email, '@nomail.org' )
-			       && false === strpos( $email, '@exemple.org' )
-			       && false === strpos( $email, '@example.org' );
+			return false === strpos( $email, '@nomail.org' );
 		} );
 
 		return array_unique( $ret );
@@ -924,13 +991,15 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 	}
 
 	public function getEditLink() {
-		return admin_url( 'user-edit.php?user_id=' . $this->getUser()->ID );
+		return admin_url( 'user-edit.php?user_id=' . $this->ID );
 	}
 
-	public function getContacts() {
+	public function getContacts( $sms = true ) {
 		$mailto = Amapress::makeLink( 'mailto:' . implode( ',', $this->getAllEmails() ), 'Joindre par email' );
 		$telto  = $this->getTelTo( 'both', false, false, ', ' );
-		$smsto  = $this->getTelTo( true, true, false, ', ' );
+		if ( $sms ) {
+			$smsto = $this->getTelTo( true, true, false, ', ' );
+		}
 
 		return $mailto .
 		       ( ! empty( $telto ) ? ' / Par téléphone : ' . $telto : '' ) .
@@ -951,20 +1020,44 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 		return $emails;
 	}
 
-	public
-	function getAllDirectlyLinkedCoAdherents() {
-		$ret    = [];
-		$co_adh = $this->getCoAdherent1();
-		if ( $co_adh ) {
-			$ret[] = $co_adh;
+	/**
+	 * @param bool $include_coadhs
+	 * @param bool $include_cofoyer
+	 *
+	 * @return AmapressUser[]
+	 */
+	public function getAllDirectlyLinkedCoUsers(
+		$include_coadhs = true,
+		$include_cofoyer = true
+	) {
+		$ret = [];
+		if ( $include_coadhs ) {
+			$co_adh = $this->getCoAdherent1();
+			if ( $co_adh ) {
+				$ret[] = $co_adh;
+			}
+			$co_adh = $this->getCoAdherent2();
+			if ( $co_adh ) {
+				$ret[] = $co_adh;
+			}
+			$co_adh = $this->getCoAdherent3();
+			if ( $co_adh ) {
+				$ret[] = $co_adh;
+			}
 		}
-		$co_adh = $this->getCoAdherent2();
-		if ( $co_adh ) {
-			$ret[] = $co_adh;
-		}
-		$co_adh = $this->getCoAdherent3();
-		if ( $co_adh ) {
-			$ret[] = $co_adh;
+		if ( $include_cofoyer ) {
+			$co_adh = $this->getCoFoyer1();
+			if ( $co_adh ) {
+				$ret[] = $co_adh;
+			}
+			$co_adh = $this->getCoFoyer2();
+			if ( $co_adh ) {
+				$ret[] = $co_adh;
+			}
+			$co_adh = $this->getCoFoyer3();
+			if ( $co_adh ) {
+				$ret[] = $co_adh;
+			}
 		}
 
 		return $ret;
@@ -974,14 +1067,16 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 
 	public function getAdherentType() {
 		if ( empty( $this->adh_type ) ) {
-			$users_ids                 = AmapressContrats::get_related_users( $this->ID, true );
-			$others_linked_users_count = 0;
-			$this_linked_users_count   = 0;
+			$users_ids                  = AmapressContrats::get_related_users( $this->ID, true );
+			$others_linked_users_count  = 0;
+			$this_linked_users_count    = 0;
+			$this_linked_cofoyers_count = 0;
 			foreach ( $users_ids as $user_id ) {
 				$user         = AmapressUser::getBy( $user_id );
-				$linked_users = $user->getAllDirectlyLinkedCoAdherents();
+				$linked_users = $user->getAllDirectlyLinkedCoUsers( true, true );
 				if ( $user->ID == $this->ID ) {
-					$this_linked_users_count += ( ! empty( $linked_users ) ? 1 : 0 );
+					$this_linked_users_count    += ( ! empty( $linked_users ) ? 1 : 0 );
+					$this_linked_cofoyers_count += ( ! empty( $user->getAllDirectlyLinkedCoUsers( false, true ) ) ? 1 : 0 );
 				} else {
 					$others_linked_users_count += ( ! empty( $linked_users ) ? 1 : 0 );
 				}
@@ -992,10 +1087,14 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			} else if ( 0 <= $this_linked_users_count && 0 == $others_linked_users_count ) {
 				$this->adh_type = 'main';
 			} else if ( 0 == $this_linked_users_count && 0 <= $others_linked_users_count ) {
-				$this->adh_type = 'co';
+				if ( 0 < $this_linked_cofoyers_count ) {
+					$this->adh_type = 'cof';
+				} else {
+					$this->adh_type = 'co';
+				}
 			} else {
 				Amapress::setFilterForReferent( false );
-				$adhs = AmapressAdhesion::getUserActiveAdhesions( $this->ID, null, null, false, true );
+				$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $this->ID, null, null, false, true );
 				Amapress::setFilterForReferent( true );
 				$adh_user_ids = [];
 				foreach ( $adhs as $adh ) {
@@ -1019,6 +1118,8 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 				return 'Adhérent principal (sans co-adhérent)';
 			case 'main':
 				return 'Adhérent principal (avec co-adhérent)';
+			case 'cof':
+				return 'Foyer';
 			case 'co':
 				return 'Co-adhérent';
 			case 'mix':
@@ -1037,11 +1138,15 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 	public function isCoAdherent() {
 		$adh_type = $this->getAdherentType();
 
-		return 'co' == $adh_type;
+		return 'co' == $adh_type || 'cof' == $adh_type;
 	}
 
-	public function getCoAdherentsList( $with_contacts = false, $include_me = false ) {
-		$users = AmapressContrats::get_related_users( $this->ID, true );
+	public function getCoAdherentsList(
+		$with_contacts = false, $include_me = false,
+		$include_foyer = true, $contrat_id = null, $include_coadhs = 'auto'
+	) {
+		$users = AmapressContrats::get_related_users( $this->ID,
+			true, null, $contrat_id, $include_foyer, $include_coadhs );
 		$res   = [];
 		foreach ( $users as $user_id ) {
 			if ( ! $include_me && $user_id == $this->ID ) {
@@ -1050,7 +1155,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 
 			$amapien = AmapressUser::getBy( $user_id );
 			if ( $with_contacts ) {
-				$res[] = $amapien->getDisplayName() . ' (' . $amapien->getContacts() . ')';
+				$res[] = $amapien->getDisplayName() . ' (' . $amapien->getContacts( false ) . ')';
 			} else {
 				$res[] = $amapien->getDisplayName();
 			}
@@ -1073,7 +1178,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 
 			$amapien = AmapressUser::getBy( $user_id );
 			if ( $with_contacts ) {
-				$res[] = $amapien->getDisplayName() . ' (' . $amapien->getContacts() . ')';
+				$res[] = $amapien->getDisplayName() . ' (' . $amapien->getContacts( false ) . ')';
 			} else {
 				$res[] = $amapien->getDisplayName();
 			}
@@ -1083,6 +1188,29 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			return 'Aucun';
 		} else {
 			return implode( ', ', $res );
+		}
+	}
+
+	public function getAdherentInfo( $admin_mode = false, $with_contacts = true ) {
+		if ( $this->isPrincipalAdherent() ) {
+			return sprintf(
+				$admin_mode ?
+					'Il/Elle est %1$s. <br/>Ses co-adhérents : %2$s. <br/>Membres du foyer : %3$s.' :
+					'Vous êtes %1$s. <br/>Vos co-adhérents : %2$s. <br/>Membres du foyer : %3$s.',
+				$this->getAdherentTypeDisplay(),
+				$this->getCoAdherentsList( $with_contacts, false, false ),
+				$this->getCoAdherentsList( $with_contacts, false, true, null, false )
+			);
+		} else {
+			return sprintf(
+				$admin_mode ?
+					'Il/Elle est %1$s. <br/>Son adhérent principal est %2$s. <br/>Ses autres co-adhérents : %3$s. <br/>Membres du foyer : %4$s.' :
+					'Vous êtes %1$s. <br/>Votre adhérent principal est %2$s. <br/>Vos autres co-adhérents : %3$s. <br/>Membres du foyer : %4$s.',
+				$this->getAdherentTypeDisplay(),
+				$this->getPrincipalAdherentList( $with_contacts ),
+				$this->getCoAdherentsList( $with_contacts, false, false ),
+				$this->getCoAdherentsList( $with_contacts, false, true, null, false )
+			);
 		}
 	}
 }

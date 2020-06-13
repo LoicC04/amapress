@@ -10,9 +10,11 @@ jQuery(document).ready(function ($) {
             'dist': $this.data('dist'),
             'role': $this.data('role'),
             'user': $this.data('user'),
+            'gardien': $this.data('gardien'),
             'key': $this.data('key'),
             'not_member': $this.data('not_member'),
             'post-id': $this.data('post-id'),
+            'message': $this.data('message') ? $($this.data('message').substr(4)).val() : '',
         };
         var $parentForm = $this.parent('form');
         var $parentDiv = $this.parent('.inscription-other-user');
@@ -47,6 +49,7 @@ jQuery(document).ready(function ($) {
             'action': 'desinscrire_distrib_action',
             'dist': $this.data('dist'),
             'user': $this.data('user'),
+            'gardien': $this.data('gardien'),
             'key': $this.data('key'),
             'post-id': $this.data('post-id'),
         };

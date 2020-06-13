@@ -4,57 +4,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
-add_filter( 'customize_nav_menu_available_item_types', function ( $item_types ) {
-	//var_dump($item_types);
-	return $item_types;
-} );
-add_filter( 'customize_nav_menu_available_items', function ( $items, $type, $object, $page ) {
-	//var_dump($items);
-	//var_dump($type);
-	//var_dump($object);
-	//var_dump($page);
-	return $items;
-}, 10, 4 );
-
-add_action( 'admin_menu', 'amapress_change_admin_menu' );
-function amapress_change_admin_menu() {
-	foreach ( AmapressEntities::getMenu() as $m ) {
-		if ( $m['type'] != 'page' ) {
-			continue;
-		}
-		add_menu_page( do_shortcode( $m['title'] ), do_shortcode( $m['menu_title'] ),
-			$m['capability'], $m['slug'],
-			$m['function'], $m['icon'], $m['position'] );
-	}
-
-	foreach ( AmapressEntities::getMenu() as $m ) {
-		if ( $m['type'] != 'panel' ) {
-			continue;
-		}
-
-		foreach ( $m['subpages'] as $subpage ) {
-			if ( isset( $subpage['subpage'] ) ) {
-				continue;
-			}
-			$menu_icon = $subpage['menu_icon'];
-			if ( $menu_icon == 'post_type' && isset( $subpage['post_type'] ) ) {
-				$pt = get_post_type_object( amapress_unsimplify_post_type( $subpage['post_type'] ) );
-				if ( ! $pt ) {
-					die( $subpage['post_type'] );
-				}
-				$menu_icon = $pt->menu_icon;
-			}
-			$hook = add_submenu_page( $m['id'],
-				do_shortcode( $subpage['title'] ),
-				'<span class="dashicons-before ' . ( empty( $menu_icon ) ? 'dashicons-admin-post' : $menu_icon ) . '" /> ' . do_shortcode( $subpage['menu_title'] ),
-				$subpage['capability'], $subpage['slug'], isset( $subpage['function'] ) ? $subpage['function'] : null );
-			if ( isset( $subpage['hook'] ) ) {
-				add_action( "load-$hook", $subpage['hook'] );
-			}
-		}
-	}
-}
-
 add_filter( 'sanitize_html_class', 'menu_sanitize_html_class', 10, 2 );
 function menu_sanitize_html_class( $sanitized, $class ) {
 	if ( 0 === strpos( $class, 'dashicons-none' ) ) {
@@ -247,7 +196,9 @@ add_action( 'admin_bar_menu', 'amapress_admin_bar_new_entities', 900, 1 );
 function amapress_admin_bar_new_entities( WP_Admin_Bar $admin_bar ) {
 	$create_new_items = [];
 	foreach ( AmapressEntities::getPostTypes() as $name => $conf ) {
-		if ( isset( $conf['show_admin_bar_new'] ) && true === $conf['show_admin_bar_new'] && current_user_can( "publish_$name" ) ) {
+		if ( isset( $conf['show_admin_bar_new'] )
+		     && true === $conf['show_admin_bar_new']
+		     && current_user_can( "publish_$name" ) ) {
 			$internal_post_type = isset( $conf['internal_name'] ) ? $conf['internal_name'] : 'amps_' . $name;
 			$create_new_items[] = [
 				'id'    => "new-$internal_post_type",
@@ -255,6 +206,10 @@ function amapress_admin_bar_new_entities( WP_Admin_Bar $admin_bar ) {
 				'title' => $conf['singular'],
 				'href'  => admin_url( "post-new.php?post_type=$internal_post_type" ),
 			];
+		} elseif ( isset( $conf['show_admin_bar_new'] )
+		           && false === $conf['show_admin_bar_new'] ) {
+			$internal_post_type = isset( $conf['internal_name'] ) ? $conf['internal_name'] : 'amps_' . $name;
+			$admin_bar->remove_node( 'new-' . $internal_post_type );
 		}
 	}
 	amapress_admin_bar_add_items( $create_new_items, $admin_bar, 'new-content' );
