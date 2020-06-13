@@ -339,6 +339,13 @@ WHERE tt.taxonomy = 'amps_amap_role_category'" );
 	}
 
 	public
+	function isHiddenFromTrombi() {
+		$this->ensure_init();
+
+		return ! empty( $this->custom['amapress_user_hidaddr'] );
+	}
+
+	public
 	function getTelephone() {
 		$this->ensure_init();
 		if ( empty( $this->custom['amapress_user_telephone'] ) ) {
@@ -768,9 +775,9 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 			$ret[] = trim( $this->custom['email4'] );
 		}
 		$ret = array_filter( $ret, function ( $email ) {
-			return false === strpos( $email, '@nomail.org' )
-			       && false === strpos( $email, '@exemple.org' )
-			       && false === strpos( $email, '@example.org' );
+			return false === strpos( $email, '@nomail.org' );
+//			       && false === strpos( $email, '@exemple.org' )
+//			       && false === strpos( $email, '@example.org' );
 		} );
 
 		return array_unique( $ret );
@@ -995,7 +1002,7 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 				$this->adh_type = 'co';
 			} else {
 				Amapress::setFilterForReferent( false );
-				$adhs = AmapressAdhesion::getUserActiveAdhesions( $this->ID, null, null, false, true );
+				$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $this->ID, null, null, false, true );
 				Amapress::setFilterForReferent( true );
 				$adh_user_ids = [];
 				foreach ( $adhs as $adh ) {

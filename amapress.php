@@ -1,19 +1,23 @@
 <?php
 /**
  * @package Amapress
+ * @author Comptoir des Applis
+ * @license GPL-2.0+
+ * @link https://github.com/comptoirdesappli/amapress
  */
 /*
-Plugin Name: Amapress
-Plugin URI: http://amapress.fr/
-Description: 
-Version: 0.91.135
-Requires PHP: 5.6
-Requires WP: 4.4
-Author: ShareVB
-Author URI: http://amapress.fr/
-License: GPLv2 or later
-Text Domain: amapress
-GitHub Plugin URI: comptoirdesappli/amapress
+ * Plugin Name:         Amapress
+ * Plugin URI:          https://github.com/comptoirdesappli/amapress
+ * Description:         Plugin de Gestion & Communication pour les AMAP
+ * Version:             0.93.75
+ * Requires             PHP: 5.6
+ * Requires at least:   4.6
+ * Author:              Comptoir des Applis
+ * Author URI:          http://amapress.fr/
+ * License:             GNU General Public License v2
+ * License URI:         http://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:         amapress
+ * GitHub Plugin URI:   https://github.com/comptoirdesappli/amapress
 */
 
 /*
@@ -47,8 +51,8 @@ define( 'AMAPRESS__PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AMAPRESS__PLUGIN_FILE', __FILE__ );
 define( 'AMAPRESS_DELETE_LIMIT', 100000 );
-define( 'AMAPRESS_DB_VERSION', 104 );
-define( 'AMAPRESS_VERSION', '0.91.135' );
+define( 'AMAPRESS_DB_VERSION', 107 );
+define( 'AMAPRESS_VERSION', '0.93.75' );
 //remove_role('responable_amap');
 
 function amapress_ensure_no_cache() {
@@ -302,6 +306,7 @@ require_once( AMAPRESS__PLUGIN_DIR . 'impersonation.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'class.amapressmeseventswidget.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'class.amapresscopyleftwidget.php' );
 //require_once(AMAPRESS__PLUGIN_DIR . 'class.amapressmenuwidget.php');
+require_once( AMAPRESS__PLUGIN_DIR . 'utils/class.phptemplate_withnewline.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'class.amapress.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'class.amapress.users.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'class.amapress.paniers.php' );
@@ -329,7 +334,10 @@ require_once( AMAPRESS__PLUGIN_DIR . 'utils/export-users-to-csv.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'utils/import-posts-from-csv.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'utils/import-users-from-csv.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'utils/class.amapress-taxonomy.php' );
+require_once( AMAPRESS__PLUGIN_DIR . 'utils/pwa.php' );
+require_once( AMAPRESS__PLUGIN_DIR . 'utils/js-error-log.php' );
 
+require_once( AMAPRESS__PLUGIN_DIR . 'entities/hidden.columns.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'entities/row.actions.php' );
 require_once( AMAPRESS__PLUGIN_DIR . 'entities/bulk.actions.php' );
 
@@ -562,8 +570,13 @@ function amapress_global_init() {
 
 	global $amapress_smtpMailingQueue;
 	require_once( AMAPRESS__PLUGIN_DIR . 'modules/mailqueue/AmapressSMTPMailingQueue.php' );
-	$amapress_smtpMailingQueue = new AmapressSMTPMailingQueue();
-
+	$amapress_smtpMailingQueue        = [];
+	$amapress_smtpMailingQueue['def'] = new AmapressSMTPMailingQueue();
+	foreach ( AmapressMailingGroup::getAll() as $mlgrp ) {
+		if ( ! empty( $mlgrp->getSmtpHost() ) ) {
+			$amapress_smtpMailingQueue[ 'm' . $mlgrp->ID ] = new AmapressSMTPMailingQueue( $mlgrp->ID );
+		}
+	}
 	if ( ! wp_next_scheduled( 'amps_cleanings' ) ) {
 		wp_schedule_event( time(), 'daily', 'amps_cleanings' );
 	}
@@ -643,7 +656,7 @@ function get_image_sizes() {
 function get_image_size( $size ) {
 	$sizes = get_image_sizes();
 
-	if ( isset( $sizes[ $size ] ) ) {
+	if ( is_string( $size ) && isset( $sizes[ $size ] ) ) {
 		return $sizes[ $size ];
 	}
 
@@ -1241,7 +1254,7 @@ add_filter( 'user_has_cap', 'amapress_user_has_cap', 10, 3 );
 
 if ( ! function_exists( 'wp_mail' ) ) {
 	function wp_mail( $to, $subject, $message, $headers = '', $attachments = array() ) {
-		/** @var AmapressSMTPMailingQueue $amapress_smtpMailingQueue */
+		/** @var AmapressSMTPMailingQueue[] $amapress_smtpMailingQueue */
 		global $amapress_smtpMailingQueue;
 
 		if ( empty( $to ) ) {
@@ -1252,7 +1265,12 @@ if ( ! function_exists( 'wp_mail' ) ) {
 		}
 
 		if ( $amapress_smtpMailingQueue ) {
-			return $amapress_smtpMailingQueue->wp_mail( $to, $subject, $message, $headers, $attachments );
+			if ( is_array( $message ) && ! empty( $message['ml_grp_id'] )
+			     && isset( $amapress_smtpMailingQueue[ 'm' . $message['ml_grp_id'] ] ) ) {
+				return $amapress_smtpMailingQueue[ 'm' . $message['ml_grp_id'] ]->wp_mail( $to, $subject, $message, $headers, $attachments );
+			} else {
+				return $amapress_smtpMailingQueue['def']->wp_mail( $to, $subject, $message, $headers, $attachments );
+			}
 		} else {
 //            wp_mail($to, $subject, $message, $headers, $attachments);
 			die( "Uh, no wp_mail ???" );
@@ -1678,6 +1696,10 @@ add_filter( 'admin_footer_text', function ( $content ) {
 			}
 		}
 	}
+	if ( empty( $subtitle ) ) {
+		$subtitle = get_admin_page_title();
+	}
+
 	$content .= ' | <strong>' .
 	            Amapress::makeLink( '#', 'Tableau de bord>' . $title
 	                                     . ( ! empty( $subtitle ) ? '>' . $subtitle : '' )
@@ -1750,12 +1772,78 @@ add_action( 'admin_post_tf_event_scheduler_test', function () {
 	die();
 } );
 
+//panier, distribution, amap_event, assemblee, visite
+
+add_filter( 'get_next_post_join', 'amapress_get_adjacent_post_join', 10, 5 );
+add_filter( 'get_previous_post_join', 'amapress_get_adjacent_post_join', 10, 5 );
+function amapress_get_adjacent_post_join( $join, $in_same_term, $excluded_terms, $taxonomy, WP_Post $post ) {
+	if ( false !== strpos( $post->post_type, 'amps_' ) ) {
+		$pt = AmapressEntities::getPostType( amapress_simplify_post_type( $post->post_type ) );
+		if ( $pt ) {
+			if ( isset( $pt['default_orderby'] ) ) {
+				$default_orderby = $pt['default_orderby'];
+				if ( false !== strpos( $default_orderby, 'amapress_' ) ) {
+					global $wpdb;
+					$join .= $wpdb->prepare( " INNER JOIN {$wpdb->postmeta} as pm ON p.ID = pm.post_id AND pm.meta_key = %s ", $default_orderby );
+				}
+			}
+		}
+	}
+
+	return $join;
+}
+
+add_filter( 'get_next_post_where', 'amapress_get_adjacent_post_where', 10, 5 );
+add_filter( 'get_previous_post_where', 'amapress_get_adjacent_post_where', 10, 5 );
+function amapress_get_adjacent_post_where( $where, $in_same_term, $excluded_terms, $taxonomy, WP_Post $post ) {
+	if ( false !== strpos( $post->post_type, 'amps_' ) ) {
+		$pt = AmapressEntities::getPostType( amapress_simplify_post_type( $post->post_type ) );
+		if ( $pt ) {
+			if ( isset( $pt['default_orderby'] ) ) {
+				global $wpdb;
+				$default_orderby = $pt['default_orderby'];
+				if ( false !== strpos( $default_orderby, 'amapress_' ) ) {
+					$where = preg_replace( '/WHERE p.post_date\s+(\S+).+?AND/',
+						$wpdb->prepare( 'WHERE CAST(pm.meta_value as UNSIGNED) ${1} %s AND',
+							get_post_meta( $post->ID, $default_orderby, true ) ), $where );
+				} else {
+					$where = preg_replace( '/WHERE p.post_date\s+(\S+).+?AND/',
+						$wpdb->prepare( 'WHERE p.' . $default_orderby . ' ${1} %s AND',
+							$post->$default_orderby ), $where );
+				}
+			}
+		}
+	}
+
+	return $where;
+}
+
+add_filter( 'get_previous_post_sort', 'amapress_get_adjacent_post_sort', 10, 2 );
+add_filter( 'get_next_post_sort', 'amapress_get_adjacent_post_sort', 10, 2 );
+function amapress_get_adjacent_post_sort( $orderby, WP_Post $post ) {
+	if ( false !== strpos( $post->post_type, 'amps_' ) ) {
+		$pt = AmapressEntities::getPostType( amapress_simplify_post_type( $post->post_type ) );
+		if ( $pt ) {
+			if ( isset( $pt['default_orderby'] ) ) {
+				$default_orderby = $pt['default_orderby'];
+				if ( false !== strpos( $default_orderby, 'amapress_' ) ) {
+					$orderby = str_replace( 'p.post_date', 'CAST(pm.meta_value as UNSIGNED)', $orderby );
+				} else {
+					$orderby = str_replace( 'p.post_date', 'p.' . $default_orderby, $orderby );
+				}
+			}
+		}
+	}
+
+	return $orderby;
+}
+
 add_action( 'pre_get_posts', function ( $query ) {
 	/* @var WP_Query $query */
 	if ( ( is_category() || is_archive() ) && $query->is_main_query() ) {
 		$post_type = $query->get( 'post_type' );
 		if ( ! is_array( $post_type ) ) {
-			$pt = AmapressEntities::getPostType( amapress_unsimplify_post_type( $post_type ) );
+			$pt = AmapressEntities::getPostType( amapress_simplify_post_type( $post_type ) );
 			if ( $pt ) {
 				if ( isset( $pt['default_orderby'] ) ) {
 					$default_orderby = $pt['default_orderby'];
@@ -1763,7 +1851,7 @@ add_action( 'pre_get_posts', function ( $query ) {
 						$query->query_vars['orderby']  = 'meta_value_num';
 						$query->query_vars['meta_key'] = $default_orderby;
 					} else {
-						$query->query_vars['orderby'] = 'meta_value_num';
+						$query->query_vars['orderby'] = $default_orderby;
 					}
 				}
 				if ( isset( $pt['default_order'] ) ) {
@@ -1778,3 +1866,46 @@ add_action( 'pre_get_posts', function ( $query ) {
 add_filter( 'admin_title', function ( $admin_title, $title ) {
 	return strip_tags( do_shortcode( $admin_title ) );
 }, 10, 2 );
+
+add_action( 'pre_get_comments', function ( $comments_query ) {
+	if ( is_admin() ) {
+		return;
+	}
+
+	$post_id = get_the_ID();
+	$type    = AmapressEntities::getPostType( amapress_simplify_post_type( get_post_type( $post_id ) ) );
+	if ( $type && empty( $type['public_comments'] ) && ! amapress_is_user_logged_in() ) {
+		$comments_query->query_vars['comment__in'] = array( 0 );
+	}
+} );
+
+add_filter( 'pre_option_comment_registration', function () {
+	if ( is_admin() ) {
+		return false;
+	}
+
+	$post_id = get_the_ID();
+
+	// Only available on wp-comments-post.php, not on regular post pages.
+	if ( isset( $_POST['comment_post_ID'] ) ) {
+		$post_id = (int) $_POST['comment_post_ID'];
+	}
+
+	$type = AmapressEntities::getPostType( amapress_simplify_post_type( get_post_type( $post_id ) ) );
+
+	if ( $type ) {
+		if ( empty( $type['public_comments'] ) ) {
+			return 1;
+		}
+	}
+
+	return false;
+} );
+
+add_filter( 'auth_cookie_expiration', function ( $length, $user_id, $remember ) {
+	if ( $remember ) {
+		return intval( Amapress::getOption( 'auth_expiration_remember' ) ) * DAY_IN_SECONDS;
+	} else {
+		return intval( Amapress::getOption( 'auth_expiration' ) ) * DAY_IN_SECONDS;
+	}
+}, 10, 3 );

@@ -297,6 +297,10 @@ class AmapressContrat_instance extends TitanEntity {
 		return $this->getCustom( 'amapress_contrat_instance_allow_bktrfr', 0 );
 	}
 
+	public function getAllow_LocalMoney() {
+		return $this->getCustom( 'amapress_contrat_instance_allow_locmon', 0 );
+	}
+
 	public function getNb_responsables_Supplementaires() {
 		return $this->getCustomAsInt( 'amapress_contrat_instance_nb_resp_supp', 0 );
 	}
@@ -617,6 +621,14 @@ class AmapressContrat_instance extends TitanEntity {
 	}
 
 	public function getContratModelDocFileName() {
+		if ( defined( 'AMAPRESS_DEMO_MODE' ) ) {
+			if ( $this->isPanierVariable() ) {
+				return AMAPRESS__PLUGIN_DIR . 'templates/contrat_generique_modulables.docx';
+			} else {
+				return AMAPRESS__PLUGIN_DIR . 'templates/contrat_generique.docx';
+			}
+		}
+
 		return get_attached_file( $this->getContratWordModelId(), true );
 	}
 
@@ -634,7 +646,29 @@ class AmapressContrat_instance extends TitanEntity {
 	}
 
 	public function getContratPapierModelDocFileName() {
+		if ( defined( 'AMAPRESS_DEMO_MODE' ) ) {
+			if ( $this->isPanierVariable() ) {
+				return AMAPRESS__PLUGIN_DIR . 'templates/contrat_generique_modulables.docx';
+			} else {
+				return AMAPRESS__PLUGIN_DIR . 'templates/contrat_generique.docx';
+			}
+		}
+
 		return get_attached_file( $this->getContratPapierWordModelId(), true );
+	}
+
+	public function getContratModelDocStatus() {
+		$model_file   = $this->getContratModelDocFileName();
+		$placeholders = AmapressAdhesion::getPlaceholders();
+
+		return Phptemplate_withnewline::getPlaceholderStatus( $model_file, $placeholders, 'Contrat personnalisé' );
+	}
+
+	public function getContratPapierModelDocStatus() {
+		$model_file   = $this->getContratPapierModelDocFileName();
+		$placeholders = AmapressContrat_instance::getPlaceholders( 'paper' );
+
+		return Phptemplate_withnewline::getPlaceholderStatus( $model_file, $placeholders, 'Contrat vierge' );
 	}
 
 //	public static function getPlaceholdersHelp() {
@@ -784,13 +818,13 @@ class AmapressContrat_instance extends TitanEntity {
 				return $adh->getTitle();
 			}
 		];
-		$ret['contrat_sous_titre']               = [
+		$ret['contrat_sous_titre'] = [
 			'desc' => 'Nom complémentaire du contrat (par ex, Semaine A)',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return $adh->getSubName();
 			}
 		];
-		$ret['contrat_lien']                     = [
+		$ret['contrat_lien'] = [
 			'desc' => 'Lien vers la présentation du contrat',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				if ( empty( $adh->getModel() ) ) {
@@ -948,7 +982,7 @@ class AmapressContrat_instance extends TitanEntity {
 				}, $adh->getLieux() ) );
 			}
 		];
-		$ret['lieux_court']                      = [
+		$ret['lieux_court'] = [
 			'desc' => 'Lieux de distribution (nom court)',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return implode( ' ou ', array_map( function ( AmapressLieu_distribution $l ) {
@@ -956,7 +990,7 @@ class AmapressContrat_instance extends TitanEntity {
 				}, $adh->getLieux() ) );
 			}
 		];
-		$ret['lieu_court']                       = [
+		$ret['lieu_court'] = [
 			'desc' => 'Lieu de distribution (nom court)',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return implode( ' ou ', array_map( function ( AmapressLieu_distribution $l ) {
@@ -980,7 +1014,7 @@ class AmapressContrat_instance extends TitanEntity {
 				}, $adh->getLieux() ) );
 			}
 		];
-		$ret['lieu_adresse']                     = [
+		$ret['lieu_adresse'] = [
 			'desc' => 'Adresse du lieu de distribution',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return implode( ' ou ', array_map( function ( AmapressLieu_distribution $l ) {
@@ -988,7 +1022,7 @@ class AmapressContrat_instance extends TitanEntity {
 				}, $adh->getLieux() ) );
 			}
 		];
-		$ret['contrat_debut']                    = [
+		$ret['contrat_debut'] = [
 			'desc' => 'Début du contrat (mois/année)',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return date_i18n( 'm/Y', $adh->getDate_debut() );
@@ -1000,13 +1034,13 @@ class AmapressContrat_instance extends TitanEntity {
 				return date_i18n( 'm/Y', $adh->getDate_fin() );
 			}
 		];
-		$ret['contrat_debut_annee']              = [
+		$ret['contrat_debut_annee'] = [
 			'desc' => 'Année de début du contrat',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return date_i18n( 'Y', $adh->getDate_debut() );
 			}
 		];
-		$ret['contrat_fin_annee']                = [
+		$ret['contrat_fin_annee'] = [
 			'desc' => 'Année de fin du contrat',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return date_i18n( 'Y', $adh->getDate_fin() );
@@ -1054,13 +1088,13 @@ class AmapressContrat_instance extends TitanEntity {
 				return $adh->getModel()->getProducteur()->getUser()->getEmail();
 			}
 		];
-		$ret['nb_paiements']                     = [
+		$ret['nb_paiements'] = [
 			'desc' => 'Nombre de chèques/règlements possibles',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return implode( ', ', $adh->getPossiblePaiements() );
 			}
 		];
-		$ret['dates_rattrapages']                = [
+		$ret['dates_rattrapages'] = [
 			'desc' => 'Description des dates de distribution de rattrapage',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return implode( ', ', $adh->getFormattedRattrapages() );
@@ -1096,7 +1130,7 @@ class AmapressContrat_instance extends TitanEntity {
 				}
 			}
 		];
-		$ret['mention_speciale']                 = [
+		$ret['mention_speciale'] = [
 			'desc' => 'Champ Mention spéciale du contrat',
 			'func' => function ( AmapressContrat_instance $adh ) {
 				return $adh->getSpecialMention();
@@ -1111,22 +1145,22 @@ class AmapressContrat_instance extends TitanEntity {
 		$ret['paiements_mention'] = [
 			'desc' => 'Mention pour les paiements',
 			'func' => function ( AmapressContrat_instance $adh ) {
-				return wp_strip_all_tags( wp_unslash( $adh->getPaiementsMention() ) );
+				return wp_strip_all_tags( html_entity_decode( wp_unslash( $adh->getPaiementsMention() ) ) );
 			}
 		];
-		$ret['nb_dates']                         = [
+		$ret['nb_dates'] = [
 			'desc' => 'Nombre de dates de distributions restantes',
 			'func' => function ( AmapressContrat_instance $adh ) use ( $first_date_distrib ) {
 				return count( $adh->getRemainingDates( $first_date_distrib ) );
 			}
 		];
-		$ret['nb_distributions']                 = [
+		$ret['nb_distributions'] = [
 			'desc' => 'Nombre de distributions restantes',
 			'func' => function ( AmapressContrat_instance $adh ) use ( $first_date_distrib ) {
 				return $adh->getRemainingDatesWithFactors( $first_date_distrib );
 			}
 		];
-		$ret['dates_distribution_par_mois']      = [
+		$ret['dates_distribution_par_mois'] = [
 			'desc' => 'Dates de distributions regroupées par mois',
 			'func' => function ( AmapressContrat_instance $adh ) use ( $first_date_distrib ) {
 				return implode( ' ; ', $adh->getFormattedDatesDistribMois( $first_date_distrib ) );
@@ -1135,15 +1169,18 @@ class AmapressContrat_instance extends TitanEntity {
 		$ret['option_paiements'] = [
 			'desc' => 'Option de paiement choisie',
 			'func' => function ( AmapressContrat_instance $adh ) {
-				if ( ! $adh->getManage_Cheques() ) {
-					return strip_tags( $adh->getPaiementsMention() );
-				}
+//				if ( ! $adh->getManage_Cheques() ) {
+//					return wp_strip_all_tags( html_entity_decode( wp_unslash( $adh->getPaiementsMention() ) ) );
+//				}
 				$paiements = [];
-				if ( 'esp' == $adh->getAllow_Cash() ) {
+				if ( $adh->getAllow_Cash() ) {
 					$paiements[] = 'en espèces';
 				}
-				if ( 'vir' == $adh->getAllow_Transfer() ) {
+				if ( $adh->getAllow_Transfer() ) {
 					$paiements[] = 'par virement';
+				}
+				if ( $adh->getAllow_LocalMoney() ) {
+					$paiements[] = 'en monnaie locale';
 				}
 				foreach ( $adh->getPossiblePaiements() as $nb_cheques ) {
 					$paiements[] = "$nb_cheques chq.";
@@ -1352,6 +1389,114 @@ class AmapressContrat_instance extends TitanEntity {
 					) );
 			}
 		];
+		$ret['adherent'] = [
+			'desc' => 'Prénom Nom adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.type'] = [
+			'desc' => 'Type d\'adhérent (Principal, Co-adhérent...) (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.nom'] = [
+			'desc' => 'Nom adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.prenom'] = [
+			'desc' => 'Prénom adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.adresse'] = [
+			'desc' => 'Adresse adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.code_postal'] = [
+			'desc' => 'Code postal adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.ville'] = [
+			'desc' => 'Ville adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.rue'] = [
+			'desc' => 'Rue (adresse) adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.tel'] = [
+			'desc' => 'Téléphone adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['adherent.email'] = [
+			'desc' => 'Email adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherents.noms'] = [
+			'desc' => 'Liste des co-adhérents (Prénom, Nom) (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherents.contacts'] = [
+			'desc' => 'Liste des co-adhérents (Prénom, Nom, Emails, Tel) (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherent'] = [
+			'desc' => 'Prénom Nom co-adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherent.nom'] = [
+			'desc' => 'Nom co-adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherent.prenom'] = [
+			'desc' => 'Prénom co-adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherent.adresse'] = [
+			'desc' => 'Adresse co-adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherent.tel'] = [
+			'desc' => 'Téléphone co-adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
+		$ret['coadherent.email'] = [
+			'desc' => 'Email co-adhérent (à remplir)',
+			'func' => function ( AmapressContrat_instance $adh ) {
+				return '';
+			}
+		];
 
 		return $ret;
 	}
@@ -1428,9 +1573,12 @@ class AmapressContrat_instance extends TitanEntity {
 		} );
 	}
 
-	public static function getPlaceholdersHelp( $additional_helps = [], $context = '', $show_toggler = true ) {
+	public static function getPlaceholders( $context ) {
 		$ret = [];
 
+		foreach ( amapress_replace_mail_placeholders_help( '', false, false ) as $k => $v ) {
+			$ret[ $k ] = $v;
+		}
 		foreach ( Amapress::getPlaceholdersHelpForProperties( self::getProperties() ) as $prop_name => $prop_desc ) {
 			$ret[ $prop_name ] = $prop_desc;
 		}
@@ -1454,6 +1602,12 @@ class AmapressContrat_instance extends TitanEntity {
 			$ret["quantite_paiements"]     = '(Tableau quantité) Possibilités de paiements';
 
 		}
+
+		return $ret;
+	}
+
+	public static function getPlaceholdersHelp( $additional_helps = [], $context = '', $show_toggler = true ) {
+		$ret = self::getPlaceholders( $context );
 
 		return Amapress::getPlaceholdersHelpTable( 'contrat_inst-placeholders', $ret,
 			'du contrat', $additional_helps, false,
@@ -1485,7 +1639,7 @@ class AmapressContrat_instance extends TitanEntity {
 		}
 	}
 
-	public function generateContratDoc( $date_first_distrib, $editable ) {
+	public function generateContratDoc( $date_first_distrib, $editable, $check_only = false ) {
 		$out_filename   = $this->getContratDocFileName( $date_first_distrib );
 		$model_filename = $this->getContratPapierModelDocFileName();
 		if ( empty( $model_filename ) ) {
@@ -1526,7 +1680,7 @@ class AmapressContrat_instance extends TitanEntity {
 		if ( $this->isPanierVariable() ) {
 			foreach ( $this->getRemainingDates( $date_first_distrib ) as $date ) {
 				$placeholders["quantite_date#$i"]                    = date_i18n( 'd/m/Y', $date );
-				$placeholders["quantite_total#$i"]                   = '';
+				$placeholders["quantite_total#$i"]                   = str_repeat( chr( 160 ), 4 );
 				$placeholders["quantite_description#$i"]             = $this->getContrat_quantites_AsString( $date, true );
 				$placeholders["quantite_description_no_price#$i"]    = $this->getContrat_quantites_AsString( $date );
 				$placeholders["quantite_description_br#$i"]          = $this->getContrat_quantites_AsString( $date, true, '<br />' );
@@ -1594,8 +1748,12 @@ class AmapressContrat_instance extends TitanEntity {
 		}
 
 		\PhpOffice\PhpWord\Settings::setTempDir( Amapress::getTempDir() );
-//		$templateProcessor = new \PhpOffice\PhpWord\TemplateProcessor( $model_filename );
 		$templateProcessor = new Phptemplate_withnewline( $model_filename );
+
+		if ( $check_only ) {
+			return Phptemplate_withnewline::getUnknownPlaceholders( $model_filename, $placeholders );
+		}
+
 		try {
 			$templateProcessor->cloneRow( 'quantite_date', $lines_count );
 		} catch ( \PhpOffice\PhpWord\Exception\Exception $ex ) {
@@ -1689,7 +1847,7 @@ class AmapressContrat_instance extends TitanEntity {
 
 	/** @return AmapressAdhesion[] */
 	public function getAdhesionsForUser( $user_id = null, $date = null, $ignore_renouv_delta = false ) {
-		return AmapressAdhesion::getUserActiveAdhesions( $user_id, $this->ID, $date, $ignore_renouv_delta );
+		return AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, $this->ID, $date, $ignore_renouv_delta );
 	}
 
 	/**
@@ -1700,7 +1858,7 @@ class AmapressContrat_instance extends TitanEntity {
 		$key     = "amapress_get_user_active_contrat_instances_{$user_id}_{$key_ids}_{$date}_{$ignore_renouv_delta}";
 		$res     = wp_cache_get( $key );
 		if ( false === $res ) {
-			$ads = AmapressAdhesion::getUserActiveAdhesions( $user_id, $contrat_id, $date, $ignore_renouv_delta );
+			$ads = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, $contrat_id, $date, $ignore_renouv_delta );
 			$res = array();
 			foreach ( $ads as $ad ) {
 				$res[] = $ad->getContrat_instanceId();

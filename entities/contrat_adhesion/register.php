@@ -148,6 +148,8 @@ function amapress_register_entities_adhesion( $entities ) {
 		'edit_header'      => function ( $post ) {
 			TitanFrameworkOption::echoFullEditLinkAndWarning();
 
+			echo '<script type="text/javascript">jQuery(function($) { $("body > div#ui-datepicker-div").hide(); });</script>';
+
 			$adh = AmapressAdhesion::getBy( $post );
 			if ( ! $adh->getContrat_instance() || ! $adh->getAdherent() ) {
 				return;
@@ -171,7 +173,7 @@ function amapress_register_entities_adhesion( $entities ) {
 			$message = '';
 			if ( $principal_contrat ) {
 				Amapress::setFilterForReferent( false );
-				$other_adhs = AmapressAdhesion::getUserActiveAdhesions( $adh->getAdherentId(), $principal_contrat->ID, $adh->getDate_debut(), true );
+				$other_adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $adh->getAdherentId(), $principal_contrat->ID, $adh->getDate_debut(), true );
 				Amapress::setFilterForReferent( true );
 				if ( ! empty( $other_adhs ) ) {
 					return;
@@ -181,11 +183,10 @@ function amapress_register_entities_adhesion( $entities ) {
 				$message = 'Pas de contrat principal actif';
 			}
 
-			$class = 'notice notice-warning';
-
-			printf( '<div class="%1$s"><p>%2$s</p></div>', esc_attr( $class ), esc_html( $message ) );
-
-			echo '<script type="text/javascript">jQuery(function($) { $("body > div#ui-datepicker-div").hide(); });</script>';
+			if ( ! empty( $message ) ) {
+				$class = 'notice notice-warning';
+				printf( '<div class="%1$s"><p>%2$s</p></div>', esc_attr( $class ), esc_html( $message ) );
+			}
 		},
 		'views'            => array(
 			'remove'  => array( 'mine' ),
@@ -481,21 +482,23 @@ jQuery(function($) {
 					},
 			),
 			'pmt_type'          => array(
-				'name'        => amapress__( 'Moyen de règlement principal' ),
-				'type'        => 'select',
-				'group'       => '3/ Paiements',
-				'readonly'    => 'amapress_is_contrat_adhesion_readonly',
-				'options'     => array(
+				'name'           => amapress__( 'Moyen de règlement principal' ),
+				'type'           => 'select',
+				'group'          => '3/ Paiements',
+				'readonly'       => 'amapress_is_contrat_adhesion_readonly',
+				'options'        => array(
 					'chq' => 'Chèque',
 					'esp' => 'Espèces',
 					'vir' => 'Virement',
+					'mon' => 'Monnaie locale',
 					'dlv' => 'A la livraison',
 				),
-				'default'     => 'chq',
-				'required'    => true,
-				'desc'        => 'Moyen de règlement principal : chèques ou espèces ou virement',
-				'show_column' => true,
-				'top_filter'  => array(
+				'default'        => 'chq',
+				'required'       => true,
+				'desc'           => 'Moyen de règlement principal : chèques ou espèces ou virement',
+				'show_column'    => true,
+				'col_def_hidden' => true,
+				'top_filter'     => array(
 					'name'        => 'amapress_pmt_type',
 					'placeholder' => 'Tous les type de paiement',
 				),
@@ -552,9 +555,9 @@ jQuery(function($) {
 				}
 			),
 			'related'           => array(
-				'name'        => amapress__( 'Inscription liée' ),
-				'type'        => 'select',
-				'options'     => function ( $option ) {
+				'name'           => amapress__( 'Inscription liée' ),
+				'type'           => 'select',
+				'options'        => function ( $option ) {
 					/** @var TitanFrameworkOption $option */
 					$adhesion_id = $option->getPostID();
 					$adhesion    = AmapressAdhesion::getBy( $adhesion_id );
@@ -598,23 +601,25 @@ jQuery(function($) {
 
 					return $ret;
 				},
-				'hidden'      => function ( $option ) {
+				'hidden'         => function ( $option ) {
 					return TitanFrameworkOption::isOnNewScreen() && empty( $_REQUEST['amapress_adhesion_related'] );
 				},
 //				'show_on'     => 'edit-only',
-				'desc'        => 'Sélectionner l\'inscription précédente en cas de changement de quantités en cours d\'année',
-				'group'       => '2/ Contrat',
-				'readonly'    => 'amapress_is_contrat_adhesion_readonly',
-				'show_column' => false,
-				'csv_import'  => false,
+				'desc'           => 'Sélectionner l\'inscription précédente en cas de changement de quantités en cours d\'année',
+				'group'          => '2/ Contrat',
+				'readonly'       => 'amapress_is_contrat_adhesion_readonly',
+				'show_column'    => true,
+				'col_def_hidden' => true,
+				'csv_import'     => false,
 			),
 			'message'           => array(
-				'name'     => amapress__( 'Message' ),
-				'type'     => 'textarea',
-				'readonly' => true,
-				'group'    => '2/ Contrat',
+				'name'           => amapress__( 'Message' ),
+				'type'           => 'textarea',
+				'readonly'       => true,
+				'group'          => '2/ Contrat',
 //				'show_column' => false,
-				'desc'     => 'Message aux référents lors de l\'inscription en ligne',
+				'desc'           => 'Message aux référents lors de l\'inscription en ligne',
+				'col_def_hidden' => true,
 //				'csv'         => false,
 			),
 			'all-coadherents'   => array(
@@ -666,15 +671,16 @@ jQuery(function($) {
 				},
 			),
 			'adherent3'         => array(
-				'name'          => amapress__( 'Co-Adhérent 2' ),
-				'type'          => 'select-users',
-				'required'      => false,
-				'desc'          => 'Sélectionner un Co-Adhérent 2 si spécifique à ce contrat. S\'il ne se trouve pas dans la liste ci-dessus, créer son compte depuis « <a href="' . admin_url( 'user-new.php' ) . '" target="_blank">Ajouter un utilisateur</a> » puis fermer la page et rafraîchir la liste avec le bouton accolé au champs',
-				'group'         => '4/ Coadhérents',
-				'readonly'      => 'amapress_is_contrat_adhesion_readonly',
-				'autocomplete'  => true,
-				'searchable'    => true,
-				'custom_column' => function ( $option, $post_id ) {
+				'name'           => amapress__( 'Co-Adhérent 2' ),
+				'type'           => 'select-users',
+				'required'       => false,
+				'desc'           => 'Sélectionner un Co-Adhérent 2 si spécifique à ce contrat. S\'il ne se trouve pas dans la liste ci-dessus, créer son compte depuis « <a href="' . admin_url( 'user-new.php' ) . '" target="_blank">Ajouter un utilisateur</a> » puis fermer la page et rafraîchir la liste avec le bouton accolé au champs',
+				'group'          => '4/ Coadhérents',
+				'readonly'       => 'amapress_is_contrat_adhesion_readonly',
+				'autocomplete'   => true,
+				'searchable'     => true,
+				'col_def_hidden' => true,
+				'custom_column'  => function ( $option, $post_id ) {
 					$user = AmapressAdhesion::getBy( $post_id );
 					if ( $user->getAdherent() ) {
 						if ( $user->getAdherent3() ) {
@@ -684,7 +690,7 @@ jQuery(function($) {
 						}
 					}
 				},
-				'custom_export' => function ( $option, $post_id ) {
+				'custom_export'  => function ( $option, $post_id ) {
 					$user = AmapressAdhesion::getBy( $post_id );
 					if ( $user->getAdherent() ) {
 						if ( $user->getAdherent3() ) {
@@ -696,15 +702,16 @@ jQuery(function($) {
 				},
 			),
 			'adherent4'         => array(
-				'name'          => amapress__( 'Co-Adhérent 3' ),
-				'type'          => 'select-users',
-				'required'      => false,
-				'desc'          => 'Sélectionner un Co-Adhérent 3 si spécifique à ce contrat. S\'il ne se trouve pas dans la liste ci-dessus, créer son compte depuis « <a href="' . admin_url( 'user-new.php' ) . '" target="_blank">Ajouter un utilisateur</a> » puis fermer la page et rafraîchir la liste avec le bouton accolé au champs',
-				'group'         => '4/ Coadhérents',
-				'readonly'      => 'amapress_is_contrat_adhesion_readonly',
-				'autocomplete'  => true,
-				'searchable'    => true,
-				'custom_column' => function ( $option, $post_id ) {
+				'name'           => amapress__( 'Co-Adhérent 3' ),
+				'type'           => 'select-users',
+				'required'       => false,
+				'desc'           => 'Sélectionner un Co-Adhérent 3 si spécifique à ce contrat. S\'il ne se trouve pas dans la liste ci-dessus, créer son compte depuis « <a href="' . admin_url( 'user-new.php' ) . '" target="_blank">Ajouter un utilisateur</a> » puis fermer la page et rafraîchir la liste avec le bouton accolé au champs',
+				'group'          => '4/ Coadhérents',
+				'readonly'       => 'amapress_is_contrat_adhesion_readonly',
+				'autocomplete'   => true,
+				'searchable'     => true,
+				'col_def_hidden' => true,
+				'custom_column'  => function ( $option, $post_id ) {
 					$user = AmapressAdhesion::getBy( $post_id );
 					if ( $user->getAdherent() ) {
 						if ( $user->getAdherent4() ) {
@@ -714,7 +721,7 @@ jQuery(function($) {
 						}
 					}
 				},
-				'custom_export' => function ( $option, $post_id ) {
+				'custom_export'  => function ( $option, $post_id ) {
 					$user = AmapressAdhesion::getBy( $post_id );
 					if ( $user->getAdherent() ) {
 						if ( $user->getAdherent4() ) {
@@ -810,7 +817,9 @@ function amapress_adhesion_contrat_quantite_editor( $post_id ) {
 		$date_debut );
 	$excluded_contrat_ids  = [];
 	if ( TitanFrameworkOption::isOnNewScreen() && ! empty( $_GET['amapress_adhesion_adherent'] ) ) {
-		foreach ( AmapressAdhesion::getUserActiveAdhesions( intval( $_GET['amapress_adhesion_adherent'] ) ) as $user_adh ) {
+		$allow_partial_coadh = Amapress::getOption( 'allow_partial_coadh' );
+
+		foreach ( AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( intval( $_GET['amapress_adhesion_adherent'] ) ) as $user_adh ) {
 			$excluded_contrat_ids[] = $user_adh->getContrat_instanceId();
 		}
 	}
@@ -996,15 +1005,18 @@ function amapress_adhesion_contrat_quantite_editor( $post_id ) {
 
 add_action( 'wp_ajax_check_inscription_unique', function () {
 	$contrats = $_POST['contrats'];
-	$user     = $_POST['user'];
+	$user_id  = $_POST['user'];
 	$post_ID  = $_POST['post_ID'];
 	$related  = isset( $_POST['related'] ) ? $_POST['related'] : 0;
 
 	$contrats = array_unique( array_map( 'intval', explode( ',', $contrats ) ) );
 
-	$adhs = array();
+	$allow_partial_coadh = Amapress::getOption( 'allow_partial_coadh' );
+
+	$user_id = intval( $user_id );
+	$adhs    = array();
 	foreach ( $contrats as $contrat ) {
-		foreach ( AmapressAdhesion::getUserActiveAdhesions( intval( $user ), $contrat ) as $adh ) {
+		foreach ( AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, $contrat ) as $adh ) {
 			if ( $adh->getID() == $post_ID || $adh->getID() == $related ) {
 				continue;
 			}
@@ -1338,9 +1350,13 @@ function amapress_get_contrat_quantite_datatable(
 				/** @var AmapressContrat_quantite $quant */
 				$row = array();
 				if ( $show_adherents ) {
-					/** @var AmapressAdhesion $adhesion */
-					$adhesion        = $adhesions[0];
-					$row['adherent'] = $adhesion->getAdherent()->getSortableDisplayName();
+					if ( isset( $adhesions[0] ) ) {
+						/** @var AmapressAdhesion $adhesion */
+						$adhesion        = $adhesions[0];
+						$row['adherent'] = $adhesion->getAdherent()->getSortableDisplayName();
+					} else {
+						$row['adherent'] = '';
+					}
 				}
 				$row['date']      = date_i18n( 'd/m/Y', $real_date );
 				$row['date_sort'] = date( 'Y-m-d', $real_date );
@@ -2305,7 +2321,7 @@ function amapress_create_user_and_adhesion_assistant( $post_id, TitanFrameworkOp
 
 
 			Amapress::setFilterForReferent( false );
-			$adhs = AmapressAdhesion::getUserActiveAdhesions( $user->ID );
+			$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user->ID );
 			Amapress::setFilterForReferent( true );
 			usort( $adhs, function ( $a, $b ) {
 				return strcmp( $a->getTitle(), $b->getTitle() );
@@ -2666,3 +2682,24 @@ add_filter( 'amapress_can_edit_adhesion', function ( $can, $post_id ) {
 
 	return $can;
 }, 10, 2 );
+
+add_filter( 'amapress_gestion-contrats_page_contrat_paiements_default_hidden_columns', function ( $hidden ) {
+	return array_merge( $hidden, [
+		'amapress_user_no_renew',
+		'amapress_user_no_renew_reason',
+		'amapress_user_last_login',
+		'amapress_user_adresse',
+		'amapress_user_code_postal',
+		'amapress_user_ville',
+		'amapress_user_hidaddr',
+		'amapress_user_telephone',
+		'amapress_user_telephone2',
+		'amapress_user_telephone3',
+		'amapress_user_telephone4',
+		'amapress_user_co-adherent-1',
+		'amapress_user_co-adherent-2',
+		'amapress_user_co-adherent-3',
+		'amapress_user_co-adherents',
+		'amapress_user_co-adherents-infos',
+	] );
+} );

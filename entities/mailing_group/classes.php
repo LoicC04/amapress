@@ -176,6 +176,10 @@ class AmapressMailingGroup extends TitanEntity {
 		return $this->getCustom( 'amapress_mailing_group_smtp_host' );
 	}
 
+	public function getSmtpMaxMailsPerHour() {
+		return $this->getCustom( 'amapress_mailing_group_smtp_max_per_hour' );
+	}
+
 	public function getSmtpPort() {
 		return $this->getCustomAsInt( 'amapress_mailing_group_smtp_port', 25 );
 	}
@@ -198,6 +202,10 @@ class AmapressMailingGroup extends TitanEntity {
 
 	public function getSmtpPassword() {
 		return $this->getCustom( 'amapress_mailing_group_smtp_auth_password' );
+	}
+
+	public function getIncludeAdhesionRequest() {
+		return $this->getCustom( 'amapress_mailing_group_inc_adh_requests' );
 	}
 
 	public function distributeMail( $msg_id ) {
@@ -299,6 +307,18 @@ class AmapressMailingGroup extends TitanEntity {
 		return count( glob( $this->getUploadDir( 'waiting' ) . '*.json' ) );
 	}
 
+	public function getAdhesionRequestEmailsIfActive() {
+		$user_emails = [];
+		if ( $this->getIncludeAdhesionRequest() ) {
+			foreach ( AmapressAdhesionRequest::getAllToConfirm() as $adh_request ) {
+				if ( ! empty( $adh_request->getEmail() ) ) {
+					$user_emails[] = $adh_request->getEmail();
+				}
+			}
+		}
+
+		return $user_emails;
+	}
 	public function getMembersCount() {
 		$user_emails = [];
 		foreach ( $this->getMembersQueries() as $query ) {
@@ -308,8 +328,13 @@ class AmapressMailingGroup extends TitanEntity {
 			}
 		}
 		$user_emails = array_merge( $user_emails, $this->getRawEmails() );
+		$user_emails = array_merge( $user_emails, $this->getAdhesionRequestEmailsIfActive() );
 
 		return count( array_unique( $user_emails ) );
+	}
+
+	public function shouldUseSmtp() {
+		return ( $this->getMembersCount() > 25 );
 	}
 
 	public function testParams() {
@@ -420,13 +445,13 @@ class AmapressMailingGroup extends TitanEntity {
 
 				if ( ! $is_from_list ) {
 					$cc           = ''; //implode( ', ', $mail->cc );
-					$from         = ! empty( $mail->fromName ) ? "{$mail->fromName} <{$mail->fromAddress}>" : $mail->fromAddress;
+					$from         = ! empty( $mail->fromName ) ? "\"{$mail->fromName}\" <{$mail->fromAddress}>" : $mail->fromAddress;
 					$cleaned_from = '';
 					if ( self::hasRestrictiveDMARC( $mail->fromAddress ) ) {
 						$headers[]    = "X-Original-From: $from";
 						$cleaned_from = ! empty( $mail->fromName )
-							? "{$mail->fromName} <{$this->getName()}>"
-							: "{$this->getName()} <{$this->getName()}>";
+							? "\"{$mail->fromName}\" <{$this->getName()}>"
+							: "\"{$this->getName()}\" <{$this->getName()}>";
 					}
 					$date    = $mail->date;
 					$subject = $mail->subject;
@@ -447,7 +472,25 @@ class AmapressMailingGroup extends TitanEntity {
 
 					$is_site_member = false !== get_user_by( 'email', $mail->fromAddress );
 					if ( ! $is_site_member ) {
-						if ( preg_match( '/mailer-daemon|sympa|listserv|majordomo|smartlist|mailman/', $mail->fromAddress ) ) {
+						if ( preg_match( '/^(mailer-daemon|postmaster|hostmaster|abuse|junk|sympa|listserv|majordomo|smartlist|mailman)@/i', $mail->fromAddress ) ) {
+							global $phpmailer;
+							if ( ! ( $phpmailer instanceof PHPMailer ) ) {
+								require_once ABSPATH . WPINC . '/class-phpmailer.php';
+								require_once ABSPATH . WPINC . '/class-smtp.php';
+								$phpmailer = new PHPMailer( true );
+							}
+							amapress_wp_mail( get_option( 'admin_email' ),
+								'Envoi en rejet sur la liste ' . $this->getName(),
+								wpautop( "Bonjour,\n\n Un mail de rejet par un destinataire a été reçu pour la liste " . $this->getName()
+								         . ":\n------\nSujet: $subject\n" . $phpmailer->html2text( $content ) . "\n------\n\n" .
+								         get_bloginfo( 'name' ) ),
+								'', [
+									[
+										'name'   => 'email.eml',
+										'inline' => false,
+										'file'   => $eml_file
+									]
+								] );
 							$res = true;
 						} else if ( 'moderate' == $unk_action && ( empty( $bl_regex ) || ! preg_match( "/$bl_regex/", $mail->fromAddress ) ) ) {
 							$res = $this->saveMailForModeration( $msg_id, $date, $cleaned_from, $from, $to, $cc, $subject, $content, $body, $headers, $eml_file, true );
@@ -630,7 +673,11 @@ class AmapressMailingGroup extends TitanEntity {
 	}
 
 	public function isMember( $senderAddress ) {
-		return in_array( $senderAddress, $this->getEmailsFromQueries( $this->getMembersQueries() ) );
+		$members_emails = $this->getEmailsFromQueries( $this->getMembersQueries() );
+		$members_emails = array_merge( $members_emails, $this->getRawEmails() );
+		$members_emails = array_merge( $members_emails, $this->getAdhesionRequestEmailsIfActive() );
+
+		return in_array( $senderAddress, $members_emails );
 	}
 
 	public function isFreeMember( $senderAddress ) {
@@ -665,7 +712,8 @@ class AmapressMailingGroup extends TitanEntity {
 	}
 
 	private function sendMail( $clean_from, $from, $to, $cc, $subject, $body, $headers ) {
-		if ( ! empty( $cc ) ) {
+		$is_ext_smtp = ! empty( $this->getSmtpHost() );
+		if ( ! $is_ext_smtp && ! empty( $cc ) ) {
 			$headers[] = 'Cc: ' . $cc;
 		}
 		if ( empty( $clean_from ) ) {
@@ -673,8 +721,11 @@ class AmapressMailingGroup extends TitanEntity {
 		}
 		$members_emails = $this->getEmailsFromQueries( $this->getMembersQueries() );
 		$members_emails = array_merge( $members_emails, $this->getRawEmails() );
+		$members_emails = array_merge( $members_emails, $this->getAdhesionRequestEmailsIfActive() );
 
-		$headers[] = 'Bcc: ' . implode( ',', array_unique( $members_emails ) );
+		if ( ! $is_ext_smtp ) {
+			$headers[] = 'Bcc: ' . implode( ',', array_unique( $members_emails ) );
+		}
 		$headers   = array_filter( $headers, function ( $h ) {
 			return 0 !== strpos( $h, 'From' );
 		} );
@@ -686,7 +737,7 @@ class AmapressMailingGroup extends TitanEntity {
 		if ( empty( $desc ) ) {
 			$desc = $this->getSimpleName();
 		}
-		$to = "{$desc} <{$this->getName()}>";
+		$to = "\"{$desc}\" <{$this->getName()}>";
 
 		$site_url  = get_bloginfo( 'url' );
 		$headers[] = 'Return-Path: ' . $admin_email;
@@ -722,7 +773,24 @@ class AmapressMailingGroup extends TitanEntity {
 		}
 		$body['ml_grp_id'] = $this->ID;
 
-		return wp_mail( $to, $this->getSubjectPrefix() . ' ' . $subject, $body, $headers, $body['attachments'] );
+		if ( $is_ext_smtp ) {
+			$res = false;
+			foreach ( $members_emails as $members_email ) {
+				$local_headers = array_merge( $headers, [
+					'Bcc: ' . $members_email
+				] );
+				$res           = $res | wp_mail( $to, $this->getSubjectPrefix() . ' ' . $subject, $body, $local_headers, $body['attachments'] );
+			}
+			if ( ! $is_ext_smtp && ! empty( $cc ) ) {
+				$headers[] = 'Cc: ' . $cc;
+
+				$res = $res | wp_mail( $to, $this->getSubjectPrefix() . ' ' . $subject, $body, $headers, $body['attachments'] );
+			}
+
+			return $res;
+		} else {
+			return wp_mail( $to, $this->getSubjectPrefix() . ' ' . $subject, $body, $headers, $body['attachments'] );
+		}
 	}
 
 	public function resendModerationMail( $msg_id ) {
@@ -813,7 +881,7 @@ class AmapressMailingGroup extends TitanEntity {
 			$moderator = AmapressUser::getBy( amapress_current_user_id() );
 		}
 
-		$subject = $msg['subject'];
+		$subject = ! empty( $msg['subject'] ) ? $msg['subject'] : '';
 		global $phpmailer;
 
 		// (Re)create it, if it's gone missing
@@ -823,9 +891,12 @@ class AmapressMailingGroup extends TitanEntity {
 			$phpmailer = new PHPMailer( true );
 		}
 
-		$body    = $phpmailer->html2text( $msg['content'] );
+		$body    = $phpmailer->html2text( ! empty( $msg['content'] ) ? $msg['content'] : '' );
 		$summary = wpautop( "\n------\nSujet: $subject\n$body\n------\n" );
 
+		if ( empty( $msg['id'] ) ) {
+			$msg['id'] = '';
+		}
 
 		$placeholders = [
 			'liste_nom'              => $this->getName(),
@@ -835,7 +906,7 @@ class AmapressMailingGroup extends TitanEntity {
 			'moderated_by_name'      => $moderator ? $moderator->getDisplayName() : '',
 			'msg_subject'            => $subject,
 			'msg_summary'            => $summary,
-			'sender'                 => esc_html( $msg['from'] ),
+			'sender'                 => esc_html( ! empty( $msg['from'] ) ? $msg['from'] : '' ),
 			'msg_waiting_link'       => Amapress::makeLink( admin_url( 'admin.php?page=mailinggroup_moderation&tab=mailgrp-moderate-tab-' . $this->ID ), 'Voir' ),
 			'msg_reject_silent_link' => amapress_get_mailgroup_action_form( 'Rejetter sans prévenir', 'amapress_mailgroup_reject_quiet', $this->ID, $msg['id'] ),
 			'msg_reject_notif_link'  => amapress_get_mailgroup_action_form( 'Rejetter', 'amapress_mailgroup_reject', $this->ID, $msg['id'] ),
@@ -941,41 +1012,45 @@ class AmapressMailingGroup extends TitanEntity {
 	public function testSMTP() {
 		$ml_grp = $this;
 		if ( ! empty( $ml_grp->getSmtpHost() ) ) {
-			require_once ABSPATH . WPINC . '/class-phpmailer.php';
-			require_once ABSPATH . WPINC . '/class-smtp.php';
-			$phpmailer = new PHPMailer( true );
+			try {
+				require_once ABSPATH . WPINC . '/class-phpmailer.php';
+				require_once ABSPATH . WPINC . '/class-smtp.php';
+				$phpmailer = new PHPMailer( true );
 
-			// Set mailer to SMTP
-			$phpmailer->isSMTP();
+				// Set mailer to SMTP
+				$phpmailer->isSMTP();
 
-			// Set encryption type
-			$phpmailer->SMTPSecure = $ml_grp->getSmtpEncryption();
+				// Set encryption type
+				$phpmailer->SMTPSecure = $ml_grp->getSmtpEncryption();
 
-			// Set host
-			$phpmailer->Host = $ml_grp->getSmtpHost();
-			$phpmailer->Port = $ml_grp->getSmtpPort();
+				// Set host
+				$phpmailer->Host = $ml_grp->getSmtpHost();
+				$phpmailer->Port = $ml_grp->getSmtpPort();
 
-			// Timeout
-			$phpmailer->Timeout = $ml_grp->getSmtpTimeout();
+				// Timeout
+				$phpmailer->Timeout = $ml_grp->getSmtpTimeout();
 
-			// Set authentication data
-			if ( $ml_grp->UseSmtpAuth() ) {
-				$phpmailer->SMTPAuth = true;
-				if ( ! empty( $ml_grp->getSmtpUserName() ) ) {
-					$phpmailer->Username = $ml_grp->getSmtpUserName();
-					$phpmailer->Password = $ml_grp->getSmtpPassword();
-				} else {
-					$phpmailer->Username = $ml_grp->getUsername();
-					$phpmailer->Password = $ml_grp->getPassword();
+				// Set authentication data
+				if ( $ml_grp->UseSmtpAuth() ) {
+					$phpmailer->SMTPAuth = true;
+					if ( ! empty( $ml_grp->getSmtpUserName() ) ) {
+						$phpmailer->Username = $ml_grp->getSmtpUserName();
+						$phpmailer->Password = $ml_grp->getSmtpPassword();
+					} else {
+						$phpmailer->Username = $ml_grp->getUsername();
+						$phpmailer->Password = $ml_grp->getPassword();
+					}
 				}
-			}
 
-			if ( $phpmailer->smtpConnect() ) {
-				$phpmailer->smtpClose();
+				if ( $phpmailer->smtpConnect() ) {
+					$phpmailer->smtpClose();
 
-				return true;
-			} else {
-				return false;
+					return true;
+				} else {
+					return false;
+				}
+			} catch ( Exception $ex ) {
+				return $ex->getMessage();
 			}
 		}
 

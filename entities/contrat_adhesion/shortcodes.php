@@ -25,6 +25,11 @@ add_action( 'amapress_init', function () {
 		if ( ! $user_id ) {
 			wp_redirect_and_exit( add_query_arg( 'message', 'cannot_create_user' ) );
 		}
+		if ( isset( $_REQUEST['hidaddr'] ) ) {
+			update_user_meta( $user_id, 'amapress_user_hidaddr', 1 );
+		} else {
+			delete_user_meta( $user_id, 'amapress_user_hidaddr' );
+		}
 
 		$notify_email = get_option( 'admin_email' );
 		if ( ! empty( $_REQUEST['notify_email'] ) ) {
@@ -207,7 +212,6 @@ function amapress_mes_contrats( $atts, $content = null, $tag ) {
 	unset( $atts['allow_coadherents_access'] );
 	unset( $atts['allow_coadherents_adhesion'] );
 	unset( $atts['show_coadherents_address'] );
-	unset( $atts['email'] );
 	if ( isset( $atts['allow_adhesion'] ) ) {
 		$atts['adhesion'] = $atts['allow_adhesion'];
 	} else {
@@ -241,6 +245,7 @@ function amapress_self_inscription( $atts, $content = null, $tag ) {
 			'send_referents'                   => 'true',
 			'allow_inscription_all_dates'      => 'false',
 			'send_tresoriers'                  => 'true',
+			'ignore_renouv_delta'              => 'true',
 			'allow_inscriptions'               => 'true',
 			'allow_new_mail'                   => 'true',
 			'track_no_renews'                  => 'false',
@@ -272,6 +277,7 @@ function amapress_self_inscription( $atts, $content = null, $tag ) {
 		]
 		, $atts );
 
+	$ignore_renouv_delta        = Amapress::toBool( $atts['ignore_renouv_delta'] );
 	$contrat_print_button_text  = $atts['contrat_print_button_text'];
 	$adhesion_print_button_text = $atts['adhesion_print_button_text'];
 	$for_logged                 = Amapress::toBool( $atts['for_logged'] );
@@ -444,7 +450,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 		$contrat_id = intval( $_REQUEST['contrat_id'] );
 
 		Amapress::setFilterForReferent( false );
-		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, null, $ignore_renouv_delta, true );
 		Amapress::setFilterForReferent( true );
 		$adhs             = array_filter( $adhs,
 			function ( $adh ) use ( $all_subscribable_contrats_ids ) {
@@ -474,7 +480,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 		$user_id = intval( $_REQUEST['user_id'] );
 
 		Amapress::setFilterForReferent( false );
-		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, null, $ignore_renouv_delta, true );
 		Amapress::setFilterForReferent( true );
 		$adhs = array_filter( $adhs,
 			function ( $adh ) use ( $all_subscribable_contrats_ids ) {
@@ -687,6 +693,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 		$edit_names               = Amapress::toBool( $atts['edit_names'] ) || empty( $user );
 		$adherents_infos          = '';
 		$adherents_custom_message = '';
+		$hidaddr                  = false;
 
 		if ( $user ) {
 //			if ( is_multisite() ) {
@@ -700,6 +707,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 				$activate_adhesion = false;
 			}
 
+			$hidaddr            = $amapien->isHiddenFromTrombi();
 			$user_message       = 'Vous êtes déjà membre de l’AMAP, vérifiez vos coordonnées :';
 			$user_firt_name     = $user->first_name;
 			$user_last_name     = $user->last_name;
@@ -817,6 +825,14 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
                     <th style="text-align: left; width: auto"><label for="address">Adresse : </label></th>
                     <td><textarea style="width: 100%" rows="4" id="address" name="address"
                                   class=""><?php echo esc_textarea( $user_address ); ?></textarea></td>
+                </tr>
+                <tr>
+                    <th style="text-align: left; width: auto"></th>
+                    <td>
+                        <label for="hidaddr"><input type="checkbox" name="hidaddr" <?php checked( $hidaddr ); ?>
+                                                    id="hidaddr"/> Ne pas apparaître sur le trombinoscope
+                        </label>
+                    </td>
                 </tr>
             </table>
             <div>
@@ -1275,7 +1291,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 		$has_principal_contrat = $user_has_contrat;
 
 		Amapress::setFilterForReferent( false );
-		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, null, $ignore_renouv_delta, true );
 		Amapress::setFilterForReferent( true );
 //		$adhs = array_filter( $adhs,
 //			function ( $adh ) use ( $all_subscribable_contrats_ids ) {
@@ -1831,7 +1847,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 		}
 
 		Amapress::setFilterForReferent( false );
-		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, null, $ignore_renouv_delta, true );
 		Amapress::setFilterForReferent( true );
 
 		$print_title = 'Récapitulatif des sommes dues';
@@ -1915,14 +1931,16 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 			$user_id = intval( $_REQUEST['user_id'] );
 		}
 
+		$by_prod = isset( $_GET['by_prod'] );
+
 		Amapress::setFilterForReferent( false );
-		$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+		$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, null, $ignore_renouv_delta, true );
 		Amapress::setFilterForReferent( true );
 
 		$print_title = 'Récapitulatif des livraisons';
 		echo '<h4>' . esc_html( $print_title ) . '</h4>';
 		$columns = [];
-		if ( isset( $_GET['by_prod'] ) ) {
+		if ( $by_prod ) {
 			$columns[] = array(
 				'title' => 'Producteur',
 				'data'  => array(
@@ -2019,7 +2037,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 				}
 			}
 		}
-		if ( isset( $_GET['by_prod'] ) ) {
+		if ( $by_prod ) {
 			usort( $data, function ( $a, $b ) {
 				return strcmp( $a['prod'], $b['prod'] );
 			} );
@@ -2037,7 +2055,7 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 				'paging'    => false,
 				'searching' => false,
 				'rowGroup'  => [
-					'dataSrc' => isset( $_GET['by_prod'] ) ? 'prod' : 'date_d',
+					'dataSrc' => $by_prod ? 'prod' : 'date_d',
 				]
 			),
 			array(
@@ -2610,6 +2628,10 @@ Vous pouvez configurer l\'email envoyé en fin de chaque inscription <a target="
 				$checked = checked( $edit_inscription && 'vir' == $edit_inscription->getMainPaiementType(), true, false );
 				echo "<label for='cheques-vir' style='font-weight: normal'><input type='radio' name='cheques' id='cheques-vir' $checked value='-2' class='input-nb-cheques required' />Par virement</label><br/>";
 			}
+			if ( $contrat->getAllow_LocalMoney() ) {
+				$checked = checked( $edit_inscription && 'mon' == $edit_inscription->getMainPaiementType(), true, false );
+				echo "<label for='cheques-mon' style='font-weight: normal'><input type='radio' name='cheques' id='cheques-mon' $checked value='-4' class='input-nb-cheques required' />En monnaie locale</label><br/>";
+			}
 			if ( $contrat->getAllowAmapienInputPaiementsDetails() && $total > 0 ) {
 				$amapien  = AmapressUser::getBy( $user_id );
 				$emetteur = esc_attr( $amapien->getDisplayName() );
@@ -2803,6 +2825,9 @@ LE cas écheant, une fois les quota mis à jour, appuyer sur F5 pour terminer l'
 		if ( - 3 == $cheques ) {
 			$meta['amapress_adhesion_pmt_type'] = 'dlv';
 		}
+		if ( - 4 == $cheques ) {
+			$meta['amapress_adhesion_pmt_type'] = 'mon';
+		}
 		if ( ! empty( $quantite_ids ) ) {
 			$meta['amapress_adhesion_contrat_quantite'] = $quantite_ids;
 		}
@@ -2852,7 +2877,7 @@ LE cas écheant, une fois les quota mis à jour, appuyer sur F5 pour terminer l'
 			}
 
 			Amapress::setFilterForReferent( false );
-			$adhs = AmapressAdhesion::getUserActiveAdhesions( $user_id, null, null, false, true );
+			$adhs = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $user_id, null, null, $ignore_renouv_delta, true );
 			Amapress::setFilterForReferent( true );
 			$adhs_contrat_ids                   = array_map( function ( $a ) {
 				/** @var AmapressAdhesion $a */

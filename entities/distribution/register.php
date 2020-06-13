@@ -9,26 +9,29 @@ function amapress_register_entities_distribution( $entities ) {
 	$entities['distribution'] = array(
 		'singular'         => amapress__( 'Distribution hebdomadaire' ),
 		'plural'           => amapress__( 'Distributions hebdomadaires' ),
-		'public'           => true,
+		'public'                   => true,
 //                'logged_or_public' => true,
-		'show_in_menu'     => false,
-		'show_in_nav_menu' => false,
-		'editor'           => false,
-		'title'            => false,
-		'title_format'     => 'amapress_distribution_title_formatter',
-		'slug_format'      => 'from_title',
-		'slug'             => amapress__( 'distributions' ),
-		'redirect_archive' => 'amapress_redirect_agenda',
-		'menu_icon'        => 'dashicons-store',
-		'row_actions'      => array(
-			'emargement'      => [
+		'show_in_menu'             => false,
+		'show_in_nav_menu'         => false,
+		'comments'                 => true,
+		'public_comments'          => false,
+		'editor'                   => false,
+		'title'                    => false,
+		'title_format'             => 'amapress_distribution_title_formatter',
+		'slug_format'              => 'from_title',
+		'slug'                     => amapress__( 'distributions' ),
+		'redirect_archive'         => 'amapress_redirect_agenda',
+		'menu_icon'                => 'dashicons-store',
+		'other_def_hidden_columns' => array( 'amps_lo', 'comments' ),
+		'row_actions'              => array(
+			'emargement'             => [
 				'label'  => 'Liste émargement',
 				'target' => '_blank',
 				'href'   => function ( $dist_id ) {
 					return AmapressDistribution::getBy( $dist_id )->getListeEmargementHref();
 				},
 			],
-			'quant_prod'      => [
+			'quant_prod'             => [
 				'label'  => 'Quantités producteurs',
 				'target' => '_blank',
 				'href'   => function ( $dist_id ) {
@@ -37,7 +40,7 @@ function amapress_register_entities_distribution( $entities ) {
 						admin_url( 'admin.php?page=contrats_quantites_next_distrib' ) );
 				},
 			],
-			'mailto_resp'     => [
+			'mailto_resp'            => [
 				'label'     => 'Email aux responsables',
 				'target'    => '_blank',
 				'confirm'   => true,
@@ -53,7 +56,7 @@ function amapress_register_entities_distribution( $entities ) {
 				},
 				'show_on'   => 'editor',
 			],
-			'smsto_resp'      => [
+			'smsto_resp'             => [
 				'label'     => 'SMS aux responsables',
 				'target'    => '_blank',
 				'confirm'   => true,
@@ -69,28 +72,24 @@ function amapress_register_entities_distribution( $entities ) {
 				},
 				'show_on'   => 'editor',
 			],
-			'mailto_amapiens' => [
+			'mailto_amapiens'        => [
 				'label'   => 'Email aux amapiens',
 				'target'  => '_blank',
-				'confirm' => true,
-				'href'    => function ( $dist_id ) {
-					$dist = AmapressDistribution::getBy( $dist_id );
-
-					return $dist->getMailtoAmapiens();
-				},
+//				'confirm' => true,
+				'href'    => admin_url( 'admin.php?page=amapress_messages_page' ),
 				'show_on' => 'editor',
 			],
-			'smsto_amapiens'         => [
-				'label'   => 'Sms aux amapiens',
-				'target'  => '_blank',
-				'confirm' => true,
-				'href'    => function ( $dist_id ) {
-					$dist = AmapressDistribution::getBy( $dist_id );
-
-					return $dist->getSMStoAmapiens();
-				},
-				'show_on' => 'editor',
-			],
+//			'smsto_amapiens'         => [
+//				'label'   => 'Sms aux amapiens',
+//				'target'  => '_blank',
+//				'confirm' => true,
+//				'href'    => function ( $dist_id ) {
+//					$dist = AmapressDistribution::getBy( $dist_id );
+//
+//					return $dist->getSMStoAmapiens();
+//				},
+//				'show_on' => 'editor',
+//			],
 			'resend_liste_to_resp'   => [
 				'label'   => 'Renvoyer la liste d\'émargement aux responsables',
 				'show_on' => 'editor',
@@ -101,6 +100,18 @@ function amapress_register_entities_distribution( $entities ) {
 				'show_on' => 'editor',
 				'confirm' => true,
 			],
+		),
+		'edit_header'      => function ( $post ) {
+			if ( TitanFrameworkOption::isOnNewScreen() ) {
+				echo amapress_get_admin_notice(
+					'L\'ajout d\'une distribution ne doit se faire que si une distribution exceptionnelle a lieu en dehors des distributions plannifiées !',
+					'warning', false
+				);
+			}
+		},
+		'labels'           => array(
+			'add_new'      => 'Planifier une distribution exceptionnelle',
+			'add_new_item' => 'Nouvelle distribution exceptionnelle',
 		),
 		'views'            => array(
 			'remove' => array( 'mine' ),
@@ -124,7 +135,9 @@ function amapress_register_entities_distribution( $entities ) {
 					'custom_options' => 'amapress_get_active_contrat_month_options'
 				),
 				'group'      => 'Infos',
-				'readonly'   => true,
+				'readonly'   => function ( $post_id ) {
+					return ! TitanFrameworkOption::isOnNewScreen();
+				},
 				'desc'       => 'Date de distribution',
 			),
 			'lieu' => array(
@@ -138,7 +151,9 @@ function amapress_register_entities_distribution( $entities ) {
 					'name'        => 'amapress_lieu',
 					'placeholder' => 'Toutes les lieux',
 				),
-				'readonly'   => true,
+				'readonly'   => function ( $post_id ) {
+					return ! TitanFrameworkOption::isOnNewScreen();
+				},
 				'desc'       => 'Lieu de distribution',
 				'searchable' => true,
 			),
@@ -283,6 +298,17 @@ function amapress_register_entities_distribution( $entities ) {
 					);
 				},
 //                'searchable' => true,
+			),
+
+			'gardiens' => array(
+				'name'         => amapress__( 'Gardiens de paniers' ),
+				'group'        => '2/ Responsables',
+				'type'         => 'select-users',
+				'autocomplete' => true,
+				'multiple'     => true,
+				'tags'         => true,
+				'desc'         => 'Amapiens se proposant de garder des paniers',
+				'readonly'     => true,
 			),
 
 			'info' => array(
@@ -497,4 +523,41 @@ function amapress_distribution_hours_setter() {
 	echo '</ul>';
 
 	TitanFrameworkOptionDate::createCalendarScript();
+}
+
+function amapress_gardiens_paniers_map( $dist_id, $show_email = true, $show_tel = true, $show_address = false ) {
+	if ( ! amapress_is_user_logged_in() ) {
+		return '';
+	}
+
+	$dist = AmapressDistribution::getBy( $dist_id );
+
+	$me_id = amapress_current_user_id();
+
+	$markers = array();
+	foreach ( $dist->getGardiens() as $user ) {
+		if ( ! $user->isAdresse_localized() ) {
+			continue;
+		}
+		$markers[] = array(
+			'longitude' => $user->getUserLongitude(),
+			'latitude'  => $user->getUserLatitude(),
+			'url'       => ( $show_email ? 'mailto:' . $user->getEmail() : null ),
+			'title'     => $user->getDisplayName(),
+			'icon'      => ( $user->ID == $me_id ? 'man' : 'green' ),
+			'content'   => $user->getDisplay( [
+				'show_email'      => $show_email,
+				'show_tel'        => $show_tel,
+				'show_tel_fixe'   => $show_tel,
+				'show_tel_mobile' => $show_tel,
+				'show_adresse'    => $show_address,
+				'show_avatar'     => 'default',
+			] ),
+		);
+	}
+
+	if ( empty( $markers ) ) {
+		return '';
+	}
+	return amapress_generate_map( $markers, 'map' );
 }

@@ -18,6 +18,8 @@ class TitanFrameworkOptionEventScheduler extends TitanFrameworkOption {
 		'hook_args_generator' => null,
 		'show_desc'           => true,
 		'bare'                => false,
+		'show_after'          => false,
+		'show_before'         => true,
 		'show_resend_links'   => true,
 		'show_test_links'     => true,
 	);
@@ -64,7 +66,7 @@ class TitanFrameworkOptionEventScheduler extends TitanFrameworkOption {
 
 		do_action( 'tf_scheduler_option_changed', $this->getID(), $this );
 
-		$this->updateScheduler();
+		$this->updateScheduler( true );
 
 		return $ret;
 	}
@@ -80,11 +82,11 @@ class TitanFrameworkOptionEventScheduler extends TitanFrameworkOption {
 	public static function updateAllSchedulers() {
 		/** @var TitanFrameworkOptionEventScheduler $option */
 		foreach ( self::$scheduler_options as $option ) {
-			$option->updateScheduler();
+			$option->updateScheduler( false );
 		}
 	}
 
-	private function updateScheduler() {
+	private function updateScheduler( $from_save ) {
 		$hook_name           = $this->settings['hook_name'];
 		$hook_args_generator = $this->settings['hook_args_generator'];
 		if ( ! empty( $hook_name ) && ! empty( $hook_args_generator ) ) {
@@ -93,14 +95,20 @@ class TitanFrameworkOptionEventScheduler extends TitanFrameworkOption {
 				[];
 			if ( ! empty( $all_args ) ) {
 				$value = $this->getValue();
+				if ( $from_save ) {
+					$this->clear_all_scheduled_hook( $hook_name );
+				}
+				foreach ( $all_args as $args ) {
+					wp_clear_scheduled_hook( $hook_name, $args );
+				}
 				if ( isset( $value['enabled'] ) && $value['enabled'] ) {
 					foreach ( $all_args as $args ) {
 						if ( ! isset( $args['time'] ) ) {
 							continue;
 						}
-						$time = $args['time'];
+						$time              = $args['time'];
+						$args['option_id'] = $this->getID();
 						unset( $args['time'] );
-						wp_clear_scheduled_hook( $hook_name, $args );
 						$event_date = self::getEventDateTime( $time, $value );
 						if ( $event_date > time() ) {
 							wp_schedule_single_event( $event_date, $hook_name, [ $args ] );
@@ -109,6 +117,39 @@ class TitanFrameworkOptionEventScheduler extends TitanFrameworkOption {
 				}
 			}
 		}
+	}
+
+	private function clear_all_scheduled_hook( $hook ) {
+		if ( function_exists( '_get_cron_array' ) && function_exists( '_set_cron_array' ) ) {
+			$crons = _get_cron_array();
+			if ( empty( $crons ) ) {
+				return 0;
+			}
+
+			$results = 0;
+			foreach ( $crons as $timestamp => $cron ) {
+				if ( isset( $cron[ $hook ] ) ) {
+					foreach ( $crons[ $timestamp ][ $hook ] as $key => $value ) {
+						if ( empty( $value['args'][0]['option_id'] ) || $this->getID() == $value['args'][0]['option_id'] ) {
+							$results += 1;
+							unset( $crons[ $timestamp ][ $hook ][ $key ] );
+						}
+					}
+					if ( empty( $crons[ $timestamp ][ $hook ] ) ) {
+						unset( $crons[ $timestamp ][ $hook ] );
+					}
+				}
+				if ( empty( $crons[ $timestamp ] ) ) {
+					unset( $crons[ $timestamp ] );
+				}
+			}
+
+			_set_cron_array( $crons );
+
+			return $results;
+		}
+
+		return false;
 	}
 
 	/** @return int */
@@ -203,13 +244,23 @@ class TitanFrameworkOptionEventScheduler extends TitanFrameworkOption {
 	public function display( $postID = null ) {
 		$value = $this->getValue( $postID );
 
-		$days_input          = '<span><input id="' . $this->getID() . '-days" name="' . $this->getID() . '-days" type="number" style="width: 3em" class="number required" min="0" step="1" value="' . $value['days'] . '" ' . disabled( ! $value['enabled'], true, false ) . ' /></span>';
-		$hours_minutes_input = '<span><input id="' . $this->getID() . '-hours" name="' . $this->getID() . '-hours" type="number" style="width: 3em"  class="number required" min="0" max="23" step="1" value="' . $value['hours'] . '" ' . disabled( ! $value['enabled'], true, false ) . ' />h<input id="' . $this->getID() . '-minutes" name="' . $this->getID() . '-minutes" type="number" style="width: 3em"  class="number required" min="0" max="59" step="1" value="' . $value['minutes'] . '" ' . disabled( ! $value['enabled'], true, false ) . ' /></span>';
+		$days_input          = '<span><input id="' . $this->getID() . '-days" name="' . $this->getID() . '-days" type="number" style="width: 4em" class="number required" min="0" step="1" value="' . $value['days'] . '" ' . disabled( ! $value['enabled'], true, false ) . ' /></span>';
+		$hours_minutes_input = '<span><input id="' . $this->getID() . '-hours" name="' . $this->getID() . '-hours" type="number" style="width: 4em"  class="number required" min="0" max="23" step="1" value="' . $value['hours'] . '" ' . disabled( ! $value['enabled'], true, false ) . ' />h<input id="' . $this->getID() . '-minutes" name="' . $this->getID() . '-minutes" type="number" style="width: 4em"  class="number required" min="0" max="59" step="1" value="' . $value['minutes'] . '" ' . disabled( ! $value['enabled'], true, false ) . ' /></span>';
 		$pos_input           = '<select id="' . $this->getID() . '-pos" style="width: 5em;min-width: 5em" name="' . $this->getID() . '-pos" class="required" ' . disabled( ! $value['enabled'], true, false ) . '>' .
-		                       tf_parse_select_options( [
-			                       'before' => 'avant',
-			                       'after'  => 'après',
-		                       ], [ $value['pos'] ], false ) .
+		                       tf_parse_select_options(
+			                       ( ! $this->settings['show_after'] ?
+				                       [
+					                       'before' => 'avant',
+				                       ]
+				                       : ( ! $this->settings['show_before'] ?
+					                       [
+						                       'after' => 'après',
+					                       ]
+					                       :
+					                       [
+						                       'before' => 'avant',
+						                       'after'  => 'après',
+					                       ] ) ), [ $value['pos'] ], false ) .
 		                       '</select>';
 		$weekday_input       = '<select id="' . $this->getID() . '-pos" style="width: 5em;min-width: 5em" name="' . $this->getID() . '-pos" class="required" ' . disabled( ! $value['enabled'], true, false ) . '>' .
 		                       tf_parse_select_options( [
@@ -262,37 +313,50 @@ jQuery(function($) {
 					if ( ! isset( $args['time'] ) ) {
 						continue;
 					}
-					unset( $args['time'] );
 					if ( ! empty( $args['title'] ) ) {
 						$hooks[] = [
 							'hook_name' => $hook_name,
 							'title'     => $args['title'],
+							'time'      => $args['time'],
 							'args'      => json_encode( [ $args ] )
 						];
 					}
+					unset( $args['time'] );
 				}
 			}
 		}
 		$links = '';
 		if ( $this->settings['show_resend_links'] && ! empty( $hooks ) ) {
 			$links .= '<p>Liens de renvoi: ' . implode( ', ', array_map(
-					function ( $hook ) {
+					function ( $hook ) use ( $value ) {
 						$hook['action'] = 'tf_event_scheduler_resend';
 						$href           = esc_attr( add_query_arg( $hook, admin_url( 'admin-post.php' ) ) );
 						$title          = esc_html( $hook['title'] );
+						$sent_on        = ! empty( $value['enabled'] ) ? self::getEventDateTime( $hook['time'], $value ) : 0;
+						if ( $sent_on ) {
+							$sent_on = 'envoyé le ' . date_i18n( 'd/m/Y', $sent_on );
+						} else {
+							$sent_on = 'non programmé';
+						}
 
-						return "<a href='$href' target='_blank'>$title</a>";
+						return "<a href='$href' target='_blank'>$title ($sent_on)</a>";
 					}, $hooks ) ) . '</p>';
 		}
 
 		if ( $this->settings['show_test_links'] && ! empty( $hooks ) ) {
 			$links .= '<p>Liens de test: ' . implode( ', ', array_map(
-					function ( $hook ) {
+					function ( $hook ) use ( $value ) {
 						$hook['action'] = 'tf_event_scheduler_test';
 						$href           = esc_attr( add_query_arg( $hook, admin_url( 'admin-post.php' ) ) );
 						$title          = esc_html( $hook['title'] );
+						$sent_on        = ! empty( $value['enabled'] ) ? self::getEventDateTime( $hook['time'], $value ) : 0;
+						if ( $sent_on ) {
+							$sent_on = 'envoyé le ' . date_i18n( 'd/m/Y', $sent_on );
+						} else {
+							$sent_on = 'non programmé';
+						}
 
-						return "<a href='$href' target='_blank'>$title</a>";
+						return "<a href='$href' target='_blank'>$title ($sent_on)</a>";
 					}, $hooks ) ) . '</p>';
 		}
 

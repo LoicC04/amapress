@@ -76,9 +76,12 @@ class AmapressIntermittence_panier extends Amapress_EventBase {
 	public function getPaniersDescription() {
 		$quantites = array();
 		foreach ( $this->getContrat_instances() as $contrat_instance ) {
-			$adhesions = AmapressAdhesion::getUserActiveAdhesions( $this->getAdherent()->ID, $contrat_instance->ID );
+			$adhesions = AmapressAdhesion::getUserActiveAdhesionsWithAllowPartialCheck( $this->getAdherent()->ID, $contrat_instance->ID );
 			/** @var AmapressAdhesion $adhesion */
 			$adhesion    = array_shift( $adhesions );
+			if ( ! $adhesion ) {
+				continue;
+			}
 			$quantites[] = $contrat_instance->getModelTitle() .
 			               '(' . $adhesion->getContrat_quantites_AsString( $this->getDate() ) . ')';
 		}

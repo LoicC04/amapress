@@ -174,9 +174,12 @@ class Amapress {
 		return '<a href="' . esc_attr( $url ) . '"' . ( $blank ? ' target="_blank"' : '' ) . '>' . ( $escape_title ? esc_html( $title ) : $title ) . '</a>';
 	}
 
-	public static function makeButtonLink( $url, $title = null, $escape_title = true, $blank = false, $classes = 'button button-secondary' ) {
+	public static function makeButtonLink( $url, $title = null, $escape_title = true, $blank = false, $classes = null ) {
 		if ( empty( $title ) ) {
 			$title = $url;
+		}
+		if ( empty( $classes ) ) {
+			$classes = is_admin() ? 'button button-secondary' : 'btn btn-default';
 		}
 
 		return '<a class="' . $classes . '" href="' . esc_attr( $url ) . '"' . ( $blank ? ' target="_blank"' : '' ) . '>' . ( $escape_title ? esc_html( $title ) : $title ) . '</a>';
@@ -405,21 +408,24 @@ class Amapress {
 				'edit'          => false,
 				'delete'        => false,
 				'publish'       => false,
-				'delete_others' => false,
+				'edit_others'   => null,
+				'delete_others' => null,
 			) );
 
-		$read    = $args['read'];
-		$edit    = $args['edit'];
-		$delete  = $args['delete'];
-		$publish = $args['publish'];
-//        $delete_others = $args['delete_others'];
+		$read          = $args['read'];
+		$edit          = $args['edit'];
+		$delete        = $args['delete'];
+		$publish       = $args['publish'];
+		$delete_others = $args['delete_others'];
+		if ( null === $delete_others ) {
+			$delete_others = $delete;
+		}
+		$edit_others = $args['edit_others'];
+		if ( null === $edit_others ) {
+			$edit_others = $edit;
+		}
 
 		$admins = get_role( $role_name );
-
-//        $pts = AmapressEntities::getPostTypes();
-//        $pt = $pts[$singular];
-//        $name = isset($pt['internal_name']) ? $pt['internal_name'] : 'amps_'. $singular;
-//        $plural = $singular . 's';
 
 		if ( $read ) {
 			$admins->add_cap( 'read_' . $singular );
@@ -433,12 +439,15 @@ class Amapress {
 			$admins->add_cap( 'edit_' . $plural );
 			$admins->add_cap( 'edit_published_' . $plural );
 			$admins->add_cap( 'edit_private_' . $plural );
-			$admins->add_cap( 'edit_others_' . $plural );
 		} else {
 			$admins->remove_cap( 'edit_' . $singular );
 			$admins->remove_cap( 'edit_' . $plural );
 			$admins->remove_cap( 'edit_published_' . $plural );
 			$admins->remove_cap( 'edit_private_' . $plural );
+		}
+		if ( $edit_others ) {
+			$admins->add_cap( 'edit_others_' . $plural );
+		} else {
 			$admins->remove_cap( 'edit_others_' . $plural );
 		}
 		if ( $publish ) {
@@ -456,15 +465,18 @@ class Amapress {
 				$admins->remove_cap( 'delete_' . $singular );
 			}
 			$admins->add_cap( 'delete_' . $plural );
-			$admins->add_cap( 'delete_others_' . $plural );
 			$admins->add_cap( 'delete_private_' . $plural );
 			$admins->add_cap( 'delete_published_' . $plural );
 		} else {
 			$admins->remove_cap( 'delete_' . $singular );
 			$admins->remove_cap( 'delete_' . $plural );
-			$admins->remove_cap( 'delete_others_' . $plural );
 			$admins->remove_cap( 'delete_private_' . $plural );
 			$admins->remove_cap( 'delete_published_' . $plural );
+		}
+		if ( $delete_others ) {
+			$admins->add_cap( 'delete_others_' . $plural );
+		} else {
+			$admins->remove_cap( 'delete_others_' . $plural );
 		}
 	}
 
@@ -638,7 +650,7 @@ class Amapress {
 			'read'    => true,
 			'edit'    => true,
 			'delete'  => false,
-			'publish' => false,
+			'publish' => true,
 		) );
 		self::add_post_role( 'administrator', 'recette', 'recettes', array(
 			'read'          => true,
@@ -797,16 +809,18 @@ class Amapress {
 			'publish' => false,
 		) );
 		self::add_post_role( 'producteur', 'recette', 'recettes', array(
-			'read'    => true,
-			'edit'    => true,
-			'delete'  => false,
-			'publish' => true,
+			'read'          => true,
+			'edit'          => true,
+			'delete'        => true,
+			'publish'       => true,
+			'delete_others' => false,
 		) );
 		self::add_post_role( 'producteur', 'post', 'posts', array(
-			'read'    => true,
-			'edit'    => true,
-			'delete'  => false,
-			'publish' => false,
+			'read'          => true,
+			'edit'          => true,
+			'delete'        => true,
+			'publish'       => false,
+			'delete_others' => false,
 		) );
 
 		$r = get_role( 'producteur' );
@@ -916,10 +930,11 @@ class Amapress {
 			'publish' => true,
 		) );
 		self::add_post_role( 'tresorier', 'post', 'posts', array(
-			'read'    => true,
-			'edit'    => true,
-			'delete'  => true,
-			'publish' => true,
+			'read'          => true,
+			'edit'          => true,
+			'delete'        => true,
+			'publish'       => true,
+			'delete_others' => false,
 		) );
 		self::add_post_role( 'tresorier', 'mailing_group', 'mailing_groups', array(
 			'read'    => true,
@@ -1067,10 +1082,11 @@ class Amapress {
 			'publish' => true,
 		) );
 		self::add_post_role( 'coordinateur_amap', 'post', 'posts', array(
-			'read'    => true,
-			'edit'    => true,
-			'delete'  => true,
-			'publish' => true,
+			'read'          => true,
+			'edit'          => true,
+			'delete'        => true,
+			'publish'       => true,
+			'delete_others' => false,
 		) );
 		self::add_post_role( 'coordinateur_amap', 'page', 'pages', array(
 			'read'    => true,
@@ -1082,8 +1098,8 @@ class Amapress {
 		self::add_post_role( 'coordinateur_amap', 'adhesion_request', 'adhesion_requests', array(
 			'read'    => true,
 			'edit'    => true,
-			'delete'  => false,
-			'publish' => false,
+			'delete'  => true,
+			'publish' => true,
 		) );
 		self::add_post_role( 'coordinateur_amap', 'mailinglist', 'mailinglists', array(
 			'read'    => true,
@@ -1152,10 +1168,11 @@ class Amapress {
 			'publish' => true,
 		) );
 		self::add_post_role( 'redacteur_amap', 'post', 'posts', array(
-			'read'    => true,
-			'edit'    => true,
-			'delete'  => true,
-			'publish' => true,
+			'read'          => true,
+			'edit'          => true,
+			'delete'        => true,
+			'publish'       => true,
+			'delete_others' => false,
 		) );
 
 		$r = get_role( 'redacteur_amap' );
@@ -1204,7 +1221,7 @@ class Amapress {
 		self::add_post_role( 'responsable_amap', 'adhesion_request', 'adhesion_requests', array(
 			'read'    => true,
 			'edit'    => true,
-			'delete'  => false,
+			'delete'  => true,
 			'publish' => true,
 		) );
 //        self::add_post_role('responsable_amap', 'contrat_paiement', 'contrat_paiements', $read = true, $edit = true, $delete = false);
@@ -1325,8 +1342,8 @@ class Amapress {
 		self::add_post_role( 'responsable_amap', 'post', 'posts', array(
 			'read'    => true,
 			'edit'    => true,
-			'delete'  => false,
-			'publish' => false,
+			'delete'  => true,
+			'publish' => true,
 		) );
 
 		self::add_post_role( 'responsable_amap', 'adhesion_request', 'adhesion_requests', array(
@@ -1523,8 +1540,8 @@ class Amapress {
 		self::add_post_role( 'referent', 'adhesion_request', 'adhesion_requests', array(
 			'read'    => true,
 			'edit'    => true,
-			'delete'  => false,
-			'publish' => false,
+			'delete'  => true,
+			'publish' => true,
 		) );
 		self::add_post_role( 'referent', 'mailinglist', 'mailinglists', array(
 			'read'    => true,
@@ -1834,6 +1851,7 @@ class Amapress {
 				$scope['public']            = true;
 				$scope['has_archive']       = true;
 				$scope['show_in_nav_menus'] = true;
+				$scope['show_in_admin_bar'] = true;
 			}
 			if ( $conf['public'] === 'adminonly' ) {
 				$scope['public']            = false;
@@ -1848,6 +1866,9 @@ class Amapress {
 			}
 			if ( array_key_exists( 'show_in_nav_menu', $conf ) && $conf['show_in_nav_menu'] === false ) {
 				$scope['show_in_nav_menus'] = false;
+			}
+			if ( array_key_exists( 'show_in_admin_bar', $conf ) && $conf['show_in_admin_bar'] === false ) {
+				$scope['show_in_admin_bar'] = false;
 			}
 			if ( array_key_exists( 'has_archive', $conf ) ) {
 				$scope['has_archive'] = $conf['has_archive'];
@@ -1871,6 +1892,9 @@ class Amapress {
 			}
 			if ( array_key_exists( 'excerpt', $conf ) && $conf['excerpt'] === true ) {
 				$supports[] = 'excerpt';
+			}
+			if ( array_key_exists( 'comments', $conf ) && $conf['comments'] === true ) {
+				$supports[] = 'comments';
 			}
 
 			if ( array_key_exists( 'slug', $conf ) && ! empty( $conf['slug'] ) ) {
@@ -2127,6 +2151,7 @@ class Amapress {
 		$generated_ids      = [];
 		$around_address_lat = Amapress::get_lieux()[0]->getAdresseLatitude();
 		$around_address_lng = Amapress::get_lieux()[0]->getAdresseLongitude();
+		$relative_time      = 0;
 
 		$user_roles_terms = AmapDemoBase::dumpTerms( AmapressUser::AMAP_ROLE );
 		$produits_terms   = AmapDemoBase::dumpTerms( AmapressProduit::CATEGORY );
@@ -2153,7 +2178,7 @@ class Amapress {
 			unset( $usermeta['amapress_user_allow_show_tel_mobile'] );
 			unset( $usermeta['amapress_user_allow_show_avatar'] );
 		};
-		$update_post_callback = function ( $post, &$postdata, &$postmeta ) {
+		$update_post_callback = function ( $post, &$postdata, &$postmeta ) use ( $relative_time ) {
 			if ( AmapressLieu_distribution::INTERNAL_POST_TYPE == $post['post_type'] ) {
 //'amapress_lieu_distribution_adresse
 //'amapress_lieu_distribution_code_postal
@@ -2178,6 +2203,21 @@ class Amapress {
 					}
 					$postmeta['amapress_adhesion_contrat_quantite'] = $arr2;
 				}
+				if ( ! empty( $postmeta['amapress_adhesion_panier_variables'] ) ) {
+					$rt = $relative_time;
+					if ( ! $rt ) {
+						$rt = amapress_time();
+					}
+					$new_paniers = [];
+					foreach ( $postmeta['amapress_adhesion_panier_variables'] as $k => $v ) {
+						$new_date_panier = [];
+						foreach ( $v as $kk => $vv ) {
+							$new_date_panier["posts[$kk]"] = $vv;
+						}
+						$new_paniers[ 'now+' . ( intval( $k ) - Amapress::start_of_day( $rt ) ) ] = $new_date_panier;
+					}
+					$postmeta['amapress_adhesion_panier_variables'] = $new_paniers;
+				}
 				if ( isset( $postmeta['amapress_adhesion_contrat_quantite_factors'] ) ) {
 					$arr  = $postmeta['amapress_adhesion_contrat_quantite_factors'];
 					$arr2 = [];
@@ -2193,7 +2233,6 @@ class Amapress {
 			unset( $postmeta['amapress_lieu_distribution_instructions_privee'] );
 			unset( $postmeta['amapress_lieu_distribution_contact_externe'] );
 		};
-		$relative_time        = 0;
 		$media                = [];
 
 

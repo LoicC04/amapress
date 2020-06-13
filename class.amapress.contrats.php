@@ -84,13 +84,10 @@ class AmapressContrats {
 		                 //|| count($commands[$contrat_id]['orphan']) > 0
 		                 || count( $paniers[ $contrat_id ] ) > 0;
 
-		return sprintf( 'Distributions : %d manquantes ; %d à associer ; %d à déassocier\n
-                        Paniers : %d manquants\n
-                        Comandes : %d manquants ; %d à annuler',
+		return sprintf( "Distributions : %d manquantes ; %d à associer ; %d à déassocier\n
+                        Paniers : %d manquants",
 			count( $dists[ $contrat_id ]['missing'] ), count( $dists[ $contrat_id ]['associate'] ), count( $dists[ $contrat_id ]['unassociate'] ),
-			count( $paniers[ $contrat_id ] ),
-			0, //count($commands[$contrat_id]['missing']),
-			0 //count($commands[$contrat_id]['orphan'])
+			count( $paniers[ $contrat_id ] )
 		);
 	}
 
@@ -1098,7 +1095,7 @@ class AmapressContrats {
 	private static $related_user_cache = [];
 
 	/* @return int[] */
-	public static function get_related_users( $user_id, $allow_not_logged = false, $date = null ) {
+	public static function get_related_users( $user_id, $allow_not_logged = false, $date = null, $contrat_id = null ) {
 		if ( ! $allow_not_logged && ! amapress_is_user_logged_in() ) {
 			return [];
 		}
@@ -1109,7 +1106,7 @@ class AmapressContrats {
 
 		$date = Amapress::end_of_day( $date );
 
-		$key = "amapress_get_related_users_{$user_id}_{$date}";
+		$key = "amapress_get_related_users_{$user_id}_{$date}_{$contrat_id}";
 		$res = wp_cache_get( $key );
 		if ( false === $res ) {
 			$res  = array( $user_id );
@@ -1128,7 +1125,7 @@ class AmapressContrats {
 			}
 
 			$active_contrat_instances_ids = amapress_prepare_in_sql(
-				AmapressContrats::get_active_contrat_instances_ids( null, $date, true ) );
+				AmapressContrats::get_active_contrat_instances_ids( $contrat_id, $date, true ) );
 			if ( amapress_current_user_id() == $user_id ) {
 				$in = amapress_prepare_in_sql( $res );
 
@@ -1158,9 +1155,10 @@ OR ( mt2.meta_key = 'amapress_adhesion_date_fin'
 AND CAST(mt2.meta_value AS UNSIGNED) >= $date ) )"
 					) );
 			} else {
-				if ( empty( self::$related_user_cache[ $date ] ) ) {
+				$rel_key = "{$date}_{$contrat_id}";
+				if ( empty( self::$related_user_cache[ $rel_key ] ) ) {
 					global $wpdb;
-					self::$related_user_cache[ $date ] = array_group_by(
+					self::$related_user_cache[ $rel_key ] = array_group_by(
 						$wpdb->get_results(
 							"SELECT DISTINCT mt3.meta_value as user_id, $wpdb->postmeta.meta_value
 FROM $wpdb->postmeta
@@ -1188,8 +1186,8 @@ AND CAST(mt2.meta_value AS UNSIGNED) >= $date ) )"
 						} );
 				}
 
-				if ( isset( self::$related_user_cache[ $date ][ $user_id ] ) ) {
-					foreach ( self::$related_user_cache[ $date ][ $user_id ] as $o ) {
+				if ( isset( self::$related_user_cache[ $rel_key ][ $user_id ] ) ) {
+					foreach ( self::$related_user_cache[ $rel_key ][ $user_id ] as $o ) {
 						if ( ! $o->user_id || in_array( $o->user_id, $res ) ) {
 							continue;
 						}

@@ -130,8 +130,8 @@ Tout email envoyé à ces comptes email spécifiques seront (après modération 
 							'subpage'  => true,
 							'id'       => 'mailinggroup_moderation',
 							'settings' => array(
-								'name'       => 'Emails en attente [waiting-mlgrp-count]',
-								'menu_title' => 'Emails en attente [waiting-mlgrp-count]',
+								'name'       => 'Modération - Emails en attente [waiting-mlgrp-count]',
+								'menu_title' => 'Modération [waiting-mlgrp-count]',
 								'capability' => 'read_mailing_group',
 								'menu_icon'  => 'dashicons-shield',
 							),
@@ -193,6 +193,120 @@ Tout email envoyé à ces comptes email spécifiques seront (après modération 
 												'type'   => 'custom',
 												'custom' => function () use ( $ml_id ) {
 													return amapress_get_mailing_group_archive_list( $ml_id, 'accepted' );
+												},
+											),
+										)
+									);
+								}
+
+								return $tabs;
+							},
+						),
+						array(
+							'subpage'  => true,
+							'id'       => 'mailinggroup_mailqueue',
+							'settings' => array(
+								'name'       => 'Emails sortants en attente',
+								'menu_title' => 'Files attente',
+								'capability' => 'read_mailing_group',
+								'menu_icon'  => 'dashicons-clock',
+							),
+							'options'  => array(),
+							'tabs'     => function () {
+								$tabs = array();
+								$mls  = AmapressMailingGroup::getAll();
+								usort( $mls, function ( $a, $b ) {
+									return strcmp( $a->getSimpleName(), $b->getSimpleName() );
+								} );
+								foreach ( $mls as $ml ) {
+									$ml_id                                                       = $ml->ID;
+									$tabs[ $ml->getName() . amapress__( ' - File d\'attente' ) ] = array(
+										'id'      => 'mailgrp-mailqueue-tab-' . $ml_id,
+										'desc'    => '',
+										'options' => array(
+											array(
+												'id'     => 'mailgrp-mailqueue-' . $ml_id,
+												'name'   => 'File d\'attente',
+												'bare'   => true,
+												'type'   => 'custom',
+												'custom' => function () use ( $ml_id ) {
+													return amapress_mailing_queue_waiting_mail_list( $ml_id );
+												},
+											),
+										)
+									);
+								}
+
+								return $tabs;
+							},
+						),
+						array(
+							'subpage'  => true,
+							'id'       => 'mailinggroup_mailerrors',
+							'settings' => array(
+								'name'       => 'Emails sortants en erreur',
+								'menu_title' => 'Erreurs',
+								'capability' => 'read_mailing_group',
+								'menu_icon'  => 'dashicons-dismiss',
+							),
+							'options'  => array(),
+							'tabs'     => function () {
+								$tabs = array();
+								$mls  = AmapressMailingGroup::getAll();
+								usort( $mls, function ( $a, $b ) {
+									return strcmp( $a->getSimpleName(), $b->getSimpleName() );
+								} );
+								foreach ( $mls as $ml ) {
+									$ml_id                                               = $ml->ID;
+									$tabs[ $ml->getName() . amapress__( ' - Erreurs' ) ] = array(
+										'id'      => 'mailgrp-mailerrors-tab-' . $ml_id,
+										'desc'    => '',
+										'options' => array(
+											array(
+												'id'     => 'mailgrp-mailerrors-' . $ml_id,
+												'name'   => 'Erreurs',
+												'bare'   => true,
+												'type'   => 'custom',
+												'custom' => function () use ( $ml_id ) {
+													return amapress_mailing_queue_errored_mail_list( $ml_id );
+												},
+											),
+										)
+									);
+								}
+
+								return $tabs;
+							},
+						),
+						array(
+							'subpage'  => true,
+							'id'       => 'mailinggroup_maillog',
+							'settings' => array(
+								'name'       => 'Log des emails sortants',
+								'menu_title' => 'Logs',
+								'capability' => 'read_mailing_group',
+								'menu_icon'  => 'dashicons-text-page',
+							),
+							'options'  => array(),
+							'tabs'     => function () {
+								$tabs = array();
+								$mls  = AmapressMailingGroup::getAll();
+								usort( $mls, function ( $a, $b ) {
+									return strcmp( $a->getSimpleName(), $b->getSimpleName() );
+								} );
+								foreach ( $mls as $ml ) {
+									$ml_id                                            = $ml->ID;
+									$tabs[ $ml->getName() . amapress__( ' - Logs' ) ] = array(
+										'id'      => 'mailgrp-maillog-tab-' . $ml_id,
+										'desc'    => '',
+										'options' => array(
+											array(
+												'id'     => 'mailgrp-maillog-' . $ml_id,
+												'name'   => 'Logs',
+												'bare'   => true,
+												'type'   => 'custom',
+												'custom' => function () use ( $ml_id ) {
+													return amapress_mailing_queue_logged_mail_list( $ml_id );
 												},
 											),
 										)
@@ -625,6 +739,11 @@ Tout email envoyé à ces comptes email spécifiques seront (après modération 
 									'desc'    => '',
 									'options' => amapress_distribution_responsable_recall_options(),
 								),
+								'Emails - Gardiens de paniers - Rappel'                           => array(
+									'id'      => 'amp_tab_recall_gardien_paniers',
+									'desc'    => '',
+									'options' => amapress_distribution_gardiens_recall_options(),
+								),
 								'Emails - Vérification de distribution - Rappel'                  => array(
 									'id'      => 'amp_tab_recall_verif_distrib',
 									'desc'    => '',
@@ -688,6 +807,93 @@ Tout email envoyé à ces comptes email spécifiques seront (après modération 
 									'id'      => 'amp_tab_role_resp_distrib',
 									'desc'    => '',
 									'options' => amapress_distribution_responsable_roles_options(),
+								),
+								'Gardiens de paniers'                    => array(
+									'id'      => 'amp_tab_gardiens_paniers_distrib',
+									'desc'    => '',
+									'options' => [
+										array(
+											'id'   => 'enable-gardiens-paniers',
+											'name' => 'Activer',
+											'desc' => 'Activer le système de gardiens de paniers',
+											'type' => 'checkbox',
+										),
+										array(
+											'name' => 'Email à l\'amapien faisant garder son panier',
+											'type' => 'heading',
+										),
+										array(
+											'id'       => 'inscr-distrib-gardiened-mail-subject',
+											'name'     => 'Sujet de l\'email',
+											'sanitize' => false,
+											'type'     => 'text',
+											'default'  => 'Garde de vos paniers par %%gardien%% à %%post:title%%',
+										),
+										array(
+											'id'      => 'inscr-distrib-gardiened-mail-content',
+											'name'    => 'Contenu de l\'email',
+											'type'    => 'textarea',
+											'default' => "Bonjour,\n\n%%gardien%% (%%gardien_contact%%) gardera vos paniers à %%post:titre%% (%%post:lien%%)\n\n%%nom_site%%",
+											'desc'    =>
+												Amapress_EventBase::getPlaceholdersHelp( [
+													'amapien'          => 'Nom de l\'amapien demandeur de garde de son panier',
+													'amapien_contacts' => 'Coordonnées de l\'amapien demandeur de garde de son panier',
+													'gardien'          => 'Nom du gardien de panier choisi',
+													'gardien_contact'  => 'Coordonnées du gardien de panier choisi',
+												], false ),
+										),
+										array(
+											'name' => 'Email au gardien de panier',
+											'type' => 'heading',
+										),
+										array(
+											'id'       => 'inscr-distrib-gardieneur-mail-subject',
+											'name'     => 'Sujet de l\'email',
+											'sanitize' => false,
+											'type'     => 'text',
+											'default'  => 'Garde de panier de %%amapien%% à %%post:title%%',
+										),
+										array(
+											'id'      => 'inscr-distrib-gardieneur-mail-content',
+											'name'    => 'Contenu de l\'email',
+											'type'    => 'textarea',
+											'default' => "Bonjour,\n\n%%amapien%% (%%amapien_contact%%) vous a attribué la garde de ses paniers à %%post:titre%% (%%post:lien%%)\n\n%%nom_site%%",
+											'desc'    =>
+												Amapress_EventBase::getPlaceholdersHelp( [
+													'amapien'          => 'Nom de l\'amapien demandeur de garde de son panier',
+													'amapien_contacts' => 'Coordonnées de l\'amapien demandeur de garde de son panier',
+													'gardien'          => 'Nom du gardien de panier choisi',
+													'gardien_contact'  => 'Coordonnées du gardien de panier choisi',
+												], false ),
+										),
+										array(
+											'name' => 'Email au gardien de panier (désaffectation)',
+											'type' => 'heading',
+										),
+										array(
+											'id'       => 'desinscr-distrib-gardieneur-mail-subject',
+											'name'     => 'Sujet de l\'email',
+											'sanitize' => false,
+											'type'     => 'text',
+											'default'  => 'Désaffectation garde de panier de %%amapien%% à %%post:title%%',
+										),
+										array(
+											'id'      => 'desinscr-distrib-gardieneur-mail-content',
+											'name'    => 'Contenu de l\'email',
+											'type'    => 'textarea',
+											'default' => "Bonjour,\n\n%%amapien%% vous a désattribué la garde de ses paniers à %%post:titre%% (%%post:lien%%)\n\n%%nom_site%%",
+											'desc'    =>
+												Amapress_EventBase::getPlaceholdersHelp( [
+													'amapien'          => 'Nom de l\'amapien demandeur de garde de son panier',
+													'amapien_contacts' => 'Coordonnées de l\'amapien demandeur de garde de son panier',
+													'gardien'          => 'Nom du gardien de panier choisi',
+													'gardien_contact'  => 'Coordonnées du gardien de panier choisi',
+												], false ),
+										),
+										array(
+											'type' => 'save',
+										),
+									],
 								),
 							),
 						),
@@ -876,7 +1082,13 @@ Tout email envoyé à ces comptes email spécifiques seront (après modération 
 								$tabs              = array();
 								$contrat_instances = AmapressContrats::get_active_contrat_instances();
 								usort( $contrat_instances, function ( $a, $b ) {
-									return strcmp( $a->getTitle(), $b->getTitle() );
+									/** @var AmapressContrat_instance $a */
+									/** @var AmapressContrat_instance $b */
+									if ( $a->getDate_debut() == $b->getDate_debut() ) {
+										return strcmp( $a->getTitle(), $b->getTitle() );
+									} else {
+										return $a->getDate_debut() < $b->getDate_debut() ? - 1 : 1;
+									}
 								} );
 								foreach ( $contrat_instances as $contrat_instance ) {
 									$contrat_id                            = $contrat_instance->ID;
@@ -1127,6 +1339,12 @@ Tout email envoyé à ces comptes email spécifiques seront (après modération 
 										array(
 											'id'      => 'disable_principal',
 											'name'    => 'AMAP sans contrat obligatoire/principal',
+											'type'    => 'checkbox',
+											'default' => false,
+										),
+										array(
+											'id'      => 'allow_partial_coadh',
+											'name'    => 'Autoriser la co-adhésion partielle sur seulement certains contrats',
 											'type'    => 'checkbox',
 											'default' => false,
 										),
@@ -2084,7 +2302,7 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 										),
 									)
 								),
-								'Email - Panier annulation - repreneur'     => array(
+								'Email - Panier annulation - repreneur'                 => array(
 									'desc'    => '',
 									'options' => array(
 										array(
@@ -2130,6 +2348,52 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 										),
 									)
 								),
+								'Email - Panier reprise - définie par Responsable AMAP' => array(
+									'desc'    => '',
+									'options' => array(
+										array(
+											'name' => 'Email à l\'amapien',
+											'type' => 'heading',
+										),
+										array(
+											'id'       => 'intermittence-panier-admin-adh-mail-subject',
+											'name'     => 'Sujet de l\'email',
+											'sanitize' => false,
+											'type'     => 'text',
+											'default'  => 'Attribution de votre panier %%post:panier%% à %%post:repreneur-nom%%',
+										),
+										array(
+											'id'      => 'intermittence-panier-admin-adh-mail-content',
+											'name'    => 'Contenu de l\'email',
+											'type'    => 'editor',
+											'default' => wpautop( "Bonjour,\nVotre panier (%%post:panier-desc%%) a été attribué par un responsable de l\'AMAP à %%post:repreneur-nom%% (%%post:repreneur-coords%%) à la distribution %%post:distribution%%\n\n%%nom_site%%" ),
+											'desc'    =>
+												AmapressIntermittence_panier::getPlaceholdersHelp( [], false ),
+										),
+										array(
+											'name' => 'Email à l\'amapien repreneur',
+											'type' => 'heading',
+										),
+										array(
+											'id'       => 'intermittence-panier-admin-rep-mail-subject',
+											'name'     => 'Sujet de l\'email',
+											'sanitize' => false,
+											'type'     => 'text',
+											'default'  => 'Attribution de %%post:panier%% de %%post:adherent-nom%%',
+										),
+										array(
+											'id'      => 'intermittence-panier-admin-rep-mail-content',
+											'name'    => 'Contenu de l\'email',
+											'type'    => 'editor',
+											'default' => wpautop( "Bonjour,\nUn responsable de l\'AMAP vous a attribué la reprise du panier de %%post:adherent-nom%% (%%post:adherent-coords%%) : (%%post:panier-desc%%) à la distribution %%post:distribution%%\n\n%%nom_site%%" ),
+											'desc'    =>
+												AmapressIntermittence_panier::getPlaceholdersHelp( [], false ),
+										),
+										array(
+											'type' => 'save',
+										),
+									)
+								),
 							),
 						),
 						array(
@@ -2159,6 +2423,12 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 											'name'    => 'Autoriser les amapiens à inscrire des intermittents',
 											'type'    => 'checkbox',
 											'default' => true,
+										),
+										array(
+											'id'      => 'allow_partial_exchange',
+											'name'    => 'Autoriser les la cession partielle de paniers',
+											'type'    => 'checkbox',
+											'default' => false,
 										),
 //								array(
 //									'id'   => 'intermittence_contrat_model',
@@ -2322,6 +2592,30 @@ Nous vous confirmons votre adhésion à %%nom_site%%\n
 							'desc'    => '',
 							'options' => array(
 								array(
+									'id'         => 'auth_expiration',
+									'name'       => amapress__( 'Expiration de session courte' ),
+									'desc'       => 'Délai d\'expiration des sessions (par défaut)',
+									'type'       => 'number',
+									'default'    => 2,
+									'min'        => 1,
+									'max'        => 365,
+									'slider'     => false,
+									'unit'       => 'jour(s)',
+									'capability' => 'manage_options',
+								),
+								array(
+									'id'         => 'auth_expiration_remember',
+									'name'       => amapress__( 'Expiration de session longue' ),
+									'desc'       => 'Délai d\'expiration des sessions (Se souvenir de moi, coché)',
+									'type'       => 'number',
+									'default'    => 14,
+									'min'        => 1,
+									'max'        => 365,
+									'slider'     => false,
+									'unit'       => 'jour(s)',
+									'capability' => 'manage_options',
+								),
+								array(
 									'id'         => 'below_login_message',
 									'name'       => 'Message à afficher en dessous du formulaire de connexion',
 									'type'       => 'editor',
@@ -2365,7 +2659,7 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								),
 							)
 						),
-						'Email de bienvenue'       => array(
+						'Email de bienvenue' => array(
 							'id'      => 'welcome_mail',
 							'desc'    => '',
 							'options' => array(
@@ -2411,7 +2705,40 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 								),
 							)
 						),
-						'Géolocalisation'          => array(
+						'Notifications'      => array(
+							'id'      => 'amp_notif_config',
+							'desc'    => '',
+							'options' => array(
+								array(
+									'id'         => 'notify_admin_new_user',
+									'name'       => 'Nouveau compte',
+									'type'       => 'checkbox',
+									'desc'       => 'Notifier l\'administrateur des inscriptions de nouveaux comptes utilisateurs',
+									'capability' => 'manage_options',
+									'default'    => true,
+								),
+								array(
+									'id'         => 'notify_admin_pwd_resp',
+									'name'       => 'Changement de mot de passe (Responsables)',
+									'type'       => 'checkbox',
+									'desc'       => 'Notifier l\'administrateur des changements de mots de passe des comptes avec accès au Tableau de bord',
+									'capability' => 'manage_options',
+									'default'    => true,
+								),
+								array(
+									'id'         => 'notify_admin_pwd_amapien',
+									'name'       => 'Changement de mot de passe (Amapiens)',
+									'type'       => 'checkbox',
+									'desc'       => 'Notifier l\'administrateur des changements de mots de passe des amapiens',
+									'capability' => 'manage_options',
+									'default'    => true,
+								),
+								array(
+									'type' => 'save',
+								),
+							)
+						),
+						'Géolocalisation'    => array(
 							'id'      => 'amp_google_api_config',
 							'desc'    => '',
 							'options' => array(
@@ -2477,6 +2804,86 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 									'default'    => '',
 									'desc'       => 'APP CODE pour la géolocalisation par Here Maps.',
 									'capability' => 'manage_options',
+								),
+								array(
+									'type' => 'save',
+								),
+							),
+						),
+						'PWA'                      => array(
+							'id'      => 'amp_pwa_config',
+							'desc'    => 'Une <a href="https://fr.wikipedia.org/wiki/Progressive_web_app" target="_blank">progressive web app</a> (<strong>PWA</strong>, applications web progressives en français) est une application web qui consiste en des pages ou des sites web, et qui peuvent apparaître à l\'utilisateur de la même manière que les applications natives ou les applications mobiles.',
+							'options' => array(
+								array(
+									'id'         => 'pwa_short_name',
+									'name'       => 'Nom de l\'application',
+									'type'       => 'text',
+									'desc'       => 'Nom du raccourci de l\'application (12 caractères maximum)',
+									'capability' => 'manage_options',
+									'maxlength'  => 25,
+								),
+								array(
+									'id'         => 'pwa_theme_color',
+									'name'       => 'Couleur du thème',
+									'type'       => 'color',
+									'default'    => '',
+									'desc'       => 'Couleur du thème de l\'application',
+									'capability' => 'manage_options',
+								),
+								array(
+									'id'         => 'pwa_display',
+									'name'       => 'Affichage',
+									'type'       => 'select',
+									'default'    => 'minimal-ui',
+									'desc'       => 'Type d\'affichage de l\'application',
+									'options'    => [
+										'fullscreen' => 'Plein écran',
+										'standalone' => 'Application native',
+										'minimal-ui' => 'Navigateur minimal',
+										'browser'    => 'Navigateur complet',
+									],
+									'capability' => 'manage_options',
+								),
+								array(
+									'id'         => 'pwa_ios_prompt',
+									'name'       => 'Popup iOs',
+									'type'       => 'checkbox',
+									'desc'       => 'Afficher un popup explicatif sur comment installer le site sur l\'écran d\'accueil des iPhone/iPad',
+									'capability' => 'manage_options',
+									'default'    => 0,
+								),
+								array(
+									'id'         => 'pwa_android_prompt',
+									'name'       => 'Bouton Installer Android',
+									'type'       => 'checkbox',
+									'desc'       => 'Afficher un bouton "Installer" avant le popup natif "Ajouter à l\'écran d\'accueil" d\'Android/Chrome',
+									'capability' => 'manage_options',
+									'default'    => 0,
+								),
+								array(
+									'id'         => 'pwa_android_btn_text',
+									'name'       => 'Texte Bouton Installer',
+									'type'       => 'text',
+									'desc'       => 'Texte du bouton "Installer" pour Android/Chrome',
+									'capability' => 'manage_options',
+									'default'    => 'Installer l\'application',
+								),
+								array(
+									'id'         => 'pwa_prompt_logged',
+									'name'       => 'Connecté seulement',
+									'type'       => 'checkbox',
+									'desc'       => 'Afficher le popup iOs/iPhone/iPad et le bouton Installer Android/Chrome pour les amapiens connectés seulement',
+									'capability' => 'manage_options',
+									'default'    => 1,
+								),
+								array(
+									'id'         => 'pwa_prompt_discard',
+									'name'       => 'Masquer',
+									'type'       => 'number',
+									'desc'       => 'Masquer le popup iOs/iPhone/iPad et le bouton Installer Android/Chrome après X secondes',
+									'capability' => 'manage_options',
+									'default'    => 30,
+									'step'       => 1,
 								),
 								array(
 									'type' => 'save',
@@ -3286,6 +3693,12 @@ Après obtention de votre nouveau mot de passe, connectez-vous. Vous pouvez le p
 											'desc' => 'Etiquettes de rôles Amap particulières. Permet, par ex, d\'affecter les Reply To des emails automatiques aux personnes qui gèrent les visites, les distributions, les intermittents',
 										),
 										array(
+											'id'       => 'resp-distrib-gardien-amap-role',
+											'name'     => 'Rôle des responsables des gardiens de paniers',
+											'type'     => 'select-categories',
+											'taxonomy' => AmapressUser::AMAP_ROLE,
+										),
+										array(
 											'id'       => 'resp-distrib-amap-role',
 											'name'     => 'Rôle des responsables des responsables des distributions',
 											'type'     => 'select-categories',
@@ -3495,6 +3908,20 @@ Cette page permet d\'importer les configurations de paniers pour vos contrats
 									'desc'       => 'Ignorer les colonnes dont l\'entête ne correspond pas à un champ existant',
 								),
 								array(
+									'id'         => 'contrat_quantite_override_contrat_with_inscriptions',
+									'input_name' => 'amapress_override_contrat_with_inscriptions',
+									'name'       => amapress__( 'Mise à jour avec inscriptions en cours' ),
+									'type'       => 'checkbox',
+									'desc'       => 'Autoriser la mise à jour de contrats avec inscriptions actives<br/><strong style="color:red">Attention : modifier les configurations de paniers d\'un contrat peut modifier ou annuler ses inscriptions en cours</strong>',
+								),
+								array(
+									'id'         => 'override_all_contrat_quantites',
+									'input_name' => 'amapress_override_all_contrat_quantites',
+									'name'       => amapress__( 'Réimporter toutes les configurations de paniers' ),
+									'type'       => 'checkbox',
+									'desc'       => 'Réimporter toutes les configurations de paniers des contrats présents dans l\'excel (permet de conserver l\'ordre)<br/><strong style="color:red">Attention : cette option n\'est pas pas possible pour les contrats ayant déjà des inscriptions. Pour ces contrats, Vous devez mettre à jour les configurations de paniers directement dans la configuration du contrat.</strong>',
+								),
+								array(
 									'id'     => 'import_contrat_quantites',
 									'name'   => 'Importer des quantités pour les contrats',
 									'type'   => 'custom',
@@ -3589,6 +4016,13 @@ Cette page permet d\'importer les contrats
 									'name'       => amapress__( 'Ignorer les colonnes inconnues' ),
 									'type'       => 'checkbox',
 									'desc'       => 'Ignorer les colonnes dont l\'entête ne correspond pas à un champ existant',
+								),
+								array(
+									'id'         => 'contrat_override_contrat_with_inscriptions',
+									'input_name' => 'amapress_override_contrat_with_inscriptions',
+									'name'       => amapress__( 'Mise à jour avec inscriptions en cours' ),
+									'type'       => 'checkbox',
+									'desc'       => 'Autoriser la mise à jour de contrats avec inscriptions actives<br/><strong style="color:red">Attention : modifier les configurations de paniers d\'un contrat peut modifier ou annuler ses inscriptions en cours</strong>',
 								),
 								array(
 									'id'     => 'import_contrats',
@@ -3740,7 +4174,7 @@ Cette page permet la création des produits des producteurs
 									'name'   => 'Shortcodes',
 									'type'   => 'custom',
 									'custom' => function () {
-										$ret .= '<p>Un <strong>shortcode</strong> est un type de balisage qui permet l\'ajout de <strong><em>fonctionnalités interactives configurables</em></strong> dans le <em>contenu</em> des <strong>pages, articles, présentations, widgets</strong> du <em>site vitrine</em>. La syntaxe est la suivante : <code>[<em>nom-du-shortcode</em> argument1=valeur1 argument2=valeur2]</code> (<code>argument1</code> et <code>argument2</code> permettent la configuration du shortcode <code><em>nom-du-shortcode</em></code>) ou <code>[<em>nom-du-shortcode</em>]</code> (sans paramètre) ou encore <code>[<em>nom-du-shortcode</em> argument1=valeur1 argument2=valeur2]xxx[/<em>nom-du-shortcode</em>]</code> (si le shortcode <code><em>nom-du-shortcode</em></code> prend en charge son contenu)
+										$ret = '<p>Un <strong>shortcode</strong> est un type de balisage qui permet l\'ajout de <strong><em>fonctionnalités interactives configurables</em></strong> dans le <em>contenu</em> des <strong>pages, articles, présentations, widgets</strong> du <em>site vitrine</em>. La syntaxe est la suivante : <code>[<em>nom-du-shortcode</em> argument1=valeur1 argument2=valeur2]</code> (<code>argument1</code> et <code>argument2</code> permettent la configuration du shortcode <code><em>nom-du-shortcode</em></code>) ou <code>[<em>nom-du-shortcode</em>]</code> (sans paramètre) ou encore <code>[<em>nom-du-shortcode</em> argument1=valeur1 argument2=valeur2]xxx[/<em>nom-du-shortcode</em>]</code> (si le shortcode <code><em>nom-du-shortcode</em></code> prend en charge son contenu)
 Par exemple :</p>
 <ul>
 <li><code>[inscription-distrib]</code> : permet d\'afficher le tableau d\'inscription comme responsable de distribution</li>
@@ -3851,6 +4285,15 @@ Par exemple :</p>
 					),
 					'options'  => array(
 						array(
+							'id'     => 'msg_ml_lists_desc',
+							'bare'   => true,
+							'type'   => 'custom',
+							'custom' => function ( $option ) {
+								echo '<p>Vous pouvez également envoyer un mail via les listes suivantes:</p>';
+								echo do_shortcode( '[listes-diffusions]' );
+							}
+						),
+						array(
 							'id'           => 'msg_target',
 							'name'         => 'Destinataire',
 							'type'         => 'select',
@@ -3892,6 +4335,8 @@ jQuery(function($) {
 							'name'     => 'Sujet de l\'email',
 							'type'     => 'text',
 							'required' => true,
+							'default'  => '[AMAP] ',
+							'desc'     => 'Pensez à préfixer le sujet de votre mail avec un motif du type [AMAP] ou [' . get_bloginfo( 'name' ) . '] pour être mieux identifié par les destinataires'
 						),
 						array(
 							'id'       => 'msg_content',
@@ -3899,11 +4344,11 @@ jQuery(function($) {
 							'type'     => 'editor',
 							'required' => true,
 						),
-						array(
-							'id'   => 'msg_content_for_sms',
-							'name' => 'Contenu du sms associé',
-							'type' => 'textarea',
-						),
+//						array(
+//							'id'   => 'msg_content_for_sms',
+//							'name' => 'Contenu du sms associé',
+//							'type' => 'textarea',
+//						),
 						array(
 							'type'      => 'save',
 							'save'      => 'Envoyer',

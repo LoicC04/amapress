@@ -432,17 +432,18 @@ function amapress_register_shortcodes() {
 		[
 			'desc' => 'Permet l\'inscription aux contrats complémentaires en cours d\'année',
 			'args' => [
+				'ignore_renouv_delta'              => '(booléen, true par défaut) : ignorer la marge de renouvellement des contrats terminés',
 				'allow_inscriptions'               => '(booléen, true par défaut) : autorise l\'inscription aux contrats',
 				'allow_adhesion'                   => '(booléen, true par défaut) : autorise l\'adhésion à l\'AMAP',
 				'filter_multi_contrat'             => '(booléen, false par défaut) : en cas de variante de contrat Semaine A/B/AB, ne pas autoriser un amapien à s\'inscrire à plusieurs variantes',
-				'agreement'                   => '(booléen, false par défaut) : afficher une étape de réglement intérieur de l\'AMAP (configurable dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' ), 'Tableau de bord > Gestion Contrats > onglet Assistant - Pré-inscription en ligne' ) . ')',
-				'check_principal'             => '(booléen, true par défaut) : vérifier qu\'un contrat principal est actif. Peut être désactivé globalement dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=contrat_config' ), 'Tableau de bord>Gestion Contrats>Configuration, onglet Contrats' ),
-				'send_adhesion_confirm'       => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour son adhésion à l\'AMAP',
-				'allow_inscription_all_dates' => '(booléen, false par défaut) : autoriser l\'inscription à partir de toutes les dates, y compris celles après la date de clôture du contrat',
-				'send_contrat_confirm'        => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour chacune de ses inscriptions aux contrats',
-				'send_referents'              => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux référents',
-				'send_tresoriers'             => '(booléen, true par défaut) : envoyer une notification pour les nouvelles adhésions aux trésoriers',
-				'adhesion_shift_weeks'        => '(0 par défaut) Nombre de semaines de décalage entre le début des contrats et la période d\'Adhésion',
+				'agreement'                        => '(booléen, false par défaut) : afficher une étape de réglement intérieur de l\'AMAP (configurable dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=config_online_inscriptions_messages' ), 'Tableau de bord > Gestion Contrats > onglet Assistant - Pré-inscription en ligne' ) . ')',
+				'check_principal'                  => '(booléen, true par défaut) : vérifier qu\'un contrat principal est actif. Peut être désactivé globalement dans ' . Amapress::makeLink( admin_url( 'admin.php?page=amapress_gest_contrat_conf_opt_page&tab=contrat_config' ), 'Tableau de bord>Gestion Contrats>Configuration, onglet Contrats' ),
+				'send_adhesion_confirm'            => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour son adhésion à l\'AMAP',
+				'allow_inscription_all_dates'      => '(booléen, false par défaut) : autoriser l\'inscription à partir de toutes les dates, y compris celles après la date de clôture du contrat',
+				'send_contrat_confirm'             => '(booléen, true par défaut) : envoyer une confirmation à l\'amapien pour chacune de ses inscriptions aux contrats',
+				'send_referents'                   => '(booléen, true par défaut) : envoyer une notification pour les nouvelles inscriptions aux référents',
+				'send_tresoriers'                  => '(booléen, true par défaut) : envoyer une notification pour les nouvelles adhésions aux trésoriers',
+				'adhesion_shift_weeks'             => '(0 par défaut) Nombre de semaines de décalage entre le début des contrats et la période d\'Adhésion',
 				'paniers_modulables_editor_height' => '(350 par défaut) Hauteur de l\'éditeur de paniers modulables (en px)',
 				'show_adherents_infos'             => '(true par défaut) Afficher les infos sur l\'ahdérent et ses co-adhérents',
 				'contact_referents'                => '(true par défaut) Affiche un lien de contact des référents dans la liste des contrats déjà souscrit (étape 4/8)',
@@ -691,6 +692,49 @@ function amapress_register_shortcodes() {
 			]
 		] );
 
+	amapress_register_shortcode( 'display-if-logged', function ( $atts, $content = null ) {
+		return do_shortcode( '[display-if role=logged]' );
+	},
+		[
+			'desc' => 'Affiche le contenu du shortcode si l\'amapien est connecté',
+			'args' => []
+		] );
+	amapress_register_shortcode( 'display-if-not-logged', function ( $atts, $content = null ) {
+		return do_shortcode( '[display-if role=not_logged]' );
+	},
+		[
+			'desc' => 'Affiche le contenu du shortcode si l\'amapien n\'est pas connecté',
+			'args' => []
+		] );
+	amapress_register_shortcode( 'display-if-no-contrat', function ( $atts, $content = null ) {
+		return do_shortcode( '[display-if role=no_contrat]' );
+	},
+		[
+			'desc' => 'Affiche le contenu du shortcode si l\'amapien n\'a pas de contrat en cours',
+			'args' => []
+		] );
+	amapress_register_shortcode( 'display-if-intermittent', function ( $atts, $content = null ) {
+		return do_shortcode( '[display-if role=intermittent]' );
+	},
+		[
+			'desc' => 'Affiche le contenu du shortcode si l\'amapien est intermittent',
+			'args' => []
+		] );
+	amapress_register_shortcode( 'display-if-responsable-distrib', function ( $atts, $content = null ) {
+		return do_shortcode( '[display-if role=responsable_distrib]' );
+	},
+		[
+			'desc' => 'Affiche le contenu du shortcode si l\'amapien est responsable de distribution cette semaine',
+			'args' => []
+		] );
+	amapress_register_shortcode( 'display-if-responsable-amap', function ( $atts, $content = null ) {
+		return do_shortcode( '[display-if role=responsable_amap]' );
+	},
+		[
+			'desc' => 'Affiche le contenu du shortcode si l\'amapien a accès au Tableau de bord (responsables AMAP)',
+			'args' => []
+		] );
+
 	amapress_register_shortcode( 'responsable-distrib-info', function ( $atts ) {
 		amapress_ensure_no_cache();
 
@@ -917,7 +961,7 @@ function amapress_register_shortcodes() {
 
 		$atts = shortcode_atts(
 			array(
-				'sms' => 'yes',
+				'sms' => 'no',
 			),
 			$atts );
 
@@ -966,9 +1010,14 @@ function amapress_register_shortcodes() {
 			$entries[] = $li;
 		}
 		sort( $entries );
-		echo '<ul>';
-		echo implode( '', $entries );
-		echo '</ul>';
+
+		if ( empty( $entries ) ) {
+			echo '<p>Aucune mailing list et aucun Emails groupés configuré</p>';
+		} else {
+			echo '<ul class="sh-listes-diffusions" style="margin-left: 1.5em;list-style: disc">';
+			echo implode( '', $entries );
+			echo '</ul>';
+		}
 
 		return ob_get_clean();
 	},

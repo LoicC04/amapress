@@ -9,9 +9,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 //
 //}
 
+function amapress_get_distance( $p1_lat, $p1_lng, $p2_lat, $p2_lng ) {
+	$R     = 6378137;   // Earth’s mean radius in meter
+	$dLat  = deg2rad( $p2_lat - $p1_lat );
+	$dLong = deg2rad( $p2_lng - $p1_lng );
+	$a     = sin( $dLat / 2 ) * sin( $dLat / 2 ) +
+	         cos( deg2rad( $p1_lat ) ) * cos( deg2rad( $p2_lat ) ) *
+	         sin( $dLong / 2 ) * sin( $dLong / 2 );
+	$c     = 2 * atan2( sqrt( $a ), sqrt( 1 - $a ) );
+	$d     = $R * $c;
+
+	return $d; // returns the distance in meter
+}
+
 function amapress_generate_map( $markers, $mode = 'map' ) {
 	if ( count( $markers ) == 0 ) {
 		return '<p>Aucune localisation disponible</p>';
+	}
+
+	if ( ! defined( 'AMAPRESS_MAX_MAP_DISTANCE' ) ) {
+		define( 'AMAPRESS_MAX_MAP_DISTANCE', 300 );
 	}
 
 	static $amapress_map_instance = 0;
@@ -36,11 +53,27 @@ function amapress_generate_map( $markers, $mode = 'map' ) {
 	$icons['man']       = 'https://maps.google.com/mapfiles/ms/micons/man.png';
 	$icons['tree']      = 'https://maps.google.com/mapfiles/ms/micons/tree.png';
 
+	$ref_lat = 0;
+	$ref_lng = 0;
+	foreach ( Amapress::get_lieux() as $lieu ) {
+		if ( $lieu->isAdresseLocalized() ) {
+			$ref_lat = $lieu->getAdresseLatitude();
+			$ref_lng = $lieu->getAdresseLongitude();
+		}
+	}
+
 	$coords     = [];
 	$js_markers = '';
 	foreach ( $markers as $marker ) {
 		if ( empty( $marker['latitude'] ) || empty( $marker['longitude'] ) ) {
 			continue;
+		}
+		$lat = floatval( $marker['latitude'] );
+		$lng = floatval( $marker['longitude'] );
+		if ( $ref_lat && $ref_lng ) {
+			if ( amapress_get_distance( $ref_lat, $ref_lng, $lat, $lng ) > AMAPRESS_MAX_MAP_DISTANCE * 1000 ) {
+				continue;
+			}
 		}
 		if ( empty( $marker['icon'] ) ) {
 			$marker['icon'] = 'red';
@@ -51,9 +84,10 @@ function amapress_generate_map( $markers, $mode = 'map' ) {
 		} else {
 			$marker['icon'] = $icons[ $marker['icon'] ];
 		}
+
 		$js_markers .= json_encode( $marker );
 		$js_markers .= ',';
-		$coords[]   = [ floatval( $marker['latitude'] ), floatval( $marker['longitude'] ) ];
+		$coords[]   = [ $lat, $lng ];
 	}
 	$js_markers = trim( $js_markers, ',' );
 
@@ -118,7 +152,6 @@ function amapress_generate_map( $markers, $mode = 'map' ) {
 
 		return $htm . '<script type="text/javascript">
                 //<![CDATA[
-                var map;
                 function initMap' . $amapress_map_instance . '() {
                   var pos = new google.maps.LatLng(' . $latitude . ',' . $longitude . ');
                   ' . $js_acces . '
@@ -181,6 +214,7 @@ function amapress_generate_map( $markers, $mode = 'map' ) {
 
 		return $htm . '<script type="text/javascript">
                 //<![CDATA[
+                jQuery(function() {
 var map = L.map(\'map' . $amapress_map_instance . '\').fitBounds(' . json_encode( $coords ) . ');
 // add an OpenStreetMap tile layer
 L.tileLayer(\'https://{s}.tile.osm.org/{z}/{x}/{y}.png\', {
@@ -197,6 +231,7 @@ L.tileLayer(\'https://{s}.tile.osm.org/{z}/{x}/{y}.png\', {
 					    icon: marker.icon ? L.icon({iconUrl: marker.icon}) : null}).addTo(map);
 					    m.bindPopup((marker.url ? "<h4><a href="+marker.url+" target=\'_blank\'>"+marker.title+"<a/></h4>" : "<h4>"+marker.title+"</h4>") + (marker.content || ""));
                 }
+                });
                 //]]>
 </script>';
 	}

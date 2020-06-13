@@ -213,8 +213,8 @@ function amapress_send_message(
 		$headers[] = 'Content-Type: text/html; charset=UTF-8';
 		switch ( isset( $opt['send_mode'] ) ? $opt['send_mode'] : '' ) {
 			case "indiv":
-				$headers[] = "From: $from_dn <$from_email>";
-				$headers[] = "Reply-to: $from_dn <$reply_to_mail>";
+				$headers[] = "From: \"$from_dn\" <$from_email>";
+				$headers[] = "Reply-to: \"$from_dn\" <$reply_to_mail>";
 				/** @var AmapressUser $name */
 				foreach ( $emails_indiv as $email => $name ) {
 					$name_string = $name->getDisplayName();
@@ -229,8 +229,8 @@ function amapress_send_message(
 			case 'cc':
 			case "to":
 				$to        = implode( ',', $emails );
-				$headers[] = "From: $from_dn <$from_email>";
-				$headers[] = "Reply-to: $from_dn <$reply_to_mail>";
+				$headers[] = "From: \"$from_dn\" <$from_email>";
+				$headers[] = "Reply-to: \"$from_dn\" <$reply_to_mail>";
 				if ( $current_user ) {
 					$headers[] = 'Cc: ' . $current_user->getUser()->user_email;
 				}
@@ -252,12 +252,12 @@ function amapress_send_message(
 //				break;
 			case "bcc":
 			default:
-				$to = "{$opt['target_name']} <$from_email>";
+				$to = "\"{$opt['target_name']}\" <$from_email>";
 				if ( $current_user ) {
 					$emails[] = $current_user->getEmail();
 				}
-				$headers[] = "From: $from_dn <$from_email>";
-				$headers[] = "Reply-to: $from_dn <$reply_to_mail>";
+				$headers[] = "From: \"$from_dn\" <$from_email>";
+				$headers[] = "Reply-to: \"$from_dn\" <$reply_to_mail>";
 				$headers[] = 'Bcc: ' . implode( ',', $emails );
 				$subject   = amapress_replace_mail_placeholders( $subject, $current_user, $entity );
 				$content   = amapress_replace_mail_placeholders( $content, $current_user, $entity );
@@ -292,7 +292,7 @@ function amapress_handle_send_message() {
 
 	$subject     = $_REQUEST['amapress_msg_subject'];
 	$content     = $_REQUEST['amapress_msg_content'];
-	$content_sms = $_REQUEST['amapress_msg_content_for_sms'];
+	$content_sms = isset( $_REQUEST['amapress_msg_content_for_sms'] ) ? $_REQUEST['amapress_msg_content_for_sms'] : '';
 
 	amapress_send_message_and_record( $subject, $content, $content_sms, $opt );
 //    'target_name' => array(

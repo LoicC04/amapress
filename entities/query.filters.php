@@ -1755,8 +1755,9 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 				$where .= " AND 0 = 1";
 			}
 		} else {
-			$op   = 'IN';
-			$date = Amapress::end_of_day( amapress_time() );
+			$op          = 'IN';
+			$date        = Amapress::end_of_day( amapress_time() );
+			$contrat_ids = array();
 			if ( $amapress_contrat == 'no' || $amapress_contrat == 'none' ) {
 				$contrat_ids = AmapressContrats::get_active_contrat_instances_ids();
 				$op          = 'NOT IN';
@@ -1772,15 +1773,26 @@ WHERE  $wpdb->usermeta.meta_key IN ('amapress_user_co-adherent-1', 'amapress_use
 				}
 				if ( $id ) {
 					$post = get_post( $id );
-					$pt   = amapress_simplify_post_type( $post->post_type );
-					if ( 'contrat_instance' == $pt ) {
-						$contrat_ids = array( $id );
-					} else if ( 'contrat' == $pt ) {
-						$contrat_ids = AmapressContrats::get_active_contrat_instances_ids_by_contrat( $id );
+					if ( $post ) {
+						$pt = amapress_simplify_post_type( $post->post_type );
+						if ( 'contrat_instance' == $pt ) {
+							$contrat_ids = array( $id );
+						} else if ( 'contrat' == $pt ) {
+							$contrat_ids = AmapressContrats::get_active_contrat_instances_ids_by_contrat( $id );
+						}
 					}
-				} else {
-					$contrat_ids = array();
 				}
+			}
+			if ( isset( $uqi->query_vars['amapress_subcontrat'] ) ) {
+				$amapress_subcontrat = $uqi->query_vars['amapress_subcontrat'];
+				$contrat_ids         = array_filter( $contrat_ids, function ( $contrat_id ) use ( $amapress_subcontrat ) {
+					$contrat = AmapressContrat_instance::getBy( $contrat_id );
+					if ( ! $contrat ) {
+						return false;
+					}
+
+					return 0 === strcasecmp( trim( $amapress_subcontrat ), trim( $contrat->getSubName() ) );
+				} );
 			}
 			$contrat_ids = amapress_prepare_in_sql( $contrat_ids );
 			$user_ids    = array();
@@ -1903,6 +1915,36 @@ AND $wpdb->usermeta.user_id IN ($all_user_ids)" ) as $user_id
                                                    AND amps_pm_contrat.meta_key = 'amapress_adhesion_paiement_period'
                                                    AND amps_pm_contrat.meta_value = %d)", $period->ID );
 			}
+		} elseif ( $amapress_adhesion == 'ok' ) {
+			$min_date = amapress_time();
+			$max_date = amapress_time();
+			$period   = AmapressAdhesionPeriod::getCurrent();
+			if ( ! $period ) {
+				$contrats = AmapressContrats::get_active_contrat_instances();
+				foreach ( $contrats as $c ) {
+					if ( $min_date > $c->getDate_debut() ) {
+						$min_date = $c->getDate_debut();
+					}
+					if ( $max_date < $c->getDate_fin() ) {
+						$max_date = $c->getDate_fin();
+					}
+				}
+				$where .= $wpdb->prepare( " AND $wpdb->users.ID IN (SELECT amps_pmach.meta_value
+                                                   FROM $wpdb->postmeta amps_pmach
+                                                   INNER JOIN $wpdb->postmeta as amps_pm_contrat ON amps_pm_contrat.post_id = amps_pmach.post_id
+                                                   WHERE amps_pmach.meta_key='amapress_adhesion_paiement_user'
+                                                   AND amps_pmach.meta_value IS NOT NULL
+                                                   AND amps_pm_contrat.meta_key = 'amapress_adhesion_paiement_date'
+                                                   AND amps_pm_contrat.meta_value BETWEEN %d AND %d)", intval( $min_date ), intval( $max_date ) );
+			} else {
+				$where .= $wpdb->prepare( " AND $wpdb->users.ID IN (SELECT amps_pmach.meta_value
+                                                   FROM $wpdb->postmeta amps_pmach
+                                                   INNER JOIN $wpdb->postmeta as amps_pm_contrat ON amps_pm_contrat.post_id = amps_pmach.post_id
+                                                   AND amps_pmach.meta_value IS NOT NULL
+                                                   WHERE amps_pmach.meta_key='amapress_adhesion_paiement_user'
+                                                   AND amps_pm_contrat.meta_key = 'amapress_adhesion_paiement_period'
+                                                   AND amps_pm_contrat.meta_value = %d)", $period->ID );
+			}
 		}
 	}
 	$uqi->query_where .= $where;
@@ -1920,6 +1962,9 @@ AND $wpdb->usermeta.user_id IN ($all_user_ids)" ) as $user_id
 add_filter( 'users_list_table_query_args', function ( $args ) {
 	if ( isset( $_GET['amapress_contrat'] ) ) {
 		$args['amapress_contrat'] = $_GET['amapress_contrat'];
+	}
+	if ( isset( $_GET['amapress_subcontrat'] ) ) {
+		$args['amapress_subcontrat'] = $_GET['amapress_subcontrat'];
 	}
 	if ( isset( $_GET['amapress_lieu'] ) ) {
 		$args['amapress_lieu'] = $_GET['amapress_lieu'];

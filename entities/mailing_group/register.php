@@ -29,11 +29,16 @@ function amapress_register_entities_mailing_groups( $entities ) {
 						echo amapress_get_admin_notice( 'Erreur de configuration : l\'extension IMAP n\'est pas installée, les emails groupés sont désactivés.', 'error', false );
 					}
 					if ( ! empty( $ml->getSmtpHost() ) ) {
-						if ( $ml->testSMTP() ) {
-							echo amapress_get_admin_notice( 'Configuration SMTP OK', 'success', false );
+						$res = $ml->testSMTP();
+						if ( true !== $res ) {
+							echo amapress_get_admin_notice( 'Erreur de configuration, connexion au SMTP ' . $ml->getSmtpHost() . ' impossible : ' . $res, 'error', false );
 						} else {
-							echo amapress_get_admin_notice( 'Erreur de configuration : connexion au SMTP ' . $ml->getSmtpHost() . ' impossible', 'error', false );
+							echo amapress_get_admin_notice( 'Configuration SMTP OK', 'success', false );
 						}
+					} elseif ( $ml->shouldUseSmtp() ) {
+						echo amapress_get_admin_notice(
+							sprintf( 'Cette Email Groupé contient %d membres, le SMTP du compte IMAP devrait être configuré pour les envois.', $ml->getMembersCount() ),
+							'warning', false );
 					}
 				}
 			}
@@ -74,6 +79,8 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'desc'        => 'Port d\'accès au serveur IMAP/POP3<br/>Ports par défaut : IMAP 143; IMAP SSL 993; POP3 110 ; POP3 SSL 995',
 				'type'        => 'number',
 				'default'     => 993,
+				'max'         => 65535,
+				'slider'      => false,
 				'required'    => true,
 				'show_column' => false,
 			),
@@ -145,8 +152,11 @@ function amapress_register_entities_mailing_groups( $entities ) {
 			),
 			'smtp_port'              => array(
 				'name'        => 'Port',
-				'group'       => 'Serveur sortant<br/>Ports par défaut : SMTP 25; SMTP SSL 465; SMTP TLS 587',
+				'group'       => 'Serveur sortant',
 				'type'        => 'number',
+				'desc'        => 'Ports par défaut : SMTP 25; SMTP SSL 465; SMTP TLS 587',
+				'max'         => 65535,
+				'slider'      => false,
 				'show_column' => false,
 			),
 			'smtp_encryption'        => array(
@@ -193,6 +203,14 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'autocomplete' => false,
 				'is_password'  => true,
 				'show_column'  => false,
+			),
+			'smtp_max_per_hour'      => array(
+				'name'        => 'Emails par heure',
+				'group'       => 'Serveur sortant',
+				'type'        => 'number',
+				'desc'        => 'Nombre maximum d\'envoi de mail par heure autorisé',
+				'max'         => 10000,
+				'show_column' => false,
 			),
 			'subject_pref'           => array(
 				'group'       => 'Description',
@@ -274,6 +292,13 @@ function amapress_register_entities_mailing_groups( $entities ) {
 				'desc'        => 'Cocher le ou les groupes à intégrer.',
 				'options'     => 'amapress_get_mailinglist_queries',
 //				'required'    => true,
+				'show_column' => false,
+			),
+			'inc_adh_requests'       => array(
+				'group'       => 'Membres',
+				'name'        => amapress__( 'Inclure les demandes d\'adhésion' ),
+				'type'        => 'checkbox',
+				'desc'        => 'Inclure les demandes d\'adhésion non confirmées (Liste d\'attente)',
 				'show_column' => false,
 			),
 			'other_users'            => array(

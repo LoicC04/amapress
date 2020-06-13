@@ -12,11 +12,32 @@ class AmapDemoBase {
 	protected $taxonomies = [];
 	protected $medias = [];
 
+	protected function handleContrats( $postarr ) {
+		if ( ! empty( [ 'meta_input' ] ) ) {
+			if ( ! empty( $postarr['meta_input']['amapress_contrat_instance_date_debut'] ) ) {
+				$postarr['meta_input']['amapress_contrat_instance_date_ouverture'] =
+					Amapress::add_a_week( intval( $postarr['meta_input']['amapress_contrat_instance_date_debut'] ), - 3 );
+				$postarr['meta_input']['amapress_contrat_instance_date_cloture']   =
+					Amapress::add_a_week( intval( $postarr['meta_input']['amapress_contrat_instance_date_fin'] ), - 4 );
+				$postarr['meta_input']['amapress_contrat_instance_self_subscribe'] = 1;
+				$postarr['meta_input']['amapress_contrat_instance_self_edit']      = 1;
+			}
+		}
+
+		return $postarr;
+	}
+
 	protected function createPost( $postarr ) {
+		$postarr = $this->handleContrats( $postarr );
+
 		return wp_insert_post( $postarr );
 	}
 
 	protected function createUser( $userdata ) {
+		if ( empty( $userdata['user_pass'] ) ) {
+			$userdata['user_pass'] = '';
+		}
+
 		return wp_insert_user( $userdata );
 	}
 
@@ -248,6 +269,10 @@ class AmapDemoBase {
 
 	}
 
+	protected function printMemoryUsage() {
+		echo '<p>' . ( function_exists( 'memory_get_usage' ) ? round( memory_get_usage() / 1024 / 1024, 2 ) : 0 ) . 'MB</p>';
+	}
+
 	public function createAMAP( $shift_weeks = 0 ) {
 		echo "<p>Starting import</p>";
 		self::startTransaction();
@@ -259,13 +284,33 @@ class AmapDemoBase {
 
 			self::cleanAttachments();
 
-			$this->onCreateAmap( Amapress::add_a_week( amapress_time(), $shift_weeks ) );
+			$this->onCreateAmap( Amapress::start_of_day( Amapress::add_a_week( amapress_time(), $shift_weeks ) ) );
+
 
 			echo "<p>Updating all post titles and slug</p>";
 			amapress_update_all_posts();
 
+			foreach (
+				array(
+					'adhesion_amap_term'        => 'Adhésion AMAP',
+					'adhesion_reseau_amap_term' => 'Adhésion Réseau AMAP',
+				) as $k => $v
+			) {
+				if ( ! term_exists( $v, 'amps_paiement_category' ) ) {
+					Amapress::setOption( $k, wp_insert_term( $v, 'amps_paiement_category' ) );
+				} else {
+					$t = term_exists( $v, 'amps_paiement_category' );
+					Amapress::setOption( $k, $t['term_id'] );
+				}
+			}
+
 			echo "<p>Committing import</p>";
 			self::commitTransaction();
+
+			foreach ( AmapressContrat_instance::getAll() as $contrat_instance ) {
+				AmapressDistributions::generate_distributions( $contrat_instance->ID, false, false );
+				AmapressPaniers::generate_paniers( $contrat_instance->ID, false, false );
+			}
 
 		} catch ( Exception $exception ) {
 			self::abortTransaction();
